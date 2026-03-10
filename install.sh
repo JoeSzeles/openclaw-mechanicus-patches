@@ -18,8 +18,8 @@ detect_openclaw() {
     return
   fi
   local home="${HOME:-$(eval echo ~)}"
-  for candidate in "$home/openclaw" "$home/.openclaw/.." "./openclaw" "."; do
-    if [ -d "$candidate" ] && { [ -f "$candidate/package.json" ] || [ -d "$candidate/.openclaw" ] || [ -d "$candidate/dist" ]; }; then
+  for candidate in "$home/openclaw" "./openclaw"; do
+    if [ -d "$candidate" ] && [ -f "$candidate/package.json" ] && [ -d "$candidate/dist" ]; then
       local resolved
       resolved="$(cd "$candidate" && pwd)"
       echo "$resolved"
@@ -115,14 +115,9 @@ if [ -f "package.json" ]; then
 fi
 
 if [ -n "$deps_needed" ]; then
-  echo "  Installing missing npm packages:$deps_needed"
-  if command -v pnpm &>/dev/null; then
-    pnpm add $deps_needed 2>/dev/null || npm install $deps_needed 2>/dev/null || echo "  WARNING: Could not install deps. Run manually: npm install$deps_needed"
-  elif command -v npm &>/dev/null; then
-    npm install $deps_needed 2>/dev/null || echo "  WARNING: Could not install deps. Run manually: npm install$deps_needed"
-  else
-    echo "  WARNING: No package manager found. Install manually: npm install$deps_needed"
-  fi
+  echo "  Additional npm packages needed:$deps_needed"
+  echo "  Run: npm install$deps_needed"
+  echo "  (or: pnpm add$deps_needed)"
 else
   echo "  All dependencies present."
 fi

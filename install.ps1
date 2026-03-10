@@ -19,15 +19,12 @@ function Find-OpenClaw {
     if (-not $home) { $home = $env:HOME }
     $candidates = @(
         (Join-Path $home "openclaw"),
-        (Join-Path $home ".openclaw" ".."),
-        (Join-Path "." "openclaw"),
-        "."
+        (Join-Path "." "openclaw")
     )
     foreach ($c in $candidates) {
         if (Test-Path $c) {
             $resolved = (Resolve-Path $c).Path
-            if ((Test-Path (Join-Path $resolved "package.json")) -or
-                (Test-Path (Join-Path $resolved ".openclaw")) -or
+            if ((Test-Path (Join-Path $resolved "package.json")) -and
                 (Test-Path (Join-Path $resolved "dist"))) {
                 return $resolved
             }
@@ -121,20 +118,9 @@ if (Test-Path $pkgJson) {
 
 if ($depsNeeded.Count -gt 0) {
     $depStr = $depsNeeded -join " "
-    Write-Host "  Installing missing npm packages: $depStr"
-    Push-Location $OpenClawRoot
-    try {
-        if (Get-Command pnpm -ErrorAction SilentlyContinue) {
-            & pnpm add $depsNeeded 2>$null
-        } elseif (Get-Command npm -ErrorAction SilentlyContinue) {
-            & npm install $depsNeeded 2>$null
-        } else {
-            Write-Host "  WARNING: No package manager found. Run manually: npm install $depStr" -ForegroundColor Yellow
-        }
-    } catch {
-        Write-Host "  WARNING: Could not install deps. Run manually: npm install $depStr" -ForegroundColor Yellow
-    }
-    Pop-Location
+    Write-Host "  Additional npm packages needed: $depStr"
+    Write-Host "  Run: npm install $depStr"
+    Write-Host "  (or: pnpm add $depStr)"
 } else {
     Write-Host "  All dependencies present."
 }
