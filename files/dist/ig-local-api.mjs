@@ -195,7 +195,13 @@ function scheduleLiveStreamingRefresh() {
     } catch (e) {
       console.log('[ls-local] Refresh failed:', e.message, '— retry in 60s');
       if (lsLiveRefreshTimer) clearTimeout(lsLiveRefreshTimer);
-      lsLiveRefreshTimer = setTimeout(() => scheduleLiveStreamingRefresh(), 60000);
+      lsLiveRefreshTimer = setTimeout(async () => {
+        if (!lsLiveActive) return;
+        try { await liveStreamingLogin(); scheduleLiveStreamingRefresh(); } catch (e2) {
+          console.log('[ls-local] Retry refresh failed:', e2.message);
+          scheduleLiveStreamingRefresh();
+        }
+      }, 60000);
     }
   }, LS_LIVE_SESSION_REFRESH);
 }
@@ -205,6 +211,7 @@ function startHybridPricePolling() {
   hybridPollErrorCount = 0;
   startStreamCandleFlush();
   console.log('[ls-local] Starting hybrid price polling (L1 unavailable)');
+  lsHybridPollingTimer = true;
   function scheduleNext() {
     const delay = hybridPollErrorCount > 0 ? Math.min(30000, 5000 * hybridPollErrorCount) : 3000;
     lsHybridPollingTimer = setTimeout(pollOnce, delay);
@@ -301,8 +308,9 @@ async function startLightstreamer() {
     let accountId = activeProfile ? activeProfile.accountId : null;
     let streamSource = activeProfile ? activeProfile.profileName : 'demo';
     if (!endpoint) {
-      console.log('[ls-local] No LS endpoint from session, skipping');
+      console.log('[ls-local] No LS endpoint from session — starting hybrid polling');
       lsStatus = 'no_endpoint';
+      startHybridPricePolling();
       return;
     }
 
@@ -362,11 +370,9 @@ async function startLightstreamer() {
       },
       onSubscriptionError: (code, msg) => {
         console.error(`[ls-local] Subscription error: ${code} ${msg}`);
-        if (msg && msg.includes('Invalid account type')) {
-          console.log('[ls-local] L1 not available for this account type — starting hybrid polling');
-          lsStatus = 'connected';
-          startHybridPricePolling();
-        }
+        console.log('[ls-local] L1 subscription failed — starting hybrid polling fallback');
+        lsStatus = 'connected';
+        startHybridPricePolling();
       },
       onItemUpdate: (info) => {
         const epicFull = info.getItemName();
@@ -460,6 +466,8 @@ function stopLightstreamer() {
   if (lsReconnectTimer) { clearTimeout(lsReconnectTimer); lsReconnectTimer = null; }
   lsReconnectAttempts = 0;
   stopHybridPricePolling();
+  if (lsLiveRefreshTimer) { clearTimeout(lsLiveRefreshTimer); lsLiveRefreshTimer = null; }
+  lsLiveActive = false;
   if (lsLiveClient && lsLiveClient !== lsClient) { try { lsLiveClient.disconnect(); } catch (_) {} }
   lsLiveClient = null;
   if (lsClient) {
