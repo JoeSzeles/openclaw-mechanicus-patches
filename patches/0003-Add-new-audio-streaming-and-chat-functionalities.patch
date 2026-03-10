@@ -1,0 +1,1566 @@
+From ca2215eb4f265f602403acaca0143dddeda559f3 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 02:58:03 +0000
+Subject: [PATCH 003/244] Add new audio streaming and chat functionalities
+
+Introduce new modules for audio playback, voice recording, voice streaming, and chat functionalities. Includes server-side logic for handling audio conversions, OpenAI API interactions for speech-to-text and text-to-speech, and chat message storage.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: ed6881a6-da5b-4d9a-a417-361ab839f2e8
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/CtLdR4X
+Replit-Helium-Checkpoint-Created: true
+---
+ .replit                                       |   2 +-
+ .../audio/audio-playback-worklet.js           | 112 +++++++
+ .../replit_integrations/audio/audio-utils.ts  |  36 +++
+ .../client/replit_integrations/audio/index.ts |  45 +++
+ .../audio/useAudioPlayback.ts                 | 105 +++++++
+ .../audio/useVoiceRecorder.ts                 |  52 ++++
+ .../audio/useVoiceStream.ts                   |  91 ++++++
+ .../replit_integrations/audio/client.ts       | 274 ++++++++++++++++++
+ .../server/replit_integrations/audio/index.ts |  14 +
+ .../replit_integrations/audio/routes.ts       | 136 +++++++++
+ .../server/replit_integrations/batch/index.ts |   7 +
+ .../server/replit_integrations/batch/utils.ts | 182 ++++++++++++
+ .../server/replit_integrations/chat/index.ts  |   3 +
+ .../server/replit_integrations/chat/routes.ts | 118 ++++++++
+ .../replit_integrations/chat/storage.ts       |  43 +++
+ .../replit_integrations/image/client.ts       |  59 ++++
+ .../server/replit_integrations/image/index.ts |   3 +
+ .../replit_integrations/image/routes.ts       |  31 ++
+ .../shared/models/chat.ts                     |  34 +++
+ openclaw.json                                 |  16 +
+ start.sh                                      |  12 +
+ 21 files changed, 1374 insertions(+), 1 deletion(-)
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/audio-playback-worklet.js
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/audio-utils.ts
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/index.ts
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/useAudioPlayback.ts
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/useVoiceRecorder.ts
+ create mode 100644 .replit_integration_files/client/replit_integrations/audio/useVoiceStream.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/audio/client.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/audio/index.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/audio/routes.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/batch/index.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/batch/utils.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/chat/index.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/chat/routes.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/chat/storage.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/image/client.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/image/index.ts
+ create mode 100644 .replit_integration_files/server/replit_integrations/image/routes.ts
+ create mode 100644 .replit_integration_files/shared/models/chat.ts
+ create mode 100644 openclaw.json
+ create mode 100755 start.sh
+
+diff --git a/.replit b/.replit
+index 742073f79..05fc5aa7b 100644
+--- a/.replit
++++ b/.replit
+@@ -33,7 +33,7 @@ outputType = "webview"
+ 
+ [[workflows.workflow.tasks]]
+ task = "shell.exec"
+-args = "cd /home/runner/workspace && COREPACK_ENABLE_STRICT=0 node dist/entry.js gateway --bind lan --port 5000 --allow-unconfigured"
++args = "cd /home/runner/workspace && COREPACK_ENABLE_STRICT=0 bash start.sh"
+ waitForPort = 5000
+ 
+ [[ports]]
+diff --git a/.replit_integration_files/client/replit_integrations/audio/audio-playback-worklet.js b/.replit_integration_files/client/replit_integrations/audio/audio-playback-worklet.js
+new file mode 100644
+index 000000000..41288a2a9
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/audio-playback-worklet.js
+@@ -0,0 +1,112 @@
++/**
++ * Reusable AudioWorklet for streaming PCM16 audio playback.
++ * Place in public/ folder and load via audioContext.audioWorklet.addModule()
++ */
++class RingBuffer {
++  constructor(initialCapacity) {
++    this.capacity = initialCapacity;
++    this.buffer = new Float32Array(initialCapacity);
++    this.readIndex = 0;
++    this.writeIndex = 0;
++    this.availableData = 0;
++  }
++
++  push(data) {
++    const len = data.length;
++    // Auto-grow if needed
++    while (this.availableData + len > this.capacity) {
++      this.grow();
++    }
++    for (let i = 0; i < len; i++) {
++      this.buffer[this.writeIndex] = data[i];
++      this.writeIndex = (this.writeIndex + 1) % this.capacity;
++      this.availableData++;
++    }
++  }
++
++  grow() {
++    const newCapacity = this.capacity * 2;
++    const newBuffer = new Float32Array(newCapacity);
++    // Copy existing data maintaining order
++    for (let i = 0; i < this.availableData; i++) {
++      const srcIndex = (this.readIndex + i) % this.capacity;
++      newBuffer[i] = this.buffer[srcIndex];
++    }
++    this.buffer = newBuffer;
++    this.readIndex = 0;
++    this.writeIndex = this.availableData;
++    this.capacity = newCapacity;
++  }
++
++  pull(outputBuffer) {
++    const len = outputBuffer.length;
++    const available = Math.min(len, this.availableData);
++    for (let i = 0; i < available; i++) {
++      outputBuffer[i] = this.buffer[this.readIndex];
++      this.readIndex = (this.readIndex + 1) % this.capacity;
++    }
++    // Pad remaining with silence
++    for (let i = available; i < len; i++) {
++      outputBuffer[i] = 0;
++    }
++    this.availableData -= available;
++    return available > 0;
++  }
++
++  available() {
++    return this.availableData;
++  }
++
++  clear() {
++    this.readIndex = 0;
++    this.writeIndex = 0;
++    this.availableData = 0;
++  }
++}
++
++class AudioPlaybackProcessor extends AudioWorkletProcessor {
++  constructor() {
++    super();
++    this.ringBuffer = new RingBuffer(24000 * 30); // 30s initial capacity
++    this.isPlaying = false;
++    this.streamComplete = false;
++
++    this.port.onmessage = (event) => {
++      const { type, samples } = event.data;
++      if (type === "audio") {
++        this.ringBuffer.push(samples);
++        this.isPlaying = true;
++      } else if (type === "clear") {
++        this.ringBuffer.clear();
++        this.isPlaying = false;
++        this.streamComplete = false;
++      } else if (type === "streamComplete") {
++        this.streamComplete = true;
++      } else if (type === "stop") {
++        this.isPlaying = false;
++        this.streamComplete = false;
++      }
++    };
++  }
++
++  process(inputs, outputs) {
++    const output = outputs[0];
++    if (!output || output.length === 0) return true;
++
++    const channel = output[0];
++    if (this.isPlaying) {
++      this.ringBuffer.pull(channel);
++      if (this.streamComplete && this.ringBuffer.available() === 0) {
++        this.isPlaying = false;
++        this.streamComplete = false;
++        this.port.postMessage({ type: "ended" });
++      }
++    } else {
++      channel.fill(0);
++    }
++    return true;
++  }
++}
++
++registerProcessor("audio-playback-processor", AudioPlaybackProcessor);
++
+diff --git a/.replit_integration_files/client/replit_integrations/audio/audio-utils.ts b/.replit_integration_files/client/replit_integrations/audio/audio-utils.ts
+new file mode 100644
+index 000000000..909dfab17
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/audio-utils.ts
+@@ -0,0 +1,36 @@
++/**
++ * Audio utility functions for voice chat.
++ * Handles PCM16 decoding and AudioContext initialization.
++ */
++
++/**
++ * Decode base64 PCM16 audio to Float32Array for Web Audio API
++ */
++export function decodePCM16ToFloat32(base64Audio: string): Float32Array {
++  const raw = atob(base64Audio);
++  const bytes = new Uint8Array(raw.length);
++  for (let i = 0; i < raw.length; i++) {
++    bytes[i] = raw.charCodeAt(i);
++  }
++  const pcm16 = new Int16Array(bytes.buffer);
++  const float32 = new Float32Array(pcm16.length);
++  for (let i = 0; i < pcm16.length; i++) {
++    float32[i] = pcm16[i] / 32768;
++  }
++  return float32;
++}
++
++/**
++ * Create and initialize AudioContext with worklet
++ */
++export async function createAudioPlaybackContext(
++  workletPath = "/audio-playback-worklet.js",
++  sampleRate = 24000
++): Promise<{ ctx: AudioContext; worklet: AudioWorkletNode }> {
++  const ctx = new AudioContext({ sampleRate });
++  await ctx.audioWorklet.addModule(workletPath);
++  const worklet = new AudioWorkletNode(ctx, "audio-playback-processor");
++  worklet.connect(ctx.destination);
++  return { ctx, worklet };
++}
++
+diff --git a/.replit_integration_files/client/replit_integrations/audio/index.ts b/.replit_integration_files/client/replit_integrations/audio/index.ts
+new file mode 100644
+index 000000000..4862b3fa3
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/index.ts
+@@ -0,0 +1,45 @@
++/**
++ * Voice chat client utilities for Replit AI Integrations.
++ * 
++ * Usage:
++ * 1. Copy audio-playback-worklet.js to your public/ folder
++ * 2. Import and use the React hooks in your components
++ * 
++ * Example:
++ * ```tsx
++ * import { useVoiceRecorder, useVoiceStream } from "./audio";
++ * 
++ * function VoiceChat() {
++ *   const [transcript, setTranscript] = useState("");
++ *   const recorder = useVoiceRecorder();
++ *   const stream = useVoiceStream({
++ *     onTranscript: (_, full) => setTranscript(full),
++ *     onComplete: (text) => console.log("Done:", text),
++ *   });
++ * 
++ *   const handleClick = async () => {
++ *     if (recorder.state === "recording") {
++ *       const blob = await recorder.stopRecording();
++ *       await stream.streamVoiceResponse("/api/voice-conversations/1/messages", blob);
++ *     } else {
++ *       await recorder.startRecording();
++ *     }
++ *   };
++ * 
++ *   return (
++ *     <div>
++ *       <button onClick={handleClick}>
++ *         {recorder.state === "recording" ? "Stop" : "Record"}
++ *       </button>
++ *       <p>{transcript}</p>
++ *     </div>
++ *   );
++ * }
++ * ```
++ */
++
++export { decodePCM16ToFloat32, createAudioPlaybackContext } from "./audio-utils";
++export { useVoiceRecorder, type RecordingState } from "./useVoiceRecorder";
++export { useAudioPlayback, type PlaybackState } from "./useAudioPlayback";
++export { useVoiceStream } from "./useVoiceStream";
++
+diff --git a/.replit_integration_files/client/replit_integrations/audio/useAudioPlayback.ts b/.replit_integration_files/client/replit_integrations/audio/useAudioPlayback.ts
+new file mode 100644
+index 000000000..dd0963d43
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/useAudioPlayback.ts
+@@ -0,0 +1,105 @@
++/**
++ * React hook for streaming audio playback using AudioWorklet.
++ * Supports real-time PCM16 audio streaming from SSE responses.
++ * Includes sequence buffer for reordering out-of-order chunks.
++ */
++import { useRef, useCallback, useState } from "react";
++import { decodePCM16ToFloat32 } from "./audio-utils";
++
++export type PlaybackState = "idle" | "playing" | "ended";
++
++/**
++ * Reorders audio chunks that may arrive out of sequence.
++ * Buffers chunks until they can be played in correct order.
++ *
++ * Example: If chunks arrive as seq 2, seq 0, seq 1:
++ * - seq 2 arrives → buffered (waiting for seq 0)
++ * - seq 0 arrives → played immediately, then check buffer
++ * - seq 1 arrives → played immediately (seq 0 done), seq 2 now plays
++ */
++class SequenceBuffer {
++  private pending = new Map<number, string[]>();
++  private nextSeq = 0;
++
++  /** Add chunk with sequence number, returns chunks ready to play in order */
++  push(seq: number, data: string): string[] {
++    // Store the chunk under its sequence number
++    if (!this.pending.has(seq)) {
++      this.pending.set(seq, []);
++    }
++    this.pending.get(seq)!.push(data);
++
++    // Drain consecutive ready sequences
++    const ready: string[] = [];
++    while (this.pending.has(this.nextSeq)) {
++      ready.push(...this.pending.get(this.nextSeq)!);
++      this.pending.delete(this.nextSeq);
++      this.nextSeq++;
++    }
++    return ready;
++  }
++
++  reset() {
++    this.pending.clear();
++    this.nextSeq = 0;
++  }
++}
++
++export function useAudioPlayback(workletPath = "/audio-playback-worklet.js") {
++  const [state, setState] = useState<PlaybackState>("idle");
++  const ctxRef = useRef<AudioContext | null>(null);
++  const workletRef = useRef<AudioWorkletNode | null>(null);
++  const readyRef = useRef(false);
++  const seqBufferRef = useRef(new SequenceBuffer());
++
++  const init = useCallback(async () => {
++    if (readyRef.current) return;
++
++    const ctx = new AudioContext({ sampleRate: 24000 });
++    await ctx.audioWorklet.addModule(workletPath);
++    const worklet = new AudioWorkletNode(ctx, "audio-playback-processor");
++    worklet.connect(ctx.destination);
++
++    worklet.port.onmessage = (e) => {
++      if (e.data.type === "ended") setState("idle");
++    };
++
++    ctxRef.current = ctx;
++    workletRef.current = worklet;
++    readyRef.current = true;
++  }, [workletPath]);
++
++  /** Push audio directly (no sequencing) - for simple streaming */
++  const pushAudio = useCallback((base64Audio: string) => {
++    if (!workletRef.current) return;
++    const samples = decodePCM16ToFloat32(base64Audio);
++    workletRef.current.port.postMessage({ type: "audio", samples });
++    setState("playing");
++  }, []);
++
++  /** Push audio with sequence number - reorders before playback */
++  const pushSequencedAudio = useCallback((seq: number, base64Audio: string) => {
++    if (!workletRef.current) return;
++
++    const readyChunks = seqBufferRef.current.push(seq, base64Audio);
++    for (const chunk of readyChunks) {
++      const samples = decodePCM16ToFloat32(chunk);
++      workletRef.current.port.postMessage({ type: "audio", samples });
++    }
++    if (readyChunks.length > 0) {
++      setState("playing");
++    }
++  }, []);
++
++  const signalComplete = useCallback(() => {
++    workletRef.current?.port.postMessage({ type: "streamComplete" });
++  }, []);
++
++  const clear = useCallback(() => {
++    workletRef.current?.port.postMessage({ type: "clear" });
++    seqBufferRef.current.reset();
++    setState("idle");
++  }, []);
++
++  return { state, init, pushAudio, pushSequencedAudio, signalComplete, clear };
++}
+diff --git a/.replit_integration_files/client/replit_integrations/audio/useVoiceRecorder.ts b/.replit_integration_files/client/replit_integrations/audio/useVoiceRecorder.ts
+new file mode 100644
+index 000000000..8bbf86e0c
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/useVoiceRecorder.ts
+@@ -0,0 +1,52 @@
++/**
++ * React hook for voice recording using MediaRecorder API.
++ * Records audio in WebM/Opus format for efficient streaming.
++ */
++import { useRef, useCallback, useState } from "react";
++
++export type RecordingState = "idle" | "recording" | "stopped";
++
++export function useVoiceRecorder() {
++  const [state, setState] = useState<RecordingState>("idle");
++  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
++  const chunksRef = useRef<Blob[]>([]);
++
++  const startRecording = useCallback(async (): Promise<void> => {
++    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
++    const recorder = new MediaRecorder(stream, {
++      mimeType: "audio/webm;codecs=opus",
++    });
++
++    mediaRecorderRef.current = recorder;
++    chunksRef.current = [];
++
++    recorder.ondataavailable = (e) => {
++      if (e.data.size > 0) chunksRef.current.push(e.data);
++    };
++
++    recorder.start(100); // Collect chunks every 100ms
++    setState("recording");
++  }, []);
++
++  const stopRecording = useCallback((): Promise<Blob> => {
++    return new Promise((resolve) => {
++      const recorder = mediaRecorderRef.current;
++      if (!recorder || recorder.state !== "recording") {
++        resolve(new Blob());
++        return;
++      }
++
++      recorder.onstop = () => {
++        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
++        recorder.stream.getTracks().forEach((t) => t.stop());
++        setState("stopped");
++        resolve(blob);
++      };
++
++      recorder.stop();
++    });
++  }, []);
++
++  return { state, startRecording, stopRecording };
++}
++
+diff --git a/.replit_integration_files/client/replit_integrations/audio/useVoiceStream.ts b/.replit_integration_files/client/replit_integrations/audio/useVoiceStream.ts
+new file mode 100644
+index 000000000..8466ce8b9
+--- /dev/null
++++ b/.replit_integration_files/client/replit_integrations/audio/useVoiceStream.ts
+@@ -0,0 +1,91 @@
++/**
++ * React hook for handling SSE voice streaming responses.
++ * Converts audio blob to base64 and sends as JSON to match server expectations.
++ */
++import { useCallback } from "react";
++import { useAudioPlayback } from "./useAudioPlayback";
++
++interface StreamCallbacks {
++  onUserTranscript?: (text: string) => void;
++  onTranscript?: (text: string, full: string) => void;
++  onComplete?: (transcript: string) => void;
++  onError?: (error: Error) => void;
++}
++
++export function useVoiceStream(callbacks: StreamCallbacks = {}) {
++  const playback = useAudioPlayback();
++
++  const streamVoiceResponse = useCallback(
++    async (url: string, audioBlob: Blob) => {
++      await playback.init();
++      playback.clear();
++
++      // Convert blob to base64 for JSON body (server expects express.json())
++      const base64Audio = await new Promise<string>((resolve) => {
++        const fileReader = new FileReader();
++        fileReader.onload = () => {
++          const result = fileReader.result as string;
++          resolve(result.split(",")[1]); // Remove data URL prefix
++        };
++        fileReader.readAsDataURL(audioBlob);
++      });
++
++      const response = await fetch(url, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({ audio: base64Audio }),
++      });
++      if (!response.ok) throw new Error("Voice request failed");
++
++      const streamReader = response.body?.getReader();
++      if (!streamReader) throw new Error("No response body");
++
++      const decoder = new TextDecoder();
++      let buffer = "";
++      let fullTranscript = "";
++
++      while (true) {
++        const { done, value } = await streamReader.read();
++        if (done) break;
++
++        buffer += decoder.decode(value, { stream: true });
++        const lines = buffer.split("\n");
++        buffer = lines.pop() || "";
++
++        for (const line of lines) {
++          if (!line.startsWith("data: ")) continue;
++
++          try {
++            const event = JSON.parse(line.slice(6));
++
++            switch (event.type) {
++              case "user_transcript":
++                callbacks.onUserTranscript?.(event.data);
++                break;
++              case "transcript":
++                fullTranscript += event.data;
++                callbacks.onTranscript?.(event.data, fullTranscript);
++                break;
++              case "audio":
++                playback.pushAudio(event.data);
++                break;
++              case "done":
++                playback.signalComplete();
++                callbacks.onComplete?.(fullTranscript);
++                break;
++              case "error":
++                throw new Error(event.error);
++            }
++          } catch (e) {
++            if (!(e instanceof SyntaxError)) {
++              callbacks.onError?.(e as Error);
++            }
++          }
++        }
++      }
++    },
++    [playback, callbacks]
++  );
++
++  return { streamVoiceResponse, playbackState: playback.state };
++}
+diff --git a/.replit_integration_files/server/replit_integrations/audio/client.ts b/.replit_integration_files/server/replit_integrations/audio/client.ts
+new file mode 100644
+index 000000000..d00642e93
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/audio/client.ts
+@@ -0,0 +1,274 @@
++import OpenAI, { toFile } from "openai";
++import { Buffer } from "node:buffer";
++import { spawn } from "child_process";
++import { writeFile, unlink, readFile } from "fs/promises";
++import { randomUUID } from "crypto";
++import { tmpdir } from "os";
++import { join } from "path";
++
++export const openai = new OpenAI({
++  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
++  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
++});
++
++export type AudioFormat = "wav" | "mp3" | "webm" | "mp4" | "ogg" | "unknown";
++
++/**
++ * Detect audio format from buffer magic bytes.
++ * Supports: WAV, MP3, WebM (Chrome/Firefox), MP4/M4A/MOV (Safari/iOS), OGG
++ */
++export function detectAudioFormat(buffer: Buffer): AudioFormat {
++  if (buffer.length < 12) return "unknown";
++
++  // WAV: RIFF....WAVE
++  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
++    return "wav";
++  }
++  // WebM: EBML header
++  if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
++    return "webm";
++  }
++  // MP3: ID3 tag or frame sync
++  if (
++    (buffer[0] === 0xff && (buffer[1] === 0xfb || buffer[1] === 0xfa || buffer[1] === 0xf3)) ||
++    (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33)
++  ) {
++    return "mp3";
++  }
++  // MP4/M4A/MOV: ....ftyp (Safari/iOS records in these containers)
++  if (buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70) {
++    return "mp4";
++  }
++  // OGG: OggS
++  if (buffer[0] === 0x4f && buffer[1] === 0x67 && buffer[2] === 0x67 && buffer[3] === 0x53) {
++    return "ogg";
++  }
++  return "unknown";
++}
++
++/**
++ * Convert any audio/video format to WAV using ffmpeg.
++ * Uses temp files instead of pipes because video containers (MP4/MOV)
++ * require seeking to find the audio track.
++ */
++export async function convertToWav(audioBuffer: Buffer): Promise<Buffer> {
++  const inputPath = join(tmpdir(), `input-${randomUUID()}`);
++  const outputPath = join(tmpdir(), `output-${randomUUID()}.wav`);
++
++  try {
++    // Write input to temp file (required for video containers that need seeking)
++    await writeFile(inputPath, audioBuffer);
++
++    // Run ffmpeg with file paths
++    await new Promise<void>((resolve, reject) => {
++      const ffmpeg = spawn("ffmpeg", [
++        "-i", inputPath,
++        "-vn",              // Extract audio only (ignore video track)
++        "-f", "wav",
++        "-ar", "16000",     // 16kHz sample rate (good for speech)
++        "-ac", "1",         // Mono
++        "-acodec", "pcm_s16le",
++        "-y",               // Overwrite output
++        outputPath,
++      ]);
++
++      ffmpeg.stderr.on("data", () => {}); // Suppress logs
++      ffmpeg.on("close", (code) => {
++        if (code === 0) resolve();
++        else reject(new Error(`ffmpeg exited with code ${code}`));
++      });
++      ffmpeg.on("error", reject);
++    });
++
++    // Read converted audio
++    return await readFile(outputPath);
++  } finally {
++    // Clean up temp files
++    await unlink(inputPath).catch(() => {});
++    await unlink(outputPath).catch(() => {});
++  }
++}
++
++/**
++ * Auto-detect and convert audio to OpenAI-compatible format.
++ * - WAV/MP3: Pass through (already compatible)
++ * - WebM/MP4/OGG: Convert to WAV via ffmpeg
++ */
++export async function ensureCompatibleFormat(
++  audioBuffer: Buffer
++): Promise<{ buffer: Buffer; format: "wav" | "mp3" }> {
++  const detected = detectAudioFormat(audioBuffer);
++  if (detected === "wav") return { buffer: audioBuffer, format: "wav" };
++  if (detected === "mp3") return { buffer: audioBuffer, format: "mp3" };
++  // Convert WebM, MP4, OGG, or unknown to WAV
++  const wavBuffer = await convertToWav(audioBuffer);
++  return { buffer: wavBuffer, format: "wav" };
++}
++
++/**
++ * Voice Chat: User speaks, LLM responds with audio (audio-in, audio-out).
++ * Uses gpt-audio model via Replit AI Integrations.
++ * Note: Browser records WebM/opus - convert to WAV using ffmpeg before calling this.
++ */
++export async function voiceChat(
++  audioBuffer: Buffer,
++  voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
++  inputFormat: "wav" | "mp3" = "wav",
++  outputFormat: "wav" | "mp3" = "mp3"
++): Promise<{ transcript: string; audioResponse: Buffer }> {
++  const audioBase64 = audioBuffer.toString("base64");
++  const response = await openai.chat.completions.create({
++    model: "gpt-audio",
++    modalities: ["text", "audio"],
++    audio: { voice, format: outputFormat },
++    messages: [{
++      role: "user",
++      content: [
++        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
++      ],
++    }],
++  });
++  const message = response.choices[0]?.message as any;
++  const transcript = message?.audio?.transcript || message?.content || "";
++  const audioData = message?.audio?.data ?? "";
++  return {
++    transcript,
++    audioResponse: Buffer.from(audioData, "base64"),
++  };
++}
++
++/**
++ * Streaming Voice Chat: For real-time audio responses.
++ * Note: Streaming only supports pcm16 output format.
++ *
++ * @example
++ * // Converting browser WebM to WAV before calling:
++ * const webmBuffer = Buffer.from(req.body.audio, "base64");
++ * const wavBuffer = await convertWebmToWav(webmBuffer);
++ * for await (const chunk of voiceChatStream(wavBuffer)) { ... }
++ */
++export async function voiceChatStream(
++  audioBuffer: Buffer,
++  voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
++  inputFormat: "wav" | "mp3" = "wav"
++): Promise<AsyncIterable<{ type: "transcript" | "audio"; data: string }>> {
++  const audioBase64 = audioBuffer.toString("base64");
++  const stream = await openai.chat.completions.create({
++    model: "gpt-audio",
++    modalities: ["text", "audio"],
++    audio: { voice, format: "pcm16" },
++    messages: [{
++      role: "user",
++      content: [
++        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
++      ],
++    }],
++    stream: true,
++  });
++
++  return (async function* () {
++    for await (const chunk of stream) {
++      const delta = chunk.choices?.[0]?.delta as any;
++      if (!delta) continue;
++      if (delta?.audio?.transcript) {
++        yield { type: "transcript", data: delta.audio.transcript };
++      }
++      if (delta?.audio?.data) {
++        yield { type: "audio", data: delta.audio.data };
++      }
++    }
++  })();
++}
++
++/**
++ * Text-to-Speech: Converts text to speech verbatim.
++ * Uses gpt-audio model via Replit AI Integrations.
++ */
++export async function textToSpeech(
++  text: string,
++  voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
++  format: "wav" | "mp3" | "flac" | "opus" | "pcm16" = "wav"
++): Promise<Buffer> {
++  const response = await openai.chat.completions.create({
++    model: "gpt-audio",
++    modalities: ["text", "audio"],
++    audio: { voice, format },
++    messages: [
++      { role: "system", content: "You are an assistant that performs text-to-speech." },
++      { role: "user", content: `Repeat the following text verbatim: ${text}` },
++    ],
++  });
++  const audioData = (response.choices[0]?.message as any)?.audio?.data ?? "";
++  return Buffer.from(audioData, "base64");
++}
++
++/**
++ * Streaming Text-to-Speech: Converts text to speech with real-time streaming.
++ * Uses gpt-audio model via Replit AI Integrations.
++ * Note: Streaming only supports pcm16 output format.
++ */
++export async function textToSpeechStream(
++  text: string,
++  voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy"
++): Promise<AsyncIterable<string>> {
++  const stream = await openai.chat.completions.create({
++    model: "gpt-audio",
++    modalities: ["text", "audio"],
++    audio: { voice, format: "pcm16" },
++    messages: [
++      { role: "system", content: "You are an assistant that performs text-to-speech." },
++      { role: "user", content: `Repeat the following text verbatim: ${text}` },
++    ],
++    stream: true,
++  });
++
++  return (async function* () {
++    for await (const chunk of stream) {
++      const delta = chunk.choices?.[0]?.delta as any;
++      if (!delta) continue;
++      if (delta?.audio?.data) {
++        yield delta.audio.data;
++      }
++    }
++  })();
++}
++
++/**
++ * Speech-to-Text: Transcribes audio using dedicated transcription model.
++ * Uses gpt-4o-mini-transcribe for accurate transcription.
++ */
++export async function speechToText(
++  audioBuffer: Buffer,
++  format: "wav" | "mp3" | "webm" = "wav"
++): Promise<string> {
++  const file = await toFile(audioBuffer, `audio.${format}`);
++  const response = await openai.audio.transcriptions.create({
++    file,
++    model: "gpt-4o-mini-transcribe",
++  });
++  return response.text;
++}
++
++/**
++ * Streaming Speech-to-Text: Transcribes audio with real-time streaming.
++ * Uses gpt-4o-mini-transcribe for accurate transcription.
++ */
++export async function speechToTextStream(
++  audioBuffer: Buffer,
++  format: "wav" | "mp3" | "webm" = "wav"
++): Promise<AsyncIterable<string>> {
++  const file = await toFile(audioBuffer, `audio.${format}`);
++  const stream = await openai.audio.transcriptions.create({
++    file,
++    model: "gpt-4o-mini-transcribe",
++    stream: true,
++  });
++
++  return (async function* () {
++    for await (const event of stream) {
++      if (event.type === "transcript.text.delta") {
++        yield event.delta;
++      }
++    }
++  })();
++}
+diff --git a/.replit_integration_files/server/replit_integrations/audio/index.ts b/.replit_integration_files/server/replit_integrations/audio/index.ts
+new file mode 100644
+index 000000000..8d2a25768
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/audio/index.ts
+@@ -0,0 +1,14 @@
++export { registerAudioRoutes } from "./routes";
++export {
++  openai,
++  detectAudioFormat,
++  convertToWav,
++  ensureCompatibleFormat,
++  type AudioFormat,
++  voiceChat,
++  voiceChatStream,
++  textToSpeech,
++  textToSpeechStream,
++  speechToText,
++  speechToTextStream,
++} from "./client";
+diff --git a/.replit_integration_files/server/replit_integrations/audio/routes.ts b/.replit_integration_files/server/replit_integrations/audio/routes.ts
+new file mode 100644
+index 000000000..b6e24217a
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/audio/routes.ts
+@@ -0,0 +1,136 @@
++import express, { type Express, type Request, type Response } from "express";
++import { chatStorage } from "../chat/storage";
++import { openai, speechToText, ensureCompatibleFormat } from "./client";
++
++// Body parser with 50MB limit for audio payloads
++const audioBodyParser = express.json({ limit: "50mb" });
++
++export function registerAudioRoutes(app: Express): void {
++  // Get all conversations
++  app.get("/api/conversations", async (req: Request, res: Response) => {
++    try {
++      const conversations = await chatStorage.getAllConversations();
++      res.json(conversations);
++    } catch (error) {
++      console.error("Error fetching conversations:", error);
++      res.status(500).json({ error: "Failed to fetch conversations" });
++    }
++  });
++
++  // Get single conversation with messages
++  app.get("/api/conversations/:id", async (req: Request, res: Response) => {
++    try {
++      const id = parseInt(req.params.id);
++      const conversation = await chatStorage.getConversation(id);
++      if (!conversation) {
++        return res.status(404).json({ error: "Conversation not found" });
++      }
++      const messages = await chatStorage.getMessagesByConversation(id);
++      res.json({ ...conversation, messages });
++    } catch (error) {
++      console.error("Error fetching conversation:", error);
++      res.status(500).json({ error: "Failed to fetch conversation" });
++    }
++  });
++
++  // Create new conversation
++  app.post("/api/conversations", async (req: Request, res: Response) => {
++    try {
++      const { title } = req.body;
++      const conversation = await chatStorage.createConversation(title || "New Chat");
++      res.status(201).json(conversation);
++    } catch (error) {
++      console.error("Error creating conversation:", error);
++      res.status(500).json({ error: "Failed to create conversation" });
++    }
++  });
++
++  // Delete conversation
++  app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
++    try {
++      const id = parseInt(req.params.id);
++      await chatStorage.deleteConversation(id);
++      res.status(204).send();
++    } catch (error) {
++      console.error("Error deleting conversation:", error);
++      res.status(500).json({ error: "Failed to delete conversation" });
++    }
++  });
++
++  // Send voice message and get streaming audio response
++  // Auto-detects audio format and converts WebM/MP4/OGG to WAV
++  // Uses gpt-4o-mini-transcribe for STT, gpt-audio for voice response
++  app.post("/api/conversations/:id/messages", audioBodyParser, async (req: Request, res: Response) => {
++    try {
++      const conversationId = parseInt(req.params.id);
++      const { audio, voice = "alloy" } = req.body;
++
++      if (!audio) {
++        return res.status(400).json({ error: "Audio data (base64) is required" });
++      }
++
++      // 1. Auto-detect format and convert to OpenAI-compatible format
++      const rawBuffer = Buffer.from(audio, "base64");
++      const { buffer: audioBuffer, format: inputFormat } = await ensureCompatibleFormat(rawBuffer);
++
++      // 2. Transcribe user audio
++      const userTranscript = await speechToText(audioBuffer, inputFormat);
++
++      // 3. Save user message
++      await chatStorage.createMessage(conversationId, "user", userTranscript);
++
++      // 4. Get conversation history
++      const existingMessages = await chatStorage.getMessagesByConversation(conversationId);
++      const chatHistory = existingMessages.map((m) => ({
++        role: m.role as "user" | "assistant",
++        content: m.content,
++      }));
++
++      // 5. Set up SSE
++      res.setHeader("Content-Type", "text/event-stream");
++      res.setHeader("Cache-Control", "no-cache");
++      res.setHeader("Connection", "keep-alive");
++
++      res.write(`data: ${JSON.stringify({ type: "user_transcript", data: userTranscript })}\n\n`);
++
++      // 6. Stream audio response from gpt-audio
++      const stream = await openai.chat.completions.create({
++        model: "gpt-audio",
++        modalities: ["text", "audio"],
++        audio: { voice, format: "pcm16" },
++        messages: chatHistory,
++        stream: true,
++      });
++
++      let assistantTranscript = "";
++
++      for await (const chunk of stream) {
++        const delta = chunk.choices?.[0]?.delta as any;
++        if (!delta) continue;
++
++        if (delta?.audio?.transcript) {
++          assistantTranscript += delta.audio.transcript;
++          res.write(`data: ${JSON.stringify({ type: "transcript", data: delta.audio.transcript })}\n\n`);
++        }
++
++        if (delta?.audio?.data) {
++          res.write(`data: ${JSON.stringify({ type: "audio", data: delta.audio.data })}\n\n`);
++        }
++      }
++
++      // 7. Save assistant message
++      await chatStorage.createMessage(conversationId, "assistant", assistantTranscript);
++
++      res.write(`data: ${JSON.stringify({ type: "done", transcript: assistantTranscript })}\n\n`);
++      res.end();
++    } catch (error) {
++      console.error("Error processing voice message:", error);
++      if (res.headersSent) {
++        res.write(`data: ${JSON.stringify({ type: "error", error: "Failed to process voice message" })}\n\n`);
++        res.end();
++      } else {
++        res.status(500).json({ error: "Failed to process voice message" });
++      }
++    }
++  });
++}
+diff --git a/.replit_integration_files/server/replit_integrations/batch/index.ts b/.replit_integration_files/server/replit_integrations/batch/index.ts
+new file mode 100644
+index 000000000..4d7efd0dc
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/batch/index.ts
+@@ -0,0 +1,7 @@
++export {
++  batchProcess,
++  batchProcessWithSSE,
++  isRateLimitError,
++  type BatchOptions,
++} from "./utils";
++
+diff --git a/.replit_integration_files/server/replit_integrations/batch/utils.ts b/.replit_integration_files/server/replit_integrations/batch/utils.ts
+new file mode 100644
+index 000000000..ee594d9fc
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/batch/utils.ts
+@@ -0,0 +1,182 @@
++import pLimit from "p-limit";
++import pRetry from "p-retry";
++
++/**
++ * Batch Processing Utilities
++ *
++ * This module provides a generic batch processing function with built-in
++ * rate limiting and automatic retries. Use it for any task that requires
++ * processing multiple items through an LLM or external API.
++ *
++ * USAGE:
++ * ```typescript
++ * import { batchProcess, isRateLimitError } from "./replit_integrations/batch";
++ *
++ * const results = await batchProcess(
++ *   artworks,
++ *   async (artwork) => {
++ *     // Your custom LLM logic here
++ *     const response = await openai.chat.completions.create({
++ *       model: "gpt-5.1",
++ *       messages: [{ role: "user", content: `Categorize: ${artwork.name}` }],
++ *       response_format: { type: "json_object" },
++ *     });
++ *     return JSON.parse(response.choices[0]?.message?.content || "{}");
++ *   },
++ *   { concurrency: 2, retries: 5 }
++ * );
++ * ```
++ */
++
++export interface BatchOptions {
++  /** Max concurrent requests (default: 2) */
++  concurrency?: number;
++  /** Max retry attempts for rate limit errors (default: 7) */
++  retries?: number;
++  /** Initial retry delay in ms (default: 2000) */
++  minTimeout?: number;
++  /** Max retry delay in ms (default: 128000) */
++  maxTimeout?: number;
++  /** Callback for progress updates */
++  onProgress?: (completed: number, total: number, item: unknown) => void;
++}
++
++/**
++ * Check if an error is a rate limit or quota violation.
++ * Use this in custom error handling if needed.
++ */
++export function isRateLimitError(error: unknown): boolean {
++  const errorMsg = error instanceof Error ? error.message : String(error);
++  return (
++    errorMsg.includes("429") ||
++    errorMsg.includes("RATELIMIT_EXCEEDED") ||
++    errorMsg.toLowerCase().includes("quota") ||
++    errorMsg.toLowerCase().includes("rate limit")
++  );
++}
++
++/**
++ * Process items in batches with rate limiting and automatic retries.
++ *
++ * @param items - Array of items to process
++ * @param processor - Async function to process each item (write your LLM logic here)
++ * @param options - Concurrency and retry settings
++ * @returns Promise resolving to array of results in the same order as input
++ *
++ * @example
++ * // Process CSV artwork data with custom categorization
++ * const categorized = await batchProcess(
++ *   csvRows,
++ *   async (row) => {
++ *     const response = await openai.chat.completions.create({
++ *       model: "gpt-5.1", // the newest OpenAI model
++ *       messages: [{ role: "user", content: `Categorize artwork: ${row.name}` }],
++ *       response_format: { type: "json_object" },
++ *     });
++ *     return { ...row, category: JSON.parse(response.choices[0]?.message?.content || "{}") };
++ *   }
++ * );
++ */
++export async function batchProcess<T, R>(
++  items: T[],
++  processor: (item: T, index: number) => Promise<R>,
++  options: BatchOptions = {}
++): Promise<R[]> {
++  const {
++    concurrency = 2,
++    retries = 7,
++    minTimeout = 2000,
++    maxTimeout = 128000,
++    onProgress,
++  } = options;
++
++  const limit = pLimit(concurrency);
++  let completed = 0;
++
++  const promises = items.map((item, index) =>
++    limit(() =>
++      pRetry(
++        async () => {
++          try {
++            const result = await processor(item, index);
++            completed++;
++            onProgress?.(completed, items.length, item);
++            return result;
++          } catch (error: unknown) {
++            if (isRateLimitError(error)) {
++              throw error; // Rethrow to trigger p-retry
++            }
++            // For non-rate-limit errors, abort immediately
++            throw new pRetry.AbortError(
++              error instanceof Error ? error : new Error(String(error))
++            );
++          }
++        },
++        { retries, minTimeout, maxTimeout, factor: 2 }
++      )
++    )
++  );
++
++  return Promise.all(promises);
++}
++
++/**
++ * Process items sequentially with SSE progress streaming.
++ * Use this when you need real-time progress updates to the client.
++ *
++ * @param items - Array of items to process
++ * @param processor - Async function to process each item
++ * @param sendEvent - Function to send SSE events to the client
++ * @param options - Retry settings (concurrency is always 1 for sequential)
++ */
++export async function batchProcessWithSSE<T, R>(
++  items: T[],
++  processor: (item: T, index: number) => Promise<R>,
++  sendEvent: (event: { type: string; [key: string]: unknown }) => void,
++  options: Omit<BatchOptions, "concurrency" | "onProgress"> = {}
++): Promise<R[]> {
++  const { retries = 5, minTimeout = 1000, maxTimeout = 15000 } = options;
++
++  sendEvent({ type: "started", total: items.length });
++
++  const results: R[] = [];
++  let errors = 0;
++
++  for (let index = 0; index < items.length; index++) {
++    const item = items[index];
++    sendEvent({ type: "processing", index, item });
++
++    try {
++      const result = await pRetry(
++        () => processor(item, index),
++        {
++          retries,
++          minTimeout,
++          maxTimeout,
++          factor: 2,
++          onFailedAttempt: (error) => {
++            if (!isRateLimitError(error)) {
++              throw new pRetry.AbortError(
++                error instanceof Error ? error : new Error(String(error))
++              );
++            }
++          },
++        }
++      );
++      results.push(result);
++      sendEvent({ type: "progress", index, result });
++    } catch (error) {
++      errors++;
++      results.push(undefined as R); // Placeholder for failed items
++      sendEvent({
++        type: "progress",
++        index,
++        error: error instanceof Error ? error.message : "Processing failed",
++      });
++    }
++  }
++
++  sendEvent({ type: "complete", processed: items.length, errors });
++  return results;
++}
++
+diff --git a/.replit_integration_files/server/replit_integrations/chat/index.ts b/.replit_integration_files/server/replit_integrations/chat/index.ts
+new file mode 100644
+index 000000000..822d8f7ad
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/chat/index.ts
+@@ -0,0 +1,3 @@
++export { registerChatRoutes } from "./routes";
++export { chatStorage, type IChatStorage } from "./storage";
++
+diff --git a/.replit_integration_files/server/replit_integrations/chat/routes.ts b/.replit_integration_files/server/replit_integrations/chat/routes.ts
+new file mode 100644
+index 000000000..fd74f8d6e
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/chat/routes.ts
+@@ -0,0 +1,118 @@
++import type { Express, Request, Response } from "express";
++import OpenAI from "openai";
++import { chatStorage } from "./storage";
++
++const openai = new OpenAI({
++  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
++  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
++});
++
++export function registerChatRoutes(app: Express): void {
++  // Get all conversations
++  app.get("/api/conversations", async (req: Request, res: Response) => {
++    try {
++      const conversations = await chatStorage.getAllConversations();
++      res.json(conversations);
++    } catch (error) {
++      console.error("Error fetching conversations:", error);
++      res.status(500).json({ error: "Failed to fetch conversations" });
++    }
++  });
++
++  // Get single conversation with messages
++  app.get("/api/conversations/:id", async (req: Request, res: Response) => {
++    try {
++      const id = parseInt(req.params.id);
++      const conversation = await chatStorage.getConversation(id);
++      if (!conversation) {
++        return res.status(404).json({ error: "Conversation not found" });
++      }
++      const messages = await chatStorage.getMessagesByConversation(id);
++      res.json({ ...conversation, messages });
++    } catch (error) {
++      console.error("Error fetching conversation:", error);
++      res.status(500).json({ error: "Failed to fetch conversation" });
++    }
++  });
++
++  // Create new conversation
++  app.post("/api/conversations", async (req: Request, res: Response) => {
++    try {
++      const { title } = req.body;
++      const conversation = await chatStorage.createConversation(title || "New Chat");
++      res.status(201).json(conversation);
++    } catch (error) {
++      console.error("Error creating conversation:", error);
++      res.status(500).json({ error: "Failed to create conversation" });
++    }
++  });
++
++  // Delete conversation
++  app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
++    try {
++      const id = parseInt(req.params.id);
++      await chatStorage.deleteConversation(id);
++      res.status(204).send();
++    } catch (error) {
++      console.error("Error deleting conversation:", error);
++      res.status(500).json({ error: "Failed to delete conversation" });
++    }
++  });
++
++  // Send message and get AI response (streaming)
++  app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
++    try {
++      const conversationId = parseInt(req.params.id);
++      const { content } = req.body;
++
++      // Save user message
++      await chatStorage.createMessage(conversationId, "user", content);
++
++      // Get conversation history for context
++      const messages = await chatStorage.getMessagesByConversation(conversationId);
++      const chatMessages = messages.map((m) => ({
++        role: m.role as "user" | "assistant",
++        content: m.content,
++      }));
++
++      // Set up SSE
++      res.setHeader("Content-Type", "text/event-stream");
++      res.setHeader("Cache-Control", "no-cache");
++      res.setHeader("Connection", "keep-alive");
++
++      // Stream response from OpenAI
++      const stream = await openai.chat.completions.create({
++        model: "gpt-5.1",
++        messages: chatMessages,
++        stream: true,
++        max_completion_tokens: 8192,
++      });
++
++      let fullResponse = "";
++
++      for await (const chunk of stream) {
++        const content = chunk.choices[0]?.delta?.content || "";
++        if (content) {
++          fullResponse += content;
++          res.write(`data: ${JSON.stringify({ content })}\n\n`);
++        }
++      }
++
++      // Save assistant message
++      await chatStorage.createMessage(conversationId, "assistant", fullResponse);
++
++      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
++      res.end();
++    } catch (error) {
++      console.error("Error sending message:", error);
++      // Check if headers already sent (SSE streaming started)
++      if (res.headersSent) {
++        res.write(`data: ${JSON.stringify({ error: "Failed to send message" })}\n\n`);
++        res.end();
++      } else {
++        res.status(500).json({ error: "Failed to send message" });
++      }
++    }
++  });
++}
++
+diff --git a/.replit_integration_files/server/replit_integrations/chat/storage.ts b/.replit_integration_files/server/replit_integrations/chat/storage.ts
+new file mode 100644
+index 000000000..3fd72c4e8
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/chat/storage.ts
+@@ -0,0 +1,43 @@
++import { db } from "../../db";
++import { conversations, messages } from "@shared/schema";
++import { eq, desc } from "drizzle-orm";
++
++export interface IChatStorage {
++  getConversation(id: number): Promise<typeof conversations.$inferSelect | undefined>;
++  getAllConversations(): Promise<(typeof conversations.$inferSelect)[]>;
++  createConversation(title: string): Promise<typeof conversations.$inferSelect>;
++  deleteConversation(id: number): Promise<void>;
++  getMessagesByConversation(conversationId: number): Promise<(typeof messages.$inferSelect)[]>;
++  createMessage(conversationId: number, role: string, content: string): Promise<typeof messages.$inferSelect>;
++}
++
++export const chatStorage: IChatStorage = {
++  async getConversation(id: number) {
++    const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id));
++    return conversation;
++  },
++
++  async getAllConversations() {
++    return db.select().from(conversations).orderBy(desc(conversations.createdAt));
++  },
++
++  async createConversation(title: string) {
++    const [conversation] = await db.insert(conversations).values({ title }).returning();
++    return conversation;
++  },
++
++  async deleteConversation(id: number) {
++    await db.delete(messages).where(eq(messages.conversationId, id));
++    await db.delete(conversations).where(eq(conversations.id, id));
++  },
++
++  async getMessagesByConversation(conversationId: number) {
++    return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
++  },
++
++  async createMessage(conversationId: number, role: string, content: string) {
++    const [message] = await db.insert(messages).values({ conversationId, role, content }).returning();
++    return message;
++  },
++};
++
+diff --git a/.replit_integration_files/server/replit_integrations/image/client.ts b/.replit_integration_files/server/replit_integrations/image/client.ts
+new file mode 100644
+index 000000000..bb5bc8a1a
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/image/client.ts
+@@ -0,0 +1,59 @@
++import fs from "node:fs";
++import OpenAI, { toFile } from "openai";
++import { Buffer } from "node:buffer";
++
++export const openai = new OpenAI({
++  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
++  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
++});
++
++/**
++ * Generate an image and return as Buffer.
++ * Uses gpt-image-1 model via Replit AI Integrations.
++ */
++export async function generateImageBuffer(
++  prompt: string,
++  size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
++): Promise<Buffer> {
++  const response = await openai.images.generate({
++    model: "gpt-image-1",
++    prompt,
++    size,
++  });
++  const base64 = response.data[0]?.b64_json ?? "";
++  return Buffer.from(base64, "base64");
++}
++
++/**
++ * Edit/combine multiple images into a composite.
++ * Uses gpt-image-1 model via Replit AI Integrations.
++ */
++export async function editImages(
++  imageFiles: string[],
++  prompt: string,
++  outputPath?: string
++): Promise<Buffer> {
++  const images = await Promise.all(
++    imageFiles.map((file) =>
++      toFile(fs.createReadStream(file), file, {
++        type: "image/png",
++      })
++    )
++  );
++
++  const response = await openai.images.edit({
++    model: "gpt-image-1",
++    image: images,
++    prompt,
++  });
++
++  const imageBase64 = response.data[0]?.b64_json ?? "";
++  const imageBytes = Buffer.from(imageBase64, "base64");
++
++  if (outputPath) {
++    fs.writeFileSync(outputPath, imageBytes);
++  }
++
++  return imageBytes;
++}
++
+diff --git a/.replit_integration_files/server/replit_integrations/image/index.ts b/.replit_integration_files/server/replit_integrations/image/index.ts
+new file mode 100644
+index 000000000..2ad0d29cf
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/image/index.ts
+@@ -0,0 +1,3 @@
++export { registerImageRoutes } from "./routes";
++export { openai, generateImageBuffer, editImages } from "./client";
++
+diff --git a/.replit_integration_files/server/replit_integrations/image/routes.ts b/.replit_integration_files/server/replit_integrations/image/routes.ts
+new file mode 100644
+index 000000000..a62fbae83
+--- /dev/null
++++ b/.replit_integration_files/server/replit_integrations/image/routes.ts
+@@ -0,0 +1,31 @@
++import type { Express, Request, Response } from "express";
++import { openai } from "./client";
++
++export function registerImageRoutes(app: Express): void {
++  app.post("/api/generate-image", async (req: Request, res: Response) => {
++    try {
++      const { prompt, size = "1024x1024" } = req.body;
++
++      if (!prompt) {
++        return res.status(400).json({ error: "Prompt is required" });
++      }
++
++      const response = await openai.images.generate({
++        model: "gpt-image-1",
++        prompt,
++        n: 1,
++        size: size as "1024x1024" | "512x512" | "256x256",
++      });
++
++      const imageData = response.data[0];
++      res.json({
++        url: imageData.url,
++        b64_json: imageData.b64_json,
++      });
++    } catch (error) {
++      console.error("Error generating image:", error);
++      res.status(500).json({ error: "Failed to generate image" });
++    }
++  });
++}
++
+diff --git a/.replit_integration_files/shared/models/chat.ts b/.replit_integration_files/shared/models/chat.ts
+new file mode 100644
+index 000000000..54c94f4de
+--- /dev/null
++++ b/.replit_integration_files/shared/models/chat.ts
+@@ -0,0 +1,34 @@
++import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
++import { createInsertSchema } from "drizzle-zod";
++import { z } from "zod";
++import { sql } from "drizzle-orm";
++
++export const conversations = pgTable("conversations", {
++  id: serial("id").primaryKey(),
++  title: text("title").notNull(),
++  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
++});
++
++export const messages = pgTable("messages", {
++  id: serial("id").primaryKey(),
++  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
++  role: text("role").notNull(),
++  content: text("content").notNull(),
++  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
++});
++
++export const insertConversationSchema = createInsertSchema(conversations).omit({
++  id: true,
++  createdAt: true,
++});
++
++export const insertMessageSchema = createInsertSchema(messages).omit({
++  id: true,
++  createdAt: true,
++});
++
++export type Conversation = typeof conversations.$inferSelect;
++export type InsertConversation = z.infer<typeof insertConversationSchema>;
++export type Message = typeof messages.$inferSelect;
++export type InsertMessage = z.infer<typeof insertMessageSchema>;
++
+diff --git a/openclaw.json b/openclaw.json
+new file mode 100644
+index 000000000..eeb630317
+--- /dev/null
++++ b/openclaw.json
+@@ -0,0 +1,16 @@
++{
++  "gateway": {
++    "bind": "lan",
++    "port": 5000,
++    "trustedProxies": ["172.16.0.0/12", "10.0.0.0/8"]
++  },
++  "models": {
++    "providers": {
++      "openai": {
++        "baseUrl": "${AI_INTEGRATIONS_OPENAI_BASE_URL}",
++        "apiKey": "${AI_INTEGRATIONS_OPENAI_API_KEY}",
++        "models": []
++      }
++    }
++  }
++}
+diff --git a/start.sh b/start.sh
+new file mode 100755
+index 000000000..706d0bb59
+--- /dev/null
++++ b/start.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
++TOKEN_JS="/home/runner/workspace/dist/control-ui/token-init.js"
++
++cat > "$TOKEN_JS" << JSEOF
++(function(){var K="openclaw.control.settings.v1";try{var r=localStorage.getItem(K);var s=r?JSON.parse(r):{};if(!s.token){s.token="${TOKEN}";localStorage.setItem(K,JSON.stringify(s))}}catch(e){}})();
++JSEOF
++
++export OPENAI_API_KEY="${AI_INTEGRATIONS_OPENAI_API_KEY}"
++export OPENAI_BASE_URL="${AI_INTEGRATIONS_OPENAI_BASE_URL}"
++
++exec node dist/entry.js gateway --bind lan --port 5000 --allow-unconfigured
+-- 
+2.40.0.windows.1
+

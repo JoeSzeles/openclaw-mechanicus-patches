@@ -1,0 +1,35 @@
+From 989e7de4f4e3b259a902b30bbdda88456bb15738 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 07:09:59 +0000
+Subject: [PATCH 010/244] Forcefully restart the gateway process to ensure a
+ clean startup
+
+Update the start script to kill existing gateway processes before starting a new one.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: ae701879-b4d5-4558-8633-056a0f22c03f
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Jk3YN42
+Replit-Helium-Checkpoint-Created: true
+---
+ start.sh | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/start.sh b/start.sh
+index cccef39f4..e44cb9dde 100755
+--- a/start.sh
++++ b/start.sh
+@@ -1,4 +1,9 @@
+ #!/bin/bash
++
++# Force kill any existing gateway processes first
++pkill -9 -f "node dist/entry.js gateway" 2>/dev/null || true
++sleep 0.5
++
+ TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+ TOKEN_JS="/home/runner/workspace/dist/control-ui/token-init.js"
+ 
+-- 
+2.40.0.windows.1
+

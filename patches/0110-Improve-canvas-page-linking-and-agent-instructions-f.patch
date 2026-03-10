@@ -1,0 +1,45 @@
+From ee16b337c836bed83276b34ca4081765b2ff4545 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 03:58:27 +0000
+Subject: [PATCH 110/244] Improve canvas page linking and agent instructions
+ for clarity
+
+Update TOOLS.md template to use full URLs for canvas pages, ensuring agents provide complete, clickable links by incorporating the REPLIT_DEV_DOMAIN environment variable.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 47f34615-a4df-49bc-8e25-3335c62dec19
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/idaQsjn
+Replit-Helium-Checkpoint-Created: true
+---
+ docs/reference/templates/TOOLS.md | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/docs/reference/templates/TOOLS.md b/docs/reference/templates/TOOLS.md
+index d1d36c85b..485f3dbc7 100644
+--- a/docs/reference/templates/TOOLS.md
++++ b/docs/reference/templates/TOOLS.md
+@@ -47,14 +47,15 @@ Skills are shared. Your setup is yours. Keeping them apart means you can update
+ When you need to show visual results — dashboards, charts, reports, or any HTML page — use the **canvas system**:
+ 
+ 1. Write an HTML file to `.openclaw/canvas/your-page.html`
+-2. It becomes accessible at `/__openclaw__/canvas/your-page.html` (no auth needed)
++2. It becomes accessible at `https://${REPLIT_DEV_DOMAIN}/__openclaw__/canvas/your-page.html` (no auth needed)
+ 3. Register it in `.openclaw/canvas/manifest.json` so it appears on the Canvas hub:
+    - Read the file (JSON array), add `{"name": "Page Name", "file": "your-page.html", "description": "What it shows", "category": "Skills"}`
+    - Categories: `Trading`, `Crypto`, `Skills`, or custom (defaults to `Other`)
+-4. Use CDN libraries freely (Chart.js, D3, etc.)
+-5. **Never** start a web server or use custom ports — canvas is the only way
++4. Always give the user a FULL URL with the domain (read `REPLIT_DEV_DOMAIN` env var) — never a relative path
++5. Use CDN libraries freely (Chart.js, D3, etc.)
++6. **Never** start a web server or use custom ports — canvas is the only way
+ 
+-The Canvas hub at `/__openclaw__/canvas/` lists all registered pages.
++The Canvas hub is at `https://${REPLIT_DEV_DOMAIN}/__openclaw__/canvas/`.
+ 
+ ---
+ 
+-- 
+2.40.0.windows.1
+

@@ -1,0 +1,71 @@
+From 0a0ab4fe752cfa04ad6ffe921317beee328ca08e Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 03:30:44 +0000
+Subject: [PATCH 168/244] Add adapter to convert ProRealTime code to IG trading
+ bot strategies
+
+Create a new adapter skill that reads ProRealTime code, parses trading logic (entry, stop-loss, take-profit, size), maps it to the `ig-strategy.json` format, and deploys it to the IG trading bot.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: ce322e4b-66be-4c71-a628-e489277842ef
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/cGjnef9
+Replit-Helium-Checkpoint-Created: true
+---
+ skills/prorealtime-ig-adapter/SKILL.md | 42 ++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+ create mode 100644 skills/prorealtime-ig-adapter/SKILL.md
+
+diff --git a/skills/prorealtime-ig-adapter/SKILL.md b/skills/prorealtime-ig-adapter/SKILL.md
+new file mode 100644
+index 000000000..42915187a
+--- /dev/null
++++ b/skills/prorealtime-ig-adapter/SKILL.md
+@@ -0,0 +1,42 @@
++---
++name: prorealtime-ig-adapter
++description: Read ProRealTime code and automatically convert/feed to IG trading bot. Parses indicators/entries/SL/TP into ig-strategy.json config, tests, deploys. Use for \"ProRealTime to IG bot\", \"PRT code to strategy\", \"convert PRT to IG\", \"feed PRT to bot\".
++---
++
++# ProRealTime → IG Trading Bot Adapter
++
++Converts ProRealTime (ProBuilder/ProOrder) code to IG bot strategies. Parses code for entry conditions, sizes, SL/TP → maps to ig-strategy.json → deploys/tests.
++
++## Workflow
++
++1. **Read PRT Code:** `read path/to/prt-code.pf`
++2. **Parse:** Extract:
++   - Entry: BUY/SELLSHORT → direction BUY/SELL
++   - Triggers: RSI[14]<30 → entryBelow mid-RSI30 level (fetch live)
++   - Size: PositionSize → size
++   - SL: SET STOP pLOSS 400 → stopDistance 400
++   - TP: SET TARGET pPROFIT 800 → limitDistance 800
++   - Indicators: RSI → condition RSI<30
++3. **Map to IG:** Create strategy obj → append `ig-strategy.json`
++4. **Test:** `exec node skills/bots/ig-trading-bot.cjs --test`
++5. **Deploy:** Refresh snapshots, notify bot live.
++
++## Examples
++
++**Input PRT:** RSI scalp → Output: {\"instrument\":\"CS.D.BITCOIN.CFD.IP\",\"name\":\"RSI Scalp\",\"direction\":\"BUY\",\"entryBelow\":68000,\"stopDistance\":400,\"limitDistance\":800,\"size\":0.05}
++
++## Parse Helpers (scripts/parse-prt.js)
++
++Use for complex code:
++```
++// Pseudo JS parser
++const lines = content.split('\\n')
++const sizeMatch = lines.find(l => l.includes('PositionSize'))
++// etc.
++```
++
++## References
++- [PROREALTIME_CODE_RULES.md](../PROREALTIME_CODE_RULES.md) — Syntax
++- [ig-trading-bot/SKILL.md](../../ig-trading-bot/SKILL.md) — Target bot
++
++**Constraints:** BTC/ETH only (crypto 24/7). Verify tradeable first.
+\ No newline at end of file
+-- 
+2.40.0.windows.1
+

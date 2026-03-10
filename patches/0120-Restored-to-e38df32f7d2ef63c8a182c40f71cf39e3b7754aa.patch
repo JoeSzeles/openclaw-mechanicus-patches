@@ -1,0 +1,572 @@
+From 9941275a662fe5ba6d9317dc07e7be2c2198a905 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 06:47:07 +0000
+Subject: [PATCH 120/244] Restored to
+ 'e38df32f7d2ef63c8a182c40f71cf39e3b7754aa'
+
+Replit-Restored-To: e38df32f7d2ef63c8a182c40f71cf39e3b7754aa
+---
+ ceo-proxy.cjs               | 287 ------------------------------------
+ replit.md                   |   6 +-
+ ui/src/styles/chat/text.css |  95 ------------
+ ui/src/ui/markdown.ts       |  64 ++------
+ 4 files changed, 11 insertions(+), 441 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index b9e4413a8..daf65b66e 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -17,289 +17,6 @@ const CHAT_FILE = path.join(DATA_DIR, "ceo-chat.json");
+ const BEES_FILE = path.join(DATA_DIR, "available-bees.json");
+ const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+ const CANVAS_DIR = path.join(DATA_DIR, "canvas");
+-const BOT_REGISTRY_FILE = path.join(DATA_DIR, "bot-registry.json");
+-const https = require("https");
+-
+-// IG API session cache
+-let igSession = { cst: null, xst: null, ts: 0 };
+-const IG_SESSION_TTL = 5 * 60 * 1000;
+-
+-// Bot process manager
+-const botProcesses = new Map();
+-
+-function igConfigured() {
+-  return !!(process.env.IG_API_KEY && process.env.IG_USERNAME && process.env.IG_PASSWORD && process.env.IG_BASE_URL);
+-}
+-
+-function igRequest(method, urlPath, headers, body) {
+-  return new Promise((resolve, reject) => {
+-    const base = process.env.IG_BASE_URL || "";
+-    const url = new URL(urlPath.startsWith("http") ? urlPath : base + urlPath);
+-    const mod = url.protocol === "https:" ? https : http;
+-    const opts = {
+-      hostname: url.hostname,
+-      port: url.port || (url.protocol === "https:" ? 443 : 80),
+-      path: url.pathname + url.search,
+-      method,
+-      headers,
+-    };
+-    const req = mod.request(opts, (res) => {
+-      const chunks = [];
+-      res.on("data", (c) => chunks.push(c));
+-      res.on("end", () => {
+-        resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString() });
+-      });
+-    });
+-    req.on("error", reject);
+-    if (body) req.write(typeof body === "string" ? body : JSON.stringify(body));
+-    req.end();
+-  });
+-}
+-
+-async function igAuth() {
+-  if (igSession.cst && Date.now() - igSession.ts < IG_SESSION_TTL) {
+-    return { cst: igSession.cst, xst: igSession.xst };
+-  }
+-  const res = await igRequest("POST", "/session", {
+-    "Content-Type": "application/json; charset=UTF-8",
+-    Accept: "application/json; charset=UTF-8",
+-    "X-IG-API-KEY": process.env.IG_API_KEY,
+-    Version: "2",
+-  }, JSON.stringify({ identifier: process.env.IG_USERNAME, password: process.env.IG_PASSWORD }));
+-  if (res.status !== 200) throw new Error("IG auth failed: " + res.status);
+-  const cst = res.headers["cst"] || res.headers["CST"];
+-  const xst = res.headers["x-security-token"] || res.headers["X-SECURITY-TOKEN"];
+-  if (!cst || !xst) throw new Error("IG auth missing tokens");
+-  igSession = { cst, xst, ts: Date.now() };
+-  return { cst, xst };
+-}
+-
+-function igHeaders(session) {
+-  return {
+-    "X-IG-API-KEY": process.env.IG_API_KEY,
+-    CST: session.cst,
+-    "X-SECURITY-TOKEN": session.xst,
+-    "Content-Type": "application/json; charset=UTF-8",
+-    Accept: "application/json; charset=UTF-8",
+-  };
+-}
+-
+-async function handleIgApi(req, res, p) {
+-  if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
+-  if (!igConfigured()) return json(res, 503, { error: "IG not configured — set IG_API_KEY, IG_USERNAME, IG_PASSWORD, IG_BASE_URL env vars" });
+-
+-  try {
+-    if (req.method === "GET" && p === "/api/ig/positions") {
+-      const session = await igAuth();
+-      const r = await igRequest("GET", "/positions", { ...igHeaders(session), Version: "2" });
+-      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
+-    }
+-
+-    if (req.method === "GET" && p === "/api/ig/account") {
+-      const session = await igAuth();
+-      const r = await igRequest("GET", "/accounts", igHeaders(session));
+-      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
+-    }
+-
+-    if (req.method === "GET" && p.startsWith("/api/ig/prices")) {
+-      const url = new URL("http://localhost" + req.url);
+-      const epics = url.searchParams.get("epics");
+-      if (!epics) return json(res, 400, { error: "Missing ?epics= param" });
+-      const session = await igAuth();
+-      const results = {};
+-      for (const epic of epics.split(",").map(s => s.trim()).filter(Boolean)) {
+-        try {
+-          const r = await igRequest("GET", "/markets/" + epic, igHeaders(session));
+-          if (r.status === 200) results[epic] = JSON.parse(r.body);
+-        } catch (_) {}
+-      }
+-      return json(res, 200, { prices: results });
+-    }
+-
+-    if (req.method === "POST" && p === "/api/ig/refresh-snapshots") {
+-      writeConfigSnapshots();
+-      return json(res, 200, { ok: true, message: "Snapshots refreshed" });
+-    }
+-
+-    return json(res, 404, { error: "Unknown IG endpoint" });
+-  } catch (e) {
+-    return json(res, 500, { error: e.message });
+-  }
+-}
+-
+-function writeConfigSnapshots() {
+-  try {
+-    if (!fs.existsSync(CANVAS_DIR)) fs.mkdirSync(CANVAS_DIR, { recursive: true });
+-    const monitorCfg = path.join(DATA_DIR, "ig-monitor-config.json");
+-    if (fs.existsSync(monitorCfg)) {
+-      fs.writeFileSync(path.join(CANVAS_DIR, "ig-monitor-config-snapshot.json"), fs.readFileSync(monitorCfg));
+-    }
+-    const strategyCfg = path.join(DATA_DIR, "ig-strategy.json");
+-    if (fs.existsSync(strategyCfg)) {
+-      fs.writeFileSync(path.join(CANVAS_DIR, "ig-strategy-snapshot.json"), fs.readFileSync(strategyCfg));
+-    }
+-    const alerts = path.join(DATA_DIR, "ig-alerts.json");
+-    if (fs.existsSync(alerts)) {
+-      fs.writeFileSync(path.join(CANVAS_DIR, "ig-alerts-snapshot.json"), fs.readFileSync(alerts));
+-    }
+-    const botLog = path.join(DATA_DIR, "ig-bot-log.json");
+-    if (fs.existsSync(botLog)) {
+-      fs.writeFileSync(path.join(CANVAS_DIR, "ig-bot-log-snapshot.json"), fs.readFileSync(botLog));
+-    }
+-    console.log("[ceo-proxy] Config snapshots written to canvas");
+-  } catch (e) {
+-    console.error("[ceo-proxy] Snapshot write error:", e.message);
+-  }
+-}
+-
+-// === Bot Process Manager ===
+-
+-function loadBotRegistry() {
+-  try {
+-    if (fs.existsSync(BOT_REGISTRY_FILE)) return JSON.parse(fs.readFileSync(BOT_REGISTRY_FILE, "utf8"));
+-  } catch (_) {}
+-  return [];
+-}
+-
+-function saveBotRegistry(registry) {
+-  fs.writeFileSync(BOT_REGISTRY_FILE, JSON.stringify(registry, null, 2));
+-}
+-
+-function spawnBot(bot) {
+-  if (botProcesses.has(bot.id) && botProcesses.get(bot.id).proc && !botProcesses.get(bot.id).proc.killed) {
+-    return;
+-  }
+-  const parts = bot.cmd.split(/\s+/);
+-  const cmd = parts[0];
+-  const args = parts.slice(1);
+-  console.log("[bot-mgr] Starting bot:", bot.id, "cmd:", bot.cmd);
+-  const proc = spawn(cmd, args, {
+-    cwd: OPENCLAW_HOME,
+-    stdio: ["ignore", "pipe", "pipe"],
+-    env: { ...process.env },
+-    detached: false,
+-  });
+-  const entry = { proc, bot, restarts: 0, lastStart: Date.now(), backoff: 5000 };
+-  botProcesses.set(bot.id, entry);
+-  proc.stdout.on("data", (d) => process.stdout.write(`[${bot.id}] ${d}`));
+-  proc.stderr.on("data", (d) => process.stderr.write(`[${bot.id}] ${d}`));
+-  proc.on("exit", (code) => {
+-    console.log(`[bot-mgr] Bot ${bot.id} exited with code ${code}`);
+-    const registry = loadBotRegistry();
+-    const current = registry.find(b => b.id === bot.id);
+-    if (!current || !current.enabled) {
+-      botProcesses.delete(bot.id);
+-      return;
+-    }
+-    const e = botProcesses.get(bot.id);
+-    if (!e) return;
+-    e.restarts++;
+-    const delay = Math.min(e.backoff * Math.pow(2, Math.min(e.restarts - 1, 4)), 60000);
+-    console.log(`[bot-mgr] Restarting ${bot.id} in ${delay}ms (restart #${e.restarts})`);
+-    setTimeout(() => {
+-      const reg = loadBotRegistry();
+-      const b = reg.find(r => r.id === bot.id);
+-      if (b && b.enabled) spawnBot(b);
+-    }, delay);
+-  });
+-}
+-
+-function stopBot(botId) {
+-  const entry = botProcesses.get(botId);
+-  if (!entry || !entry.proc) return;
+-  try {
+-    entry.proc.kill("SIGTERM");
+-    setTimeout(() => {
+-      try { if (!entry.proc.killed) entry.proc.kill("SIGKILL"); } catch (_) {}
+-    }, 3000);
+-  } catch (_) {}
+-  botProcesses.delete(botId);
+-}
+-
+-function startRegisteredBots() {
+-  const registry = loadBotRegistry();
+-  for (const bot of registry) {
+-    if (bot.enabled) {
+-      spawnBot(bot);
+-    }
+-  }
+-  if (registry.length > 0) console.log(`[bot-mgr] Started ${registry.filter(b => b.enabled).length}/${registry.length} registered bots`);
+-}
+-
+-async function handleBotsApi(req, res, p) {
+-  if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
+-
+-  if (req.method === "GET" && p === "/api/bots") {
+-    const registry = loadBotRegistry();
+-    const bots = registry.map(b => {
+-      const entry = botProcesses.get(b.id);
+-      const running = !!(entry && entry.proc && !entry.proc.killed);
+-      return {
+-        id: b.id,
+-        cmd: b.cmd,
+-        enabled: b.enabled,
+-        running,
+-        pid: running ? entry.proc.pid : null,
+-        restarts: entry ? entry.restarts : 0,
+-        addedBy: b.addedBy || "unknown",
+-        addedAt: b.addedAt || null,
+-      };
+-    });
+-    return json(res, 200, { bots });
+-  }
+-
+-  if (req.method === "POST" && p === "/api/bots/register") {
+-    const body = JSON.parse((await readBody(req)).toString() || "{}");
+-    if (!body.id || !body.cmd) return json(res, 400, { error: "id and cmd required" });
+-    const registry = loadBotRegistry();
+-    const existing = registry.find(b => b.id === body.id);
+-    if (existing) {
+-      existing.cmd = body.cmd;
+-      existing.enabled = true;
+-    } else {
+-      registry.push({ id: body.id, cmd: body.cmd, enabled: true, addedBy: body.addedBy || "api", addedAt: new Date().toISOString() });
+-    }
+-    saveBotRegistry(registry);
+-    const bot = registry.find(b => b.id === body.id);
+-    spawnBot(bot);
+-    return json(res, 200, { ok: true, bot });
+-  }
+-
+-  const idMatch = p.match(/^\/api\/bots\/([^/]+)\/?(start|stop)?$/);
+-  if (idMatch) {
+-    const botId = decodeURIComponent(idMatch[1]);
+-    const action = idMatch[2];
+-
+-    if (req.method === "DELETE" && !action) {
+-      stopBot(botId);
+-      const registry = loadBotRegistry().filter(b => b.id !== botId);
+-      saveBotRegistry(registry);
+-      return json(res, 200, { ok: true, removed: botId });
+-    }
+-
+-    if (req.method === "POST" && action === "start") {
+-      const registry = loadBotRegistry();
+-      const bot = registry.find(b => b.id === botId);
+-      if (!bot) return json(res, 404, { error: "Bot not found in registry" });
+-      bot.enabled = true;
+-      saveBotRegistry(registry);
+-      spawnBot(bot);
+-      return json(res, 200, { ok: true, started: botId });
+-    }
+-
+-    if (req.method === "POST" && action === "stop") {
+-      stopBot(botId);
+-      const registry = loadBotRegistry();
+-      const bot = registry.find(b => b.id === botId);
+-      if (bot) { bot.enabled = false; saveBotRegistry(registry); }
+-      return json(res, 200, { ok: true, stopped: botId });
+-    }
+-  }
+-
+-  return json(res, 404, { error: "Not found" });
+-}
+ 
+ const MIME_TYPES = {
+   ".html": "text/html; charset=utf-8",
+@@ -1357,8 +1074,6 @@ async function handleApi(req, res) {
+     return json(res, 201, { ok: true, taskId: task.id, workerName: w.name }), true;
+   }
+ 
+-  if (p.startsWith("/api/ig/")) { await handleIgApi(req, res, p); return true; }
+-  if (p.startsWith("/api/bots")) { await handleBotsApi(req, res, p); return true; }
+   if (p.startsWith("/api/processes")) { await handleProcesses(req, res, p); return true; }
+   if (p.startsWith("/api/canvas")) { await handleCanvasApi(req, res, p); return true; }
+   if (p.startsWith("/api/keys")) { await handleApiKeys(req, res, p); return true; }
+@@ -1554,8 +1269,6 @@ server.on("upgrade", (req, socket, head) => {
+ server.listen(PROXY_PORT, "0.0.0.0", () => {
+   console.log(`[ceo-proxy] listening on 0.0.0.0:${PROXY_PORT}, proxying to gateway:${GATEWAY_PORT}`);
+   updateCrewFile();
+-  writeConfigSnapshots();
+-  startRegisteredBots();
+ });
+ 
+ setInterval(() => {
+diff --git a/replit.md b/replit.md
+index e7321d442..028ff1557 100644
+--- a/replit.md
++++ b/replit.md
+@@ -39,9 +39,7 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+ -   **Persistent Storage**: All OpenClaw data, including configuration, agents, API keys, worker tasks, chat history, and file exchange, persists across container restarts in the `.openclaw/` directory.
+ -   **Canvas Static File Serving**: The CEO proxy serves files from `.openclaw/canvas/` at `/__openclaw__/canvas/` without authentication. Canvas API: `DELETE /api/canvas/page/{filename}` removes a page from manifest + disk (protected pages: index.html, manifest.json, ig-dashboard.html). `GET /api/canvas/manifest` returns manifest entries. Skills and agents can write HTML dashboards, charts, and reports to this directory and link users directly. No separate web server or custom port needed. A manifest system (`.openclaw/canvas/manifest.json`) tracks all published pages for dynamic discovery on the Canvas hub (`/__openclaw__/canvas/`). Agents register new pages by adding entries to the manifest JSON array.
+ -   **Auto-Token Injection**: The gateway authentication token is automatically injected into the Control UI at startup, eliminating manual configuration.
+--   **Process Manager & Bot Registry**: A web UI (`/processes.html`) shows registered bots with start/stop/remove controls AND ad-hoc running processes. Bot registry persists in `.openclaw/bot-registry.json` — registered bots auto-restart on server restart with exponential backoff (5s→60s max). API: `GET /api/processes` (list ad-hoc), `POST /api/processes/kill` (kill by PID), `GET /api/bots` (list registered bots), `POST /api/bots/register` (register a bot with id+cmd), `POST /api/bots/{id}/start|stop` (control), `DELETE /api/bots/{id}` (remove).
+--   **IG API Proxy**: Live IG Group API endpoints in ceo-proxy.cjs with session token caching (5-min TTL). Endpoints: `GET /api/ig/account` (balance/margin), `GET /api/ig/positions` (open positions), `GET /api/ig/prices?epics=...` (current prices), `POST /api/ig/refresh-snapshots` (refresh config snapshot files for dashboard). Graceful fallback if IG env vars not configured.
+--   **Chat Rich Media (Canvas Embeds)**: The chat UI supports inline iframe embeds for canvas pages. `![canvas](/__openclaw__/canvas/page.html)` renders as a sandboxed iframe. Raw `<iframe src="/__openclaw__/canvas/...">` also works. DOMPurify restricts iframe src to `/__openclaw__/canvas/` URLs only. Enhanced markdown tables with alternating row colors and hover highlighting.
++-   **Process Manager**: A web UI (`/processes.html`) shows all running bot scripts, monitors, and skill processes. Uses OS-level process discovery (`ps aux`) filtered to `skills/` scripts. Supports killing processes with SIGTERM/SIGKILL fallback. Auto-refreshes every 10 seconds. API: `GET /api/processes` (list), `POST /api/processes/kill` (kill by PID).
+ -   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, AI Model Config, Workers, and Processes pages.
+ 
+ ### Technical Implementation Details:
+@@ -71,7 +69,7 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+     -   **Trade Proof Reader**: Multi-layered anti-hallucination protection for margin trading. Bot-level rule-based verification (spread limits, stop-loss validation, price staleness detection, risk sizing, duplicate checks) runs before every trade. Agent-level `ig-trade-verify` skill defines a mandatory verification protocol. All verifications logged to `.openclaw/canvas/ig-verify-log.json` and displayed on the IG dashboard.
+     -   Signal monitor config: `.openclaw/ig-monitor-config.json`, alerts: `.openclaw/ig-alerts.json`.
+     -   Trading bot config: `.openclaw/ig-strategy.json`, log: `.openclaw/ig-bot-log.json`.
+-    -   Dashboard: `.openclaw/canvas/ig-dashboard.html` (viewable at `/__openclaw__/canvas/ig-dashboard.html`). Shows LIVE account/positions data via `/api/ig/*` endpoints + SNAPSHOT data from config files. Badge system: green "LIVE" for API-fetched, grey "SNAPSHOT" for file-based sections.
++    -   Dashboard: `.openclaw/canvas/ig-dashboard.html` (viewable at `/__openclaw__/canvas/ig-dashboard.html`). Includes price charts, alerts, strategies, verification audit trail.
+     -   Credentials stored in env vars: `IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`, `IG_ACCOUNT_ID`, `IG_BASE_URL`.
+     -   Reference doc: `.openclaw/workspace/IG_TRADING.md`.
+ -   **Replit Secrets Management**: Securely stores API keys like `XAI_API_KEY`, `OPENCLAW_GATEWAY_TOKEN`, and IG credentials.
+diff --git a/ui/src/styles/chat/text.css b/ui/src/styles/chat/text.css
+index 52dd90c08..d6eea9866 100644
+--- a/ui/src/styles/chat/text.css
++++ b/ui/src/styles/chat/text.css
+@@ -142,98 +142,3 @@
+   padding-left: 0;
+   padding-right: 1em;
+ }
+-
+-/* =============================================
+-   CANVAS EMBEDS
+-   ============================================= */
+-
+-.chat-text .canvas-embed-wrapper {
+-  margin: 8px 0;
+-  border-radius: 8px;
+-  overflow: hidden;
+-  border: 1px solid var(--border);
+-  background: rgba(0, 0, 0, 0.1);
+-}
+-
+-.chat-text .canvas-embed {
+-  width: 100%;
+-  height: 420px;
+-  border: none;
+-  display: block;
+-  background: #0d1117;
+-}
+-
+-.chat-text .canvas-embed-label {
+-  padding: 4px 10px;
+-  font-size: 11px;
+-  color: var(--muted);
+-  background: rgba(0, 0, 0, 0.15);
+-  border-top: 1px solid var(--border);
+-}
+-
+-/* =============================================
+-   ENHANCED TABLES
+-   ============================================= */
+-
+-.chat-text :where(table) {
+-  border-collapse: collapse;
+-  width: 100%;
+-  font-size: 13px;
+-  margin: 8px 0;
+-  border: 1px solid var(--border);
+-  border-radius: 6px;
+-  overflow: hidden;
+-}
+-
+-.chat-text :where(th) {
+-  background: rgba(0, 0, 0, 0.2);
+-  font-weight: 600;
+-  font-size: 12px;
+-  text-transform: uppercase;
+-  letter-spacing: 0.3px;
+-  color: var(--muted);
+-  padding: 8px 10px;
+-  text-align: left;
+-  border-bottom: 1px solid var(--border);
+-}
+-
+-.chat-text :where(td) {
+-  padding: 6px 10px;
+-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+-}
+-
+-.chat-text :where(tr:nth-child(even)) {
+-  background: rgba(255, 255, 255, 0.02);
+-}
+-
+-.chat-text :where(tr:hover) {
+-  background: rgba(88, 166, 255, 0.04);
+-}
+-
+-:root[data-theme="light"] .chat-text :where(th) {
+-  background: rgba(0, 0, 0, 0.05);
+-}
+-
+-:root[data-theme="light"] .chat-text :where(td) {
+-  border-bottom-color: rgba(0, 0, 0, 0.06);
+-}
+-
+-:root[data-theme="light"] .chat-text :where(tr:nth-child(even)) {
+-  background: rgba(0, 0, 0, 0.02);
+-}
+-
+-:root[data-theme="light"] .chat-text :where(tr:hover) {
+-  background: rgba(0, 0, 0, 0.04);
+-}
+-
+-:root[data-theme="light"] .chat-text .canvas-embed-wrapper {
+-  background: rgba(0, 0, 0, 0.03);
+-}
+-
+-:root[data-theme="light"] .chat-text .canvas-embed {
+-  background: #f6f8fa;
+-}
+-
+-:root[data-theme="light"] .chat-text .canvas-embed-label {
+-  background: rgba(0, 0, 0, 0.04);
+-}
+diff --git a/ui/src/ui/markdown.ts b/ui/src/ui/markdown.ts
+index fed8285ec..1867b0eda 100644
+--- a/ui/src/ui/markdown.ts
++++ b/ui/src/ui/markdown.ts
+@@ -14,7 +14,6 @@ const allowedTags = [
+   "br",
+   "code",
+   "del",
+-  "div",
+   "em",
+   "h1",
+   "h2",
+@@ -22,12 +21,10 @@ const allowedTags = [
+   "h4",
+   "hr",
+   "i",
+-  "iframe",
+   "li",
+   "ol",
+   "p",
+   "pre",
+-  "span",
+   "strong",
+   "table",
+   "tbody",
+@@ -39,22 +36,7 @@ const allowedTags = [
+   "img",
+ ];
+ 
+-const allowedAttrs = [
+-  "class",
+-  "href",
+-  "rel",
+-  "target",
+-  "title",
+-  "start",
+-  "src",
+-  "alt",
+-  "style",
+-  "width",
+-  "height",
+-  "frameborder",
+-  "sandbox",
+-  "loading",
+-];
++const allowedAttrs = ["class", "href", "rel", "target", "title", "start", "src", "alt"];
+ const sanitizeOptions = {
+   ALLOWED_TAGS: allowedTags,
+   ALLOWED_ATTR: allowedAttrs,
+@@ -89,8 +71,6 @@ function setCachedMarkdown(key: string, value: string) {
+   }
+ }
+ 
+-const CANVAS_URL_PREFIX = "/__openclaw__/canvas/";
+-
+ function installHooks() {
+   if (hooksInstalled) {
+     return;
+@@ -98,27 +78,15 @@ function installHooks() {
+   hooksInstalled = true;
+ 
+   DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+-    if (node instanceof HTMLAnchorElement) {
+-      const href = node.getAttribute("href");
+-      if (!href) {
+-        return;
+-      }
+-      node.setAttribute("rel", "noreferrer noopener");
+-      node.setAttribute("target", "_blank");
++    if (!(node instanceof HTMLAnchorElement)) {
++      return;
+     }
+-
+-    if (node instanceof HTMLIFrameElement) {
+-      const src = node.getAttribute("src") || "";
+-      if (!src.startsWith(CANVAS_URL_PREFIX)) {
+-        node.remove();
+-        return;
+-      }
+-      node.setAttribute("sandbox", "allow-scripts allow-same-origin");
+-      node.setAttribute("loading", "lazy");
+-      if (!node.classList.contains("canvas-embed")) {
+-        node.classList.add("canvas-embed");
+-      }
++    const href = node.getAttribute("href");
++    if (!href) {
++      return;
+     }
++    node.setAttribute("rel", "noreferrer noopener");
++    node.setAttribute("target", "_blank");
+   });
+ }
+ 
+@@ -162,21 +130,7 @@ export function toSanitizedMarkdownHtml(markdown: string): string {
+ // Security is handled by DOMPurify, but rendering pasted HTML (e.g. error
+ // pages) as formatted output is confusing UX (#13937).
+ const htmlEscapeRenderer = new marked.Renderer();
+-htmlEscapeRenderer.html = ({ text }: { text: string }) => {
+-  const iframeMatch = text.match(/<iframe\s[^>]*src=["'](\/__openclaw__\/canvas\/[^"']+)["'][^>]*>/i);
+-  if (iframeMatch) {
+-    return text;
+-  }
+-  return escapeHtml(text);
+-};
+-htmlEscapeRenderer.image = ({ href, title, text }: { href: string; title: string | null; text: string }) => {
+-  if (href && href.startsWith(CANVAS_URL_PREFIX)) {
+-    const label = text || title || "Canvas Page";
+-    return `<div class="canvas-embed-wrapper"><iframe class="canvas-embed" src="${escapeHtml(href)}" frameborder="0" loading="lazy" sandbox="allow-scripts allow-same-origin"></iframe><div class="canvas-embed-label">${escapeHtml(label)}</div></div>`;
+-  }
+-  const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+-  return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${titleAttr} />`;
+-};
++htmlEscapeRenderer.html = ({ text }: { text: string }) => escapeHtml(text);
+ 
+ function escapeHtml(value: string): string {
+   return value
+-- 
+2.40.0.windows.1
+

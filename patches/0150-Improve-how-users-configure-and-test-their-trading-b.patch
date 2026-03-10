@@ -1,0 +1,132 @@
+From bb01b425d7a852d0739cb1c7c37b2861e61b709f Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 23:45:06 +0000
+Subject: [PATCH 150/244] Improve how users configure and test their trading
+ bot API connections
+
+Refactor `ceo-proxy.cjs` and `model-config.js` to enable profile-specific API testing and update placeholder text for credential fields.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 959220c6-bd9f-4a2d-bbb3-8178a8b1bc6d
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/SPV18l3
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs             | 31 +++++++++++++++++++++++++++++--
+ ui/public/model-config.js | 26 ++++++++++++++++----------
+ 2 files changed, 45 insertions(+), 12 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 1a3497aca..bc6267928 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -260,10 +260,10 @@ function stopLightstreamer() {
+ // Bot process manager
+ const botProcesses = new Map();
+ 
+-function igRequest(method, urlPath, headers, body) {
++function igRequest(method, urlPath, headers, body, baseUrlOverride) {
+   return new Promise((resolve, reject) => {
+     const profile = getActiveIgProfile();
+-    const base = (profile && profile.baseUrl) || process.env.IG_BASE_URL || "";
++    const base = baseUrlOverride || (profile && profile.baseUrl) || process.env.IG_BASE_URL || "";
+     const url = new URL(urlPath.startsWith("http") ? urlPath : base + urlPath);
+     const mod = url.protocol === "https:" ? https : http;
+     const opts = {
+@@ -481,6 +481,33 @@ async function handleIgApi(req, res, p) {
+     }
+ 
+     if (req.method === "POST" && p === "/api/ig/config/test") {
++      const testBody = JSON.parse((await readBody(req)).toString() || "{}");
++      const testProfileName = testBody.profile || null;
++      if (testProfileName) {
++        const config = ensureIgConfig();
++        const prof = config.profiles[testProfileName];
++        if (!prof || !prof.apiKey || !prof.username || !prof.password || !prof.baseUrl) {
++          return json(res, 400, { error: "No credentials configured for " + testProfileName + " profile" });
++        }
++        try {
++          const testRes = await igRequest("POST", "/session", {
++            "Content-Type": "application/json; charset=UTF-8",
++            Accept: "application/json; charset=UTF-8",
++            "X-IG-API-KEY": prof.apiKey,
++            Version: "2",
++          }, JSON.stringify({ identifier: prof.username, password: prof.password }), prof.baseUrl);
++          if (testRes.status !== 200) {
++            let errDetail = testRes.body || "";
++            try { const ej = JSON.parse(errDetail); errDetail = ej.errorCode || ej.error || errDetail; } catch(_) {}
++            return json(res, 200, { ok: false, error: "IG auth failed (" + testRes.status + "): " + errDetail });
++          }
++          let lsEndpoint = null;
++          try { lsEndpoint = JSON.parse(testRes.body).lightstreamerEndpoint || null; } catch(_) {}
++          return json(res, 200, { ok: true, profile: testProfileName, lightstreamerEndpoint: lsEndpoint });
++        } catch (e) {
++          return json(res, 200, { ok: false, error: e.message });
++        }
++      }
+       if (!igConfigured()) return json(res, 400, { error: "No credentials configured for active profile" });
+       try {
+         const session = await igAuth();
+diff --git a/ui/public/model-config.js b/ui/public/model-config.js
+index 6cd7043d9..bdfa3b828 100644
+--- a/ui/public/model-config.js
++++ b/ui/public/model-config.js
+@@ -151,9 +151,15 @@ function renderIgConfig(config) {
+     var usernameEl = document.getElementById(key + '-username');
+     var passwordEl = document.getElementById(key + '-password');
+     var accountIdEl = document.getElementById(key + '-accountId');
+-    if (apiKeyEl) apiKeyEl.placeholder = prof.hasCredentials ? prof.apiKey : 'Enter API key';
+-    if (usernameEl) usernameEl.placeholder = prof.hasCredentials ? prof.username : 'Enter username';
+-    if (passwordEl) passwordEl.placeholder = prof.hasCredentials ? '********' : 'Enter password';
++    if (prof.hasCredentials) {
++      if (apiKeyEl) apiKeyEl.placeholder = prof.apiKey + ' (leave empty to keep)';
++      if (usernameEl) usernameEl.placeholder = prof.username + ' (leave empty to keep)';
++      if (passwordEl) passwordEl.placeholder = '******** (leave empty to keep)';
++    } else {
++      if (apiKeyEl) apiKeyEl.placeholder = 'Enter API key';
++      if (usernameEl) usernameEl.placeholder = 'Enter username';
++      if (passwordEl) passwordEl.placeholder = 'Enter password';
++    }
+     if (accountIdEl) accountIdEl.value = prof.accountId || '';
+     apiKeyEl.value = '';
+     usernameEl.value = '';
+@@ -322,18 +328,18 @@ function saveProfile(profileName) {
+   });
+ }
+ 
+-function testConnection() {
+-  showToast('Testing connection...', 'success');
++function testConnection(profileName) {
++  showToast('Testing ' + profileName.toUpperCase() + ' connection...', 'success');
+   apiFetch('/api/ig/config/test', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+-    body: '{}'
++    body: JSON.stringify({ profile: profileName })
+   }).then(function(r) { return r.json(); }).then(function(data) {
+     if (data.ok) {
+-      showToast('Connection successful! Profile: ' + data.profile + (data.lightstreamerEndpoint ? ', Streaming: ' + data.lightstreamerEndpoint : ''), 'success');
++      showToast(profileName.toUpperCase() + ' connection successful!' + (data.lightstreamerEndpoint ? ' Streaming: ' + data.lightstreamerEndpoint : ''), 'success');
+       loadIgConfig();
+     } else {
+-      showToast('Connection failed: ' + (data.error || 'Unknown error'), 'error');
++      showToast(profileName.toUpperCase() + ' connection failed: ' + (data.error || 'Unknown error'), 'error');
+     }
+   }).catch(function(e) {
+     showToast('Error: ' + e.message, 'error');
+@@ -341,9 +347,9 @@ function testConnection() {
+ }
+ 
+ document.getElementById('btnSaveDemo').addEventListener('click', function() { saveProfile('demo'); });
+-document.getElementById('btnTestDemo').addEventListener('click', function() { testConnection(); });
++document.getElementById('btnTestDemo').addEventListener('click', function() { testConnection('demo'); });
+ document.getElementById('btnSaveLive').addEventListener('click', function() { saveProfile('live'); });
+-document.getElementById('btnTestLive').addEventListener('click', function() { testConnection(); });
++document.getElementById('btnTestLive').addEventListener('click', function() { testConnection('live'); });
+ 
+ loadConfig();
+ loadIgConfig();
+-- 
+2.40.0.windows.1
+

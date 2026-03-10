@@ -1,0 +1,41 @@
+From a5a86410ab6ca99573e0a9571ef38e195caee5c9 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 16:36:12 +0000
+Subject: [PATCH 052/244] Add ability to manually disconnect workers from the
+ list
+
+Add a DELETE endpoint to the proxy to allow manual removal of workers by ID.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 96d1d77e-161e-4fa9-8457-e231e7a87166
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: f3cfc0ac-baac-4146-bb49-d631bdfbf923
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index f0341e22c..628f52920 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -214,6 +214,16 @@ async function handleWorkers(req, res, p) {
+     return json(res, 200, { ok: true });
+   }
+ 
++  if (req.method === "DELETE" && p.match(/^\/api\/workers\/[^/]+$/)) {
++    if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
++    const wid = p.split("/")[3];
++    if (workers.has(wid)) {
++      workers.delete(wid);
++      return json(res, 200, { ok: true });
++    }
++    return json(res, 404, { error: "Worker not found" });
++  }
++
+   return json(res, 404, { error: "Not found" });
+ }
+ 
+-- 
+2.40.0.windows.1
+

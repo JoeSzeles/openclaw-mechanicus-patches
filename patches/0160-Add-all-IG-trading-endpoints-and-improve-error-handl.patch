@@ -1,0 +1,811 @@
+From 71671d79c53d5f9e0e0925eb71658c4adfc9bcea Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 01:46:17 +0000
+Subject: [PATCH 160/244] Add all IG trading endpoints and improve error
+ handling
+
+Added all missing IG API endpoints, implemented safe JSON parsing for all IG API responses, and created a comprehensive IG-COMMANDS.md reference file.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 5d4c5957-9f50-4f04-a12a-aebf513f3b00
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/3k3AZVJ
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 247 +++++++++++++++++++++++++++++-
+ dist/control-ui/model-config.html |   6 +-
+ dist/control-ui/processes.html    |   6 +-
+ dist/control-ui/workers.html      |   6 +-
+ replit.md                         |   2 +-
+ skills/ig-trading/IG-COMMANDS.md  | 234 ++++++++++++++++++++++++++++
+ skills/ig-trading/SKILL.md        | 171 ++++++---------------
+ 7 files changed, 534 insertions(+), 138 deletions(-)
+ create mode 100644 skills/ig-trading/IG-COMMANDS.md
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 85cc19c49..415879091 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -73,6 +73,8 @@ function isLoginExempt(req) {
+       p.startsWith("/api/exchange") || p.startsWith("/api/sharedspace") || p.startsWith("/api/chat") || p.startsWith("/api/agent/chat") ||
+       p.startsWith("/api/ig/positions") || p.startsWith("/api/ig/prices") || p.startsWith("/api/ig/account") ||
+       p.startsWith("/api/ig/confirms") || p.startsWith("/api/ig/history") || p.startsWith("/api/ig/stream") ||
++      p.startsWith("/api/ig/workingorders") || p.startsWith("/api/ig/markets") || p.startsWith("/api/ig/marketnavigation") ||
++      p.startsWith("/api/ig/pricehistory") || p.startsWith("/api/ig/watchlists") || p.startsWith("/api/ig/activity") ||
+       p === "/api/ig/session" || p === "/api/ig/refresh-snapshots") {
+     if (hasValidBearerToken(req)) return true;
+   }
+@@ -494,6 +496,17 @@ function maskSecret(val) {
+   return val.slice(0, 2) + "****" + val.slice(-2);
+ }
+ 
++function safeParseIgBody(body) {
++  try { return JSON.parse(body); } catch(_) { return { _parseError: true, _raw: String(body).slice(0, 500) }; }
++}
++function igJsonResponse(res, statusCode, body) {
++  const parsed = safeParseIgBody(body);
++  if (parsed._parseError) {
++    return json(res, 502, { error: "IG returned non-JSON response", detail: parsed._raw });
++  }
++  return json(res, statusCode, parsed);
++}
++
+ async function handleIgApi(req, res, p) {
+   if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
+ 
+@@ -675,7 +688,8 @@ async function handleIgApi(req, res, p) {
+       const session = await igAuth();
+       const r = await igRequest("GET", "/positions", { ...igHeaders(session), Version: "2" });
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      const data = JSON.parse(r.body);
++      const data = safeParseIgBody(r.body);
++      if (data._parseError) return json(res, 502, { error: "IG returned non-JSON", detail: data._raw });
+       igCacheSet("positions", data);
+       return json(res, 200, data);
+     }
+@@ -686,7 +700,8 @@ async function handleIgApi(req, res, p) {
+       const session = await igAuth();
+       const r = await igRequest("GET", "/accounts", igHeaders(session));
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      const data = JSON.parse(r.body);
++      const data = safeParseIgBody(r.body);
++      if (data._parseError) return json(res, 502, { error: "IG returned non-JSON", detail: data._raw });
+       igCacheSet("account", data);
+       return json(res, 200, data);
+     }
+@@ -829,13 +844,161 @@ async function handleIgApi(req, res, p) {
+       return json(res, 200, { ok: true, dealReference: dealRef });
+     }
+ 
++    if (req.method === "PUT" && p === "/api/ig/positions/update") {
++      const body = JSON.parse((await readBody(req)).toString() || "{}");
++      if (!body.dealId) {
++        return json(res, 400, { error: "Missing required field: dealId" });
++      }
++      const updateBody = {};
++      if (body.stopLevel !== undefined) updateBody.stopLevel = body.stopLevel;
++      if (body.limitLevel !== undefined) updateBody.limitLevel = body.limitLevel;
++      if (body.trailingStop !== undefined) updateBody.trailingStop = body.trailingStop;
++      if (body.trailingStopDistance !== undefined) updateBody.trailingStopDistance = body.trailingStopDistance;
++      if (body.trailingStopIncrement !== undefined) updateBody.trailingStopIncrement = body.trailingStopIncrement;
++      if (Object.keys(updateBody).length === 0) {
++        return json(res, 400, { error: "Nothing to update. Provide stopLevel, limitLevel, or trailing stop params." });
++      }
++      console.log(`[ig-trade] Updating position ${body.dealId}`, updateBody);
++      const session = await igAuth();
++      const r = await igRequest("PUT", "/positions/otc/" + body.dealId, { ...igHeaders(session), Version: "2" }, JSON.stringify(updateBody));
++      igCacheInvalidate();
++      if (r.status !== 200) {
++        let detail = r.body;
++        try { detail = JSON.parse(r.body); } catch(_) {}
++        console.log(`[ig-trade] Update failed: HTTP ${r.status}`, detail);
++        return json(res, 200, { ok: false, error: typeof detail === "object" ? (detail.errorCode || JSON.stringify(detail)) : detail, statusCode: r.status });
++      }
++      let dealRef = null;
++      try { dealRef = JSON.parse(r.body).dealReference; } catch(_) {}
++      if (dealRef) {
++        await new Promise(resolve => setTimeout(resolve, 1000));
++        try {
++          const conf = await igRequest("GET", "/confirms/" + dealRef, igHeaders(session));
++          if (conf.status === 200) {
++            const cd = JSON.parse(conf.body);
++            console.log(`[ig-trade] Update confirmed: ${cd.dealStatus}`);
++            return json(res, 200, { ok: true, dealReference: dealRef, confirmation: cd });
++          }
++        } catch(_) {}
++      }
++      return json(res, 200, { ok: true, dealReference: dealRef });
++    }
++
++    if (req.method === "GET" && p === "/api/ig/workingorders") {
++      const session = await igAuth();
++      const r = await igRequest("GET", "/workingorders", { ...igHeaders(session), Version: "2" });
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "POST" && p === "/api/ig/workingorders/create") {
++      const body = JSON.parse((await readBody(req)).toString() || "{}");
++      if (!body.epic || !body.direction || !body.size || !body.level || !body.type) {
++        return json(res, 400, { error: "Missing required fields: epic, direction, size, level, type (LIMIT or STOP)" });
++      }
++      const session = await igAuth();
++      const orderBody = {
++        epic: body.epic,
++        direction: body.direction.toUpperCase(),
++        size: body.size,
++        level: body.level,
++        type: body.type.toUpperCase(),
++        currencyCode: body.currencyCode || "USD",
++        expiry: body.expiry || "-",
++        forceOpen: body.forceOpen !== undefined ? body.forceOpen : true,
++        guaranteedStop: body.guaranteedStop || false,
++        timeInForce: body.timeInForce || "GOOD_TILL_CANCELLED",
++      };
++      if (body.stopDistance) orderBody.stopDistance = body.stopDistance;
++      if (body.limitDistance) orderBody.limitDistance = body.limitDistance;
++      if (body.stopLevel) orderBody.stopLevel = body.stopLevel;
++      if (body.limitLevel) orderBody.limitLevel = body.limitLevel;
++      if (body.goodTillDate) orderBody.goodTillDate = body.goodTillDate;
++      console.log(`[ig-trade] Creating working order: ${orderBody.type} ${orderBody.direction} ${orderBody.size} ${orderBody.epic} @ ${orderBody.level}`);
++      const r = await igRequest("POST", "/workingorders/otc", { ...igHeaders(session), Version: "2" }, JSON.stringify(orderBody));
++      if (r.status !== 200) {
++        let detail = r.body;
++        try { detail = JSON.parse(r.body); } catch(_) {}
++        console.log(`[ig-trade] Working order failed: HTTP ${r.status}`, detail);
++        return json(res, 200, { ok: false, error: typeof detail === "object" ? (detail.errorCode || JSON.stringify(detail)) : detail, statusCode: r.status });
++      }
++      let dealRef = null;
++      try { dealRef = JSON.parse(r.body).dealReference; } catch(_) {}
++      console.log(`[ig-trade] Working order placed, dealReference: ${dealRef}`);
++      if (dealRef) {
++        await new Promise(resolve => setTimeout(resolve, 1000));
++        try {
++          const conf = await igRequest("GET", "/confirms/" + dealRef, igHeaders(session));
++          if (conf.status === 200) {
++            return json(res, 200, { ok: true, dealReference: dealRef, confirmation: JSON.parse(conf.body) });
++          }
++        } catch(_) {}
++      }
++      return json(res, 200, { ok: true, dealReference: dealRef });
++    }
++
++    if (req.method === "PUT" && p === "/api/ig/workingorders/update") {
++      const body = JSON.parse((await readBody(req)).toString() || "{}");
++      if (!body.dealId) {
++        return json(res, 400, { error: "Missing required field: dealId" });
++      }
++      const updateBody = {};
++      if (body.level !== undefined) updateBody.level = body.level;
++      if (body.size !== undefined) updateBody.size = body.size;
++      if (body.stopDistance !== undefined) updateBody.stopDistance = body.stopDistance;
++      if (body.limitDistance !== undefined) updateBody.limitDistance = body.limitDistance;
++      if (body.stopLevel !== undefined) updateBody.stopLevel = body.stopLevel;
++      if (body.limitLevel !== undefined) updateBody.limitLevel = body.limitLevel;
++      if (body.timeInForce !== undefined) updateBody.timeInForce = body.timeInForce;
++      if (body.goodTillDate !== undefined) updateBody.goodTillDate = body.goodTillDate;
++      if (body.type !== undefined) updateBody.type = body.type;
++      console.log(`[ig-trade] Updating working order ${body.dealId}`, updateBody);
++      const session = await igAuth();
++      const r = await igRequest("PUT", "/workingorders/otc/" + body.dealId, { ...igHeaders(session), Version: "2" }, JSON.stringify(updateBody));
++      if (r.status !== 200) {
++        let detail = r.body;
++        try { detail = JSON.parse(r.body); } catch(_) {}
++        return json(res, 200, { ok: false, error: typeof detail === "object" ? (detail.errorCode || JSON.stringify(detail)) : detail, statusCode: r.status });
++      }
++      let dealRef = null;
++      try { dealRef = JSON.parse(r.body).dealReference; } catch(_) {}
++      if (dealRef) {
++        await new Promise(resolve => setTimeout(resolve, 1000));
++        try {
++          const conf = await igRequest("GET", "/confirms/" + dealRef, igHeaders(session));
++          if (conf.status === 200) {
++            return json(res, 200, { ok: true, dealReference: dealRef, confirmation: JSON.parse(conf.body) });
++          }
++        } catch(_) {}
++      }
++      return json(res, 200, { ok: true, dealReference: dealRef });
++    }
++
++    if (req.method === "DELETE" && p === "/api/ig/workingorders/delete") {
++      const body = JSON.parse((await readBody(req)).toString() || "{}");
++      if (!body.dealId) {
++        return json(res, 400, { error: "Missing required field: dealId" });
++      }
++      console.log(`[ig-trade] Deleting working order ${body.dealId}`);
++      const session = await igAuth();
++      const r = await igRequest("POST", "/workingorders/otc/" + body.dealId, { ...igHeaders(session), "_method": "DELETE", Version: "2" }, "{}");
++      if (r.status !== 200) {
++        let detail = r.body;
++        try { detail = JSON.parse(r.body); } catch(_) {}
++        return json(res, 200, { ok: false, error: typeof detail === "object" ? (detail.errorCode || JSON.stringify(detail)) : detail, statusCode: r.status });
++      }
++      let dealRef = null;
++      try { dealRef = JSON.parse(r.body).dealReference; } catch(_) {}
++      return json(res, 200, { ok: true, dealReference: dealRef, message: "Working order deleted" });
++    }
++
+     if (req.method === "GET" && p.startsWith("/api/ig/confirms/")) {
+       const dealRef = p.split("/api/ig/confirms/")[1];
+       if (!dealRef) return json(res, 400, { error: "Missing deal reference" });
+       const session = await igAuth();
+       const r = await igRequest("GET", "/confirms/" + dealRef, igHeaders(session));
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
++      return igJsonResponse(res, 200, r.body);
+     }
+ 
+     if (req.method === "GET" && p === "/api/ig/history") {
+@@ -849,10 +1012,84 @@ async function handleIgApi(req, res, p) {
+       const session = await igAuth();
+       const r = await igRequest("GET", "/history/transactions" + qs, { ...igHeaders(session), Version: "2" });
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p === "/api/ig/activity") {
++      const url = new URL("http://localhost" + req.url);
++      const from = url.searchParams.get("from") || "";
++      const to = url.searchParams.get("to") || "";
++      let qs = "?";
++      if (from) qs += `from=${from}&`;
++      if (to) qs += `to=${to}&`;
++      qs = qs.replace(/[&?]$/, "");
++      const session = await igAuth();
++      const r = await igRequest("GET", "/history/activity" + (qs.length > 1 ? qs : ""), { ...igHeaders(session), Version: "3" });
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p.startsWith("/api/ig/markets/")) {
++      const epic = p.replace("/api/ig/markets/", "");
++      if (!epic) return json(res, 400, { error: "Missing epic" });
++      const session = await igAuth();
++      const r = await igRequest("GET", "/markets/" + epic, igHeaders(session));
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p === "/api/ig/markets") {
++      const url = new URL("http://localhost" + req.url);
++      const searchTerm = url.searchParams.get("searchTerm") || url.searchParams.get("q") || "";
++      if (!searchTerm) return json(res, 400, { error: "Missing searchTerm or q param" });
++      const session = await igAuth();
++      const r = await igRequest("GET", "/markets?searchTerm=" + encodeURIComponent(searchTerm), igHeaders(session));
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p.startsWith("/api/ig/marketnavigation")) {
++      const nodeId = p.replace("/api/ig/marketnavigation", "").replace(/^\//, "");
++      const session = await igAuth();
++      const igPath = nodeId ? "/marketnavigation/" + nodeId : "/marketnavigation";
++      const r = await igRequest("GET", igPath, igHeaders(session));
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p.startsWith("/api/ig/pricehistory/")) {
++      const epic = p.replace("/api/ig/pricehistory/", "");
++      if (!epic) return json(res, 400, { error: "Missing epic" });
++      const url = new URL("http://localhost" + req.url);
++      const resolution = url.searchParams.get("resolution") || "HOUR";
++      const max = url.searchParams.get("max") || "50";
++      const from = url.searchParams.get("from") || "";
++      const to = url.searchParams.get("to") || "";
++      let qs = `?resolution=${resolution}&max=${max}`;
++      if (from) qs += `&from=${from}`;
++      if (to) qs += `&to=${to}`;
++      const session = await igAuth();
++      const r = await igRequest("GET", "/prices/" + epic + qs, { ...igHeaders(session), Version: "3" });
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p === "/api/ig/watchlists") {
++      const session = await igAuth();
++      const r = await igRequest("GET", "/watchlists", igHeaders(session));
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
++    }
++
++    if (req.method === "GET" && p.startsWith("/api/ig/watchlists/")) {
++      const wlId = p.replace("/api/ig/watchlists/", "");
++      const session = await igAuth();
++      const r = await igRequest("GET", "/watchlists/" + wlId, igHeaders(session));
++      if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
++      return igJsonResponse(res, 200, r.body);
+     }
+ 
+-    return json(res, 404, { error: "Unknown IG endpoint" });
++    return json(res, 404, { error: "Unknown IG endpoint. Available: GET positions, POST positions/open, POST positions/close, PUT positions/update, GET workingorders, POST workingorders/create, PUT workingorders/update, DELETE workingorders/delete, GET account, GET prices, GET markets, GET markets/{epic}, GET marketnavigation, GET pricehistory/{epic}, GET watchlists, GET history, GET activity, GET confirms/{ref}, GET session, POST session/refresh, GET stream/prices, GET stream/status" });
+   } catch (e) {
+     return json(res, 500, { error: e.message });
+   }
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 2c5232cdf..fbe228cac 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772328823"></script>
+-<script src="/model-config.js?v=1772328823"></script>
+-<script src="/nav-inject.js?v=1772328823"></script>
++<script src="/token-init.js?v=1772329523"></script>
++<script src="/model-config.js?v=1772329523"></script>
++<script src="/nav-inject.js?v=1772329523"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index 74c01ff1e..23a42657b 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772328823"></script>
+-<script src="/processes.js?v=1772328823"></script>
+-<script src="/nav-inject.js?v=1772328823"></script>
++<script src="/token-init.js?v=1772329523"></script>
++<script src="/processes.js?v=1772329523"></script>
++<script src="/nav-inject.js?v=1772329523"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 64de64d9a..0aaeefc53 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772328823"></script>
+-<script src="/workers.js?v=1772328823"></script>
+-<script src="/nav-inject.js?v=1772328823"></script>
++<script src="/token-init.js?v=1772329523"></script>
++<script src="/workers.js?v=1772329523"></script>
++<script src="/nav-inject.js?v=1772329523"></script>
+ </body>
+ </html>
+diff --git a/replit.md b/replit.md
+index 0f19795e1..d27dc9256 100644
+--- a/replit.md
++++ b/replit.md
+@@ -25,7 +25,7 @@ OpenClaw Cloud employs a "CEO Proxy + Gateway" architecture, where two component
+ -   **Canvas Static File Serving**: Serves dynamic HTML dashboards and reports from a dedicated canvas directory, supporting a manifest system for page discovery.
+ -   **Auto-Token Injection**: Automatically injects the gateway authentication token into the Control UI.
+ -   **Process Manager & Bot Registry**: A web UI for managing ad-hoc and registered bots, including start/stop controls and auto-restart capabilities for bots residing in `skills/bots/`.
+--   **IG API Proxy**: Provides a proxy for IG Group Trading API with persistent session management, response caching, and a comprehensive set of trading-related skills and bot scripts. Includes a multi-layered trade proof reader for risk mitigation.
++-   **IG API Proxy**: Full-featured proxy for IG Group Trading API covering ALL IG operations: positions (open/close/update), working orders (create/update/delete), market search, price history, watchlists, activity/transaction history, and session management. Handles authentication automatically. See `skills/ig-trading/IG-COMMANDS.md` for complete endpoint reference. Includes a multi-layered trade proof reader for risk mitigation.
+ -   **Chat Rich Media**: Supports inline iframe embeds for canvas pages and enhanced markdown tables in the chat UI.
+ -   **Navigation Bar**: Injected navigation for easy access to different sections of the platform.
+ 
+diff --git a/skills/ig-trading/IG-COMMANDS.md b/skills/ig-trading/IG-COMMANDS.md
+new file mode 100644
+index 000000000..723f26411
+--- /dev/null
++++ b/skills/ig-trading/IG-COMMANDS.md
+@@ -0,0 +1,234 @@
++# IG Trading Commands — Quick Reference
++
++All commands use `web_fetch` to `http://localhost:5000/api/ig/...` with header `Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN`.
++Authentication is handled automatically by the proxy. You NEVER need to call `/session` or manage CST/XST tokens.
++
++---
++
++## POSITIONS
++
++### List Open Positions
++```
++GET /api/ig/positions
++```
++Returns: `{ positions: [{ position: { dealId, direction, size, level, currency, stopLevel, limitLevel, ... }, market: { epic, instrumentName, bid, offer, marketStatus, ... } }] }`
++
++### Open Position (Market Order)
++```
++POST /api/ig/positions/open
++{
++  "epic": "CS.D.BITCOIN.CFD.IP",
++  "direction": "BUY",
++  "size": 0.5,
++  "stopDistance": 100,
++  "limitDistance": 200
++}
++```
++Required: `epic`, `direction` (BUY/SELL), `size`
++Optional: `stopDistance`, `limitDistance`, `stopLevel`, `limitLevel`, `currencyCode` (default USD), `orderType` (default MARKET), `expiry` (default "-"), `forceOpen` (default true), `guaranteedStop` (default false)
++Returns: `{ ok: true/false, dealReference, confirmation: { dealId, dealStatus, level, size, direction, profit, ... } }`
++**IMPORTANT**: Always check `ok` field AND `confirmation.dealStatus`. Only `ACCEPTED` means the trade went through.
++
++### Close Position
++```
++POST /api/ig/positions/close
++{ "dealId": "DIAAAAB1234ABC" }
++```
++Required: `dealId` (from positions list)
++Optional: `direction`, `size` — auto-detected if omitted (closes full position)
++Returns: `{ ok: true/false, confirmation: { dealStatus, profit, profitCurrency, ... } }`
++
++### Update Position (Move Stop/Limit)
++```
++PUT /api/ig/positions/update
++{
++  "dealId": "DIAAAAB1234ABC",
++  "stopLevel": 65000,
++  "limitLevel": 70000
++}
++```
++Required: `dealId`
++Optional: `stopLevel`, `limitLevel`, `trailingStop`, `trailingStopDistance`, `trailingStopIncrement`
++
++---
++
++## WORKING ORDERS (Limit/Stop Orders)
++
++### List Working Orders
++```
++GET /api/ig/workingorders
++```
++
++### Create Working Order
++```
++POST /api/ig/workingorders/create
++{
++  "epic": "CS.D.BITCOIN.CFD.IP",
++  "direction": "BUY",
++  "size": 0.5,
++  "level": 60000,
++  "type": "LIMIT",
++  "stopDistance": 800,
++  "limitDistance": 1600
++}
++```
++Required: `epic`, `direction`, `size`, `level`, `type` (LIMIT or STOP)
++Optional: `stopDistance`, `limitDistance`, `currencyCode`, `timeInForce` (GOOD_TILL_CANCELLED or GOOD_TILL_DATE), `goodTillDate`
++
++### Update Working Order
++```
++PUT /api/ig/workingorders/update
++{
++  "dealId": "DIAAAAB1234ABC",
++  "level": 59000,
++  "size": 1.0
++}
++```
++
++### Delete Working Order
++```
++DELETE /api/ig/workingorders/delete
++{ "dealId": "DIAAAAB1234ABC" }
++```
++
++---
++
++## ACCOUNT
++
++### Account Info & Balance
++```
++GET /api/ig/account
++```
++Returns: `{ accounts: [{ accountId, accountName, balance: { balance, available, deposit, profitLoss }, currency, status, ... }] }`
++
++---
++
++## MARKET DATA
++
++### Get Live Price (Single/Multiple)
++```
++GET /api/ig/prices?epics=CS.D.BITCOIN.CFD.IP,CS.D.USCGC.TODAY.IP
++```
++
++### Market Details (Full Info)
++```
++GET /api/ig/markets/CS.D.BITCOIN.CFD.IP
++```
++Returns: instrument details, dealing rules (min/max size, margin, spread), snapshot prices, market hours
++
++### Search Markets
++```
++GET /api/ig/markets?q=bitcoin
++GET /api/ig/markets?searchTerm=gold
++```
++
++### Browse Market Categories
++```
++GET /api/ig/marketnavigation
++GET /api/ig/marketnavigation/{nodeId}
++```
++
++### Price History (Candles)
++```
++GET /api/ig/pricehistory/CS.D.BITCOIN.CFD.IP?resolution=HOUR&max=50
++```
++Resolutions: SECOND, MINUTE, MINUTE_2, MINUTE_3, MINUTE_5, MINUTE_10, MINUTE_15, MINUTE_30, HOUR, HOUR_2, HOUR_3, HOUR_4, DAY, WEEK, MONTH
++Optional: `from`, `to` (ISO dates), `max` (number of candles)
++
++### Watchlists
++```
++GET /api/ig/watchlists
++GET /api/ig/watchlists/{watchlistId}
++```
++
++---
++
++## HISTORY
++
++### Transaction History (Closed Trades/P&L)
++```
++GET /api/ig/history?type=ALL&from=2026-02-01T00:00:00&to=2026-02-28T00:00:00
++```
++Types: ALL, ALL_DEAL, DEPOSIT, WITHDRAWAL
++
++### Activity History (All Actions)
++```
++GET /api/ig/activity?from=2026-02-01T00:00:00&to=2026-02-28T00:00:00
++```
++
++---
++
++## SESSION & STREAMING
++
++### Check Session Status
++```
++GET /api/ig/session
++```
++
++### Force Session Refresh
++```
++POST /api/ig/session/refresh
++```
++
++### Get Streamed Prices
++```
++GET /api/ig/stream/prices
++```
++
++### Stream Status
++```
++GET /api/ig/stream/status
++```
++
++### Deal Confirmation
++```
++GET /api/ig/confirms/{dealReference}
++```
++
++---
++
++## COMMON EPICS
++
++| Instrument | Epic |
++|---|---|
++| Bitcoin ($1) | CS.D.BITCOIN.CFD.IP |
++| Gold (US, $10) | CS.D.USCGC.TODAY.IP |
++| Gold (AUD, $1) | CS.D.CFAGOLD.CFA.IP |
++| Silver (AUD, $1) | CS.D.CFASILVER.CFA.IP |
++| EUR/USD | CS.D.EURUSD.CFD.IP |
++| GBP/USD | CS.D.GBPUSD.CFD.IP |
++| AUD/USD | CS.D.AUDUSD.CFD.IP |
++| USD/JPY | CS.D.USDJPY.CFD.IP |
++| FTSE 100 | IX.D.FTSE.CFD.IP |
++| DAX 40 | IX.D.DAX.CFD.IP |
++| S&P 500 | IX.D.SPTRD.CFD.IP |
++| Nasdaq 100 | IX.D.NASDAQ.CFD.IP |
++| Crude Oil | CC.D.CL.UME.IP |
++
++---
++
++## ERROR HANDLING
++
++Every mutating endpoint returns `{ ok: true/false, ... }`.
++- `ok: true` + `confirmation.dealStatus: "ACCEPTED"` = **success**
++- `ok: true` + `confirmation.dealStatus: "REJECTED"` = **IG rejected the trade** (check `confirmation.reason`)
++- `ok: false` + `error: "..."` = **API error** (check `statusCode`)
++- HTTP 400 = missing/invalid request parameters
++- HTTP 401 = bad auth token
++- HTTP 500 = server error
++
++**Common IG rejection reasons:**
++- `MARKET_CLOSED` / `EDITS_ONLY` — market is closed (weekend for non-crypto)
++- `INSUFFICIENT_FUNDS` — not enough margin
++- `POSITION_NOT_AVAILABLE_TO_CLOSE` — dealId wrong or already closed
++- `MINIMUM_ORDER_SIZE_ERROR` — size too small
++- `MAX_POSITIONS_REACHED` — too many open positions
++- `ATTACHED_ORDER_LEVEL_ERROR` — stop/limit too close to entry
++- `error.public-api.exceeded-api-key-allowance` — rate limited, wait 60s
++
++**CRITICAL**: When reporting trade results to the user, you MUST:
++1. Check the `ok` field
++2. If `ok: true`, check `confirmation.dealStatus` — only "ACCEPTED" means success
++3. If `ok: false`, report the exact `error` message
++4. NEVER say "trade executed" unless `dealStatus` is "ACCEPTED"
++5. Include the `dealId` and `level` (fill price) when confirming a trade
+diff --git a/skills/ig-trading/SKILL.md b/skills/ig-trading/SKILL.md
+index 4cdab1490..13b5370ff 100644
+--- a/skills/ig-trading/SKILL.md
++++ b/skills/ig-trading/SKILL.md
+@@ -1,128 +1,53 @@
+ ---
+ name: ig-trading
+-description: IG Group Trading API via proxy — trade CFDs, manage positions, view account. Use for "IG trade", "open position", "close position", "sell BTC", "IG account", "IG balance".
++description: IG Group Trading API — trade CFDs, manage positions, working orders, market data. Use for ANY IG trading task. ALWAYS read IG-COMMANDS.md first.
+ ---
+ # IG Trading API Skill
+ 
+-Trade CFDs on the IG Group platform. Supports forex, indices, commodities, crypto.
+-All endpoints go through the local proxy which handles IG authentication automatically.
+-
+-**IMPORTANT**: Use `web_fetch` with `http://localhost:5000/api/ig/...` for ALL IG operations. The proxy manages sessions, tokens, and rate limiting. Do NOT call IG APIs directly.
+-
+-## 1. List Open Positions
+-
+-```
+-GET http://localhost:5000/api/ig/positions
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-```
+-
+-Returns `{ positions: [{ position: { dealId, direction, size, level, ... }, market: { epic, instrumentName, bid, offer, ... } }, ...] }`
+-
+-## 2. Open a Position (Market Order)
+-
+-```
+-POST http://localhost:5000/api/ig/positions/open
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-Content-Type: application/json
+-
+-{
+-  "epic": "CS.D.BITCOIN.CFD.IP",
+-  "direction": "BUY",
+-  "size": 0.5,
+-  "currencyCode": "USD",
+-  "stopDistance": 100,
+-  "limitDistance": 200
+-}
+-```
+-
+-Required fields: `epic`, `direction` (BUY/SELL), `size`
+-Optional: `stopDistance`, `limitDistance`, `stopLevel`, `limitLevel`, `currencyCode` (default USD), `orderType` (default MARKET), `expiry` (default "-"), `forceOpen` (default true)
+-
+-Returns `{ ok: true, dealReference: "...", confirmation: { dealId, dealStatus, direction, size, level, ... } }` on success.
+-Returns `{ ok: false, error: "...", statusCode: N }` on failure.
+-
+-## 3. Close a Position
+-
+-```
+-POST http://localhost:5000/api/ig/positions/close
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-Content-Type: application/json
+-
+-{
+-  "dealId": "DIAAAAB1234ABC"
+-}
+-```
+-
+-Required: `dealId` (get from positions list)
+-Optional: `direction` (auto-detected from position if omitted), `size` (auto-detected if omitted), `orderType` (default MARKET)
+-
+-The proxy automatically looks up the position to determine the correct close direction and size. Just pass the `dealId`.
+-
+-Returns `{ ok: true, dealReference: "...", confirmation: { dealId, dealStatus, ... } }` on success.
+-
+-## 4. Get Deal Confirmation
+-
+-```
+-GET http://localhost:5000/api/ig/confirms/{dealReference}
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-```
+-
+-## 5. Account Info
+-
+-```
+-GET http://localhost:5000/api/ig/account
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-```
+-
+-Returns `{ accounts: [{ accountId, accountName, balance: { balance, available, deposit, profitLoss }, currency, ... }] }`
+-
+-## 6. Market Prices
+-
+-```
+-GET http://localhost:5000/api/ig/prices?epics=CS.D.BITCOIN.CFD.IP,CS.D.USCGC.TODAY.IP
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-```
+-
+-## 7. Transaction History
+-
+-```
+-GET http://localhost:5000/api/ig/history?type=ALL&from=2026-02-01T00:00:00&to=2026-02-28T00:00:00
+-Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN
+-```
+-
+-## 8. Session Management
+-
+-```
+-GET http://localhost:5000/api/ig/session          # Check session status
+-POST http://localhost:5000/api/ig/session/refresh  # Force re-login
+-```
+-
+-## Common Epics
+-
+-| Instrument | Epic |
+-|---|---|
+-| Bitcoin | CS.D.BITCOIN.CFD.IP |
+-| Gold | CS.D.USCGC.TODAY.IP |
+-| EUR/USD | CS.D.EURUSD.CFD.IP |
+-| GBP/USD | CS.D.GBPUSD.CFD.IP |
+-| FTSE 100 | IX.D.FTSE.CFD.IP |
+-| Silver | CS.D.CFASILVER.CFA.IP |
+-
+-## Risk Management Rules
+-
+-- Max 1% of balance per trade
+-- Position size formula: `(balance * 0.01) / (stop_distance * value_per_point)`
+-- Start with 0.1–0.5 contracts
+-- Always use stop losses
+-- Check market status before trading (TRADEABLE vs EDITS_ONLY)
+-
+-## Common Errors
+-
+-| Error | Meaning |
+-|---|---|
+-| `error.security.api-key-disabled` | API key disabled — regenerate on IG platform |
+-| `error.security.api-key-invalid` | Wrong server (demo key on live, or vice versa) |
+-| `error.security.invalid-details` | Wrong username or password |
+-| `error.public-api.exceeded-api-key-allowance` | Rate limited — wait and retry |
+-| `error.position.trading-not-enabled` | Account not enabled for trading |
+-| `MARKET_CLOSED` or `EDITS_ONLY` | Market is closed (e.g. weekend for non-crypto) |
++Trade CFDs on the IG Group platform via the local proxy. The proxy handles all authentication automatically.
++
++## FIRST: Read the Command Reference
++
++**Before doing ANYTHING with IG, read `skills/ig-trading/IG-COMMANDS.md`** — it has every endpoint, every parameter, every error code. Do NOT guess or improvise.
++
++## How It Works
++
++All IG operations go through `http://localhost:5000/api/ig/...` with `Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN`. The proxy manages IG sessions (CST/XST tokens), rate limiting, and caching. You NEVER authenticate to IG directly.
++
++## Critical Rules
++
++1. **ALWAYS check the response `ok` field** — `ok: false` means the operation FAILED
++2. **For trades, ALWAYS check `confirmation.dealStatus`** — only `ACCEPTED` means success. `REJECTED` means IG refused it
++3. **NEVER tell the user a trade executed unless `dealStatus` is `ACCEPTED`**
++4. **Include `dealId` and fill `level` when confirming trades**
++5. **Check `marketStatus` before trading** — `EDITS_ONLY` means market is closed
++6. **Rate limits**: IG allows ~60 requests/minute. The proxy handles this but avoid rapid-fire calls
++
++## Available Endpoints Summary
++
++| Action | Method | Endpoint |
++|---|---|---|
++| List positions | GET | /api/ig/positions |
++| Open position | POST | /api/ig/positions/open |
++| Close position | POST | /api/ig/positions/close |
++| Update stop/limit | PUT | /api/ig/positions/update |
++| List working orders | GET | /api/ig/workingorders |
++| Create working order | POST | /api/ig/workingorders/create |
++| Update working order | PUT | /api/ig/workingorders/update |
++| Delete working order | DELETE | /api/ig/workingorders/delete |
++| Account balance | GET | /api/ig/account |
++| Live prices | GET | /api/ig/prices?epics=... |
++| Market details | GET | /api/ig/markets/{epic} |
++| Search markets | GET | /api/ig/markets?q=... |
++| Browse categories | GET | /api/ig/marketnavigation |
++| Price candles | GET | /api/ig/pricehistory/{epic}?resolution=HOUR&max=50 |
++| Watchlists | GET | /api/ig/watchlists |
++| Transaction history | GET | /api/ig/history?type=ALL&from=...&to=... |
++| Activity log | GET | /api/ig/activity?from=...&to=... |
++| Deal confirmation | GET | /api/ig/confirms/{dealRef} |
++| Session status | GET | /api/ig/session |
++| Force re-login | POST | /api/ig/session/refresh |
++| Stream prices | GET | /api/ig/stream/prices |
++| Stream status | GET | /api/ig/stream/status |
++
++See `skills/ig-trading/IG-COMMANDS.md` for full request/response details on every endpoint.
+-- 
+2.40.0.windows.1
+

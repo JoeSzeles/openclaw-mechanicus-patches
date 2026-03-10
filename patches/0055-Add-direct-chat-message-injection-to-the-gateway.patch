@@ -1,0 +1,113 @@
+From f22fc2fa6ac32898941d81a9902fc252d2cb2613 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 17:23:05 +0000
+Subject: [PATCH 055/244] Add direct chat message injection to the gateway
+
+Integrates WebSocket client to connect to the gateway, handling connection, session establishment, and injecting chat messages directly via the `chat.inject` method.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 96d1d77e-161e-4fa9-8457-e231e7a87166
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 67193d38-6a31-4043-b38e-c3499d93ca19
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 69 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 69 insertions(+)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 80c106466..25e750b3a 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -3,6 +3,7 @@ const crypto = require("crypto");
+ const fs = require("fs");
+ const path = require("path");
+ const { spawn } = require("child_process");
++const { WebSocket } = require("ws");
+ 
+ const GATEWAY_PORT = 5001;
+ const PROXY_PORT = 5000;
+@@ -14,6 +15,73 @@ const TASKS_FILE = path.join(DATA_DIR, "worker-tasks.json");
+ const CHAT_FILE = path.join(DATA_DIR, "ceo-chat.json");
+ const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+ 
++let gatewayWs = null;
++let gwReqCounter = 0;
++let gwSessionKey = null;
++
++function connectGateway() {
++  if (gatewayWs && gatewayWs.readyState === WebSocket.OPEN) return;
++  try {
++    const ws = new WebSocket(`ws://127.0.0.1:${GATEWAY_PORT}`, {
++      headers: { origin: "http://127.0.0.1:5000" },
++    });
++    ws.on("open", () => {
++      const connectFrame = {
++        type: "req", id: "gw-connect-" + Date.now(), method: "connect",
++        params: {
++          minProtocol: 3, maxProtocol: 3,
++          client: { id: "openclaw-control-ui", mode: "webchat", version: "dev", platform: "linux" },
++          auth: { token: GATEWAY_TOKEN },
++          role: "operator",
++          scopes: ["operator.admin"],
++        },
++      };
++      ws.send(JSON.stringify(connectFrame));
++      console.log("[ceo-proxy] Gateway WebSocket connected");
++    });
++    ws.on("message", (data) => {
++      try {
++        const msg = JSON.parse(data.toString());
++        if (msg.type === "res" && msg.id && msg.id.startsWith("gw-connect-")) {
++          console.log("[ceo-proxy] Gateway connect response:", JSON.stringify(msg).slice(0, 300));
++          if (msg.ok !== false && msg.payload) {
++            gwSessionKey = msg.payload.sessionKey || "agent:main:main";
++            console.log("[ceo-proxy] Gateway session:", gwSessionKey);
++          }
++        }
++      } catch {}
++    });
++    ws.on("close", () => {
++      gatewayWs = null;
++      setTimeout(connectGateway, 5000);
++    });
++    ws.on("error", () => {
++      gatewayWs = null;
++      setTimeout(connectGateway, 5000);
++    });
++    gatewayWs = ws;
++  } catch {
++    setTimeout(connectGateway, 5000);
++  }
++}
++
++function injectToGateway(label, message) {
++  if (!gatewayWs || gatewayWs.readyState !== WebSocket.OPEN) {
++    console.log("[ceo-proxy] No gateway WS for inject");
++    return;
++  }
++  const sessionKey = gwSessionKey || "agent:main:main";
++  const id = "gw-inject-" + (++gwReqCounter) + "-" + Date.now();
++  const frame = {
++    type: "req", id, method: "chat.inject",
++    params: { sessionKey, message, label },
++  };
++  gatewayWs.send(JSON.stringify(frame));
++  console.log("[ceo-proxy] Injected to gateway chat:", label, message.slice(0, 60));
++}
++
++setTimeout(connectGateway, 3000);
++
+ fs.mkdirSync(EXCHANGE_DIR, { recursive: true });
+ 
+ if (!fs.existsSync(API_KEYS_FILE)) {
+@@ -209,6 +277,7 @@ async function handleWorkers(req, res, p) {
+       if (chatData.messages.length > 500) chatData.messages = chatData.messages.slice(-500);
+       saveJson(CHAT_FILE, chatData);
+       console.log(`[ceo-proxy] Worker "${workerName}" result auto-posted to chat`);
++      injectToGateway(workerName, resultText);
+     }
+ 
+     return json(res, 200, { ok: true });
+-- 
+2.40.0.windows.1
+

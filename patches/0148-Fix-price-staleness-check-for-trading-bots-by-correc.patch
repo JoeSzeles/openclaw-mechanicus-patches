@@ -1,0 +1,38 @@
+From 282dc6075f2ccbbd67d3c8bf12c10f4f85c7cb3d Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 22:59:57 +0000
+Subject: [PATCH 148/244] Fix price staleness check for trading bots by
+ correctly parsing time data
+
+Correctly parse `updateTime` field when it only contains time information by prepending the current date, resolving price staleness errors in the IG trading bot.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 23879e9c-ab0e-494e-818e-ac9c373ec2ef
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/2YLkJyj
+Replit-Helium-Checkpoint-Created: true
+---
+ skills/bots/ig-trading-bot.cjs | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/skills/bots/ig-trading-bot.cjs b/skills/bots/ig-trading-bot.cjs
+index 75319dd82..a18b5158b 100644
+--- a/skills/bots/ig-trading-bot.cjs
++++ b/skills/bots/ig-trading-bot.cjs
+@@ -363,7 +363,11 @@ async function proofReadTrade(strategy, marketData) {
+ 
+   const updateTime = snapshot.updateTime || snapshot.updateTimeUTC;
+   if (updateTime) {
+-    const updateMs = new Date(updateTime).getTime();
++    let updateMs = new Date(updateTime).getTime();
++    if (isNaN(updateMs) && /^\d{2}:\d{2}:\d{2}$/.test(updateTime)) {
++      const today = new Date().toISOString().slice(0, 11);
++      updateMs = new Date(today + updateTime + "Z").getTime();
++    }
+     const ageSeconds = (Date.now() - updateMs) / 1000;
+     if (isNaN(ageSeconds) || ageSeconds > 120) {
+       checks.push({ check: "Price staleness", pass: false, detail: `Snapshot age ${isNaN(ageSeconds) ? 'unknown' : Math.round(ageSeconds) + 's'} exceeds 120s limit — data may be stale` });
+-- 
+2.40.0.windows.1
+

@@ -1,0 +1,44 @@
+From 44ddf2151e92b4fc58c793a9f3e6b1239a192bd7 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Tue, 24 Feb 2026 23:32:49 +0000
+Subject: [PATCH 078/244] Update gateway binding to improve internal tool
+ communication
+
+Change gateway binding from 'lan' to 'loopback' in `openclaw.json` and `start.sh` to resolve internal tool subsystem connection failures due to pairing requirements.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 4ae6aa6a-6ae3-4e6d-a851-1c824e909f58
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/SQ1tVYx
+Replit-Helium-Checkpoint-Created: true
+---
+ openclaw.json | 2 +-
+ start.sh      | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/openclaw.json b/openclaw.json
+index a7a1d41f4..11f8834d6 100644
+--- a/openclaw.json
++++ b/openclaw.json
+@@ -1,6 +1,6 @@
+ {
+   "gateway": {
+-    "bind": "lan",
++    "bind": "loopback",
+     "port": 5001,
+     "trustedProxies": ["172.16.0.0/12", "10.0.0.0/8"],
+     "controlUi": {
+diff --git a/start.sh b/start.sh
+index ddd387969..1d6d88a4b 100755
+--- a/start.sh
++++ b/start.sh
+@@ -35,4 +35,4 @@ PROXY_PID=$!
+ sleep 1
+ 
+ # Start OpenClaw gateway on internal port 5001 (foreground)
+-exec node dist/entry.js gateway --bind lan --port 5001 --allow-unconfigured
++exec node dist/entry.js gateway --bind loopback --port 5001 --allow-unconfigured
+-- 
+2.40.0.windows.1
+

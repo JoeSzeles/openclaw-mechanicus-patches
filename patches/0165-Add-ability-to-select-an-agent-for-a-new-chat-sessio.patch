@@ -1,0 +1,67 @@
+From 39ecc2b77d991f188c6dd0483806ed12e2206342 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 02:29:55 +0000
+Subject: [PATCH 165/244] Add ability to select an agent for a new chat session
+
+Replace the generic "New session" button with a dropdown allowing users to select a specific agent or start a new chat.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 8b1ec92a-29b7-4edb-bbf1-c7951f4c4ea3
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/6TFNks7
+Replit-Helium-Checkpoint-Created: true
+---
+ ui/src/ui/views/chat.ts | 36 +++++++++++++++++++++++++++++-------
+ 1 file changed, 29 insertions(+), 7 deletions(-)
+
+diff --git a/ui/src/ui/views/chat.ts b/ui/src/ui/views/chat.ts
+index d3c60ca9f..a3788731b 100644
+--- a/ui/src/ui/views/chat.ts
++++ b/ui/src/ui/views/chat.ts
+@@ -480,13 +480,35 @@ export function renderChat(props: ChatProps) {
+             ></textarea>
+           </label>
+           <div class="chat-compose__actions">
+-            <button
+-              class="btn"
+-              ?disabled=${!props.connected || (!canAbort && props.sending)}
+-              @click=${canAbort ? props.onAbort : props.onNewSession}
+-            >
+-              ${canAbort ? "Stop" : "New session"}
+-            </button>
++            ${canAbort
++              ? html`<button
++                  class="btn"
++                  ?disabled=${!props.connected}
++                  @click=${props.onAbort}
++                >Stop</button>`
++              : html`<div class="chat-new-session-wrap">
++                  <select
++                    class="chat-new-session-select"
++                    ?disabled=${!props.connected || props.sending}
++                    @change=${(e: Event) => {
++                      const sel = e.target as HTMLSelectElement;
++                      const agentId = sel.value;
++                      sel.value = "";
++                      if (agentId && props.onSelectAgent) {
++                        props.onSelectAgent(agentId);
++                      } else {
++                        props.onNewSession();
++                      }
++                    }}
++                  >
++                    <option value="" disabled selected>New chat ▾</option>
++                    ${(props.agentsList?.agents ?? []).map((agent) => {
++                      const name = agent.identity?.name || agent.name || agent.id;
++                      return html`<option value=${agent.id}>${name}</option>`;
++                    })}
++                  </select>
++                </div>`
++            }
+             <button
+               class="btn primary"
+               ?disabled=${!props.connected}
+-- 
+2.40.0.windows.1
+

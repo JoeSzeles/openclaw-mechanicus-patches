@@ -1,0 +1,86 @@
+From 7610c380d38faf8852f16a1e18faddaf5a7ef9f4 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 02:13:30 +0000
+Subject: [PATCH 163/244] Improve system to properly handle configuration and
+ testing endpoints
+
+Add `/api/ig/config` to the login-exempt list in `ceo-proxy.cjs` and update cache-busting timestamps in HTML files.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 96e79ead-69e6-4008-bf35-48636044ad77
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/CmWvJj3
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 3 ++-
+ dist/control-ui/model-config.html | 6 +++---
+ dist/control-ui/processes.html    | 6 +++---
+ dist/control-ui/workers.html      | 6 +++---
+ 4 files changed, 11 insertions(+), 10 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 79751b9f3..71f47a587 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -75,7 +75,8 @@ function isLoginExempt(req) {
+       p.startsWith("/api/ig/confirms") || p.startsWith("/api/ig/history") || p.startsWith("/api/ig/stream") ||
+       p.startsWith("/api/ig/workingorders") || p.startsWith("/api/ig/markets") || p.startsWith("/api/ig/marketnavigation") ||
+       p.startsWith("/api/ig/pricehistory") || p.startsWith("/api/ig/watchlists") || p.startsWith("/api/ig/activity") ||
+-      p === "/api/ig/session" || p === "/api/ig/refresh-snapshots") {
++      p === "/api/ig/session" || p === "/api/ig/refresh-snapshots" ||
++      p.startsWith("/api/ig/config")) {
+     if (hasValidBearerToken(req)) return true;
+   }
+   if (p.startsWith("/__openclaw__/canvas/")) return true;
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 8328019ca..f9b07420d 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772330688"></script>
+-<script src="/model-config.js?v=1772330688"></script>
+-<script src="/nav-inject.js?v=1772330688"></script>
++<script src="/token-init.js?v=1772331132"></script>
++<script src="/model-config.js?v=1772331132"></script>
++<script src="/nav-inject.js?v=1772331132"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index fb80cf79c..357b0ab32 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772330688"></script>
+-<script src="/processes.js?v=1772330688"></script>
+-<script src="/nav-inject.js?v=1772330688"></script>
++<script src="/token-init.js?v=1772331132"></script>
++<script src="/processes.js?v=1772331132"></script>
++<script src="/nav-inject.js?v=1772331132"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 6284d0c72..7581edb84 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772330688"></script>
+-<script src="/workers.js?v=1772330688"></script>
+-<script src="/nav-inject.js?v=1772330688"></script>
++<script src="/token-init.js?v=1772331132"></script>
++<script src="/workers.js?v=1772331132"></script>
++<script src="/nav-inject.js?v=1772331132"></script>
+ </body>
+ </html>
+-- 
+2.40.0.windows.1
+

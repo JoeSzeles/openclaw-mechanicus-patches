@@ -1,0 +1,32 @@
+From ad4242af9ae96cd813ec54d4c53ff2141060a3d8 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 17:48:41 +0000
+Subject: [PATCH 060/244] Refine message extraction when agents mention workers
+
+Update regex to correctly capture message body in agent mentions by excluding extraneous text following the target worker name.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 96d1d77e-161e-4fa9-8457-e231e7a87166
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: e0b69990-f9c1-491f-8ec2-56a1a13121f4
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index d1eddd74c..e99ba4717 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -88,7 +88,7 @@ function connectGateway() {
+               }
+               lastAutoDispatch[foundWorker.name] = now;
+               const nameEsc = foundWorker.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+-              const bodyMatch = text.match(new RegExp("@" + nameEsc + "\\s+([\\s\\S]+)", "i"));
++              const bodyMatch = text.match(new RegExp("@" + nameEsc + "\\s+(.+)", "i"));
+               const body = bodyMatch ? bodyMatch[1].trim() : text;
+               console.log("[ceo-proxy] CEO agent @mentioned worker:", foundWorker.name, "- auto-dispatching");
+               const task = {
+-- 
+2.40.0.windows.1
+

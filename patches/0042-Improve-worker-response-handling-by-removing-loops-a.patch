@@ -1,0 +1,45 @@
+From 4c76584a742420cab35fbf92f565897b76681773 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 14:51:54 +0000
+Subject: [PATCH 042/244] Improve worker response handling by removing loops
+ and showing banners
+
+Fixes infinite loops in worker dispatching by removing the agent response watcher and implements a banner notification for worker replies.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 2032a277-98e9-46cd-88b7-a34763b26e25
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ...insics-lockdown-install-js_1771858275330.txt | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+ create mode 100644 attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771858275330.txt
+
+diff --git a/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771858275330.txt b/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771858275330.txt
+new file mode 100644
+index 000000000..0c3bbbf4c
+--- /dev/null
++++ b/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771858275330.txt
+@@ -0,0 +1,17 @@
++SES Removing unpermitted intrinsics lockdown-install.js:1:203117
++  Removing intrinsics.%MapPrototype%.getOrInsert lockdown-install.js:1:202962
++  Removing intrinsics.%MapPrototype%.getOrInsertComputed lockdown-install.js:1:202962
++  Removing intrinsics.%WeakMapPrototype%.getOrInsert lockdown-install.js:1:202962
++  Removing intrinsics.%WeakMapPrototype%.getOrInsertComputed lockdown-install.js:1:202962
++  Removing intrinsics.%DatePrototype%.toTemporalInstant lockdown-install.js:1:202962
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-qDgogVjJNRrT/QcFIp1US9pe5S3je6IRag1UIGRroLQ=') or a nonce. inpage.js:1:557271
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-GXqLAMH4DRRKVxLSXFLi5D9FlucbD5bRkJYaAHZD7xw=') or a nonce. preload.js:139:16
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU=') or a nonce. sandbox eval code:17:34
++[worker-chat] v9 loaded worker-chat.js:2:11
++[worker-chat] v9 ready - chat poller active worker-chat.js:174:11
++Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap from being applied because it violates the following directive: “style-src 'self' 'unsafe-inline'” chat
++[worker-chat] chat.send intercepted: @DESKTOP-N1TGQ67  whats up worker-chat.js:142:19
++[worker-chat] dispatching to worker: DESKTOP-N1TGQ67 worker-chat.js:153:25
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 worker-chat.js:93:13
++[worker-chat] task created: b8acf9b8-fa4d-4e8b-9d2f-2030f363eaf9 worker-chat.js:101:15
++[worker-chat] worker reply from DESKTOP-N1TGQ67 : Yo Boss, grinding those online biz ideas from projects/onlin worker-chat.js:116:21
+-- 
+2.40.0.windows.1
+

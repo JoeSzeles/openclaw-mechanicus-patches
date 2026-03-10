@@ -1,0 +1,127 @@
+From fefe5e74f0ea8659f9e9e32efcef88c95fb31aa8 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 00:08:47 +0000
+Subject: [PATCH 152/244] Add account balance display to connection test
+ results
+
+Update the proxy to fetch account details and the UI to display them upon successful connection testing.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: c3807a8f-d106-4e2c-8320-592409da961a
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/TnnYK4c
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs             | 34 +++++++++++++++++++++++++++++++--
+ ui/public/model-config.js | 40 +++++++++++++++++++++++++++++++++++----
+ 2 files changed, 68 insertions(+), 6 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index bc6267928..d0f59a162 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -502,8 +502,38 @@ async function handleIgApi(req, res, p) {
+             return json(res, 200, { ok: false, error: "IG auth failed (" + testRes.status + "): " + errDetail });
+           }
+           let lsEndpoint = null;
+-          try { lsEndpoint = JSON.parse(testRes.body).lightstreamerEndpoint || null; } catch(_) {}
+-          return json(res, 200, { ok: true, profile: testProfileName, lightstreamerEndpoint: lsEndpoint });
++          let sessionBody = {};
++          try { sessionBody = JSON.parse(testRes.body); lsEndpoint = sessionBody.lightstreamerEndpoint || null; } catch(_) {}
++          const testCst = testRes.headers["cst"] || "";
++          const testXst = testRes.headers["x-security-token"] || "";
++          let accountInfo = null;
++          try {
++            const acctRes = await igRequest("GET", "/accounts", {
++              "Content-Type": "application/json; charset=UTF-8",
++              Accept: "application/json; charset=UTF-8",
++              "X-IG-API-KEY": prof.apiKey,
++              CST: testCst,
++              "X-SECURITY-TOKEN": testXst,
++              Version: "1",
++            }, null, prof.baseUrl);
++            if (acctRes.status === 200) {
++              const acctData = JSON.parse(acctRes.body);
++              const accounts = acctData.accounts || [];
++              const acct = accounts.find(a => a.accountId === prof.accountId) || accounts[0];
++              if (acct && acct.balance) {
++                accountInfo = {
++                  accountId: acct.accountId,
++                  accountName: acct.accountName,
++                  balance: acct.balance.balance,
++                  deposit: acct.balance.deposit,
++                  profitLoss: acct.balance.profitLoss,
++                  available: acct.balance.available,
++                  currency: acct.currency
++                };
++              }
++            }
++          } catch (_) {}
++          return json(res, 200, { ok: true, profile: testProfileName, lightstreamerEndpoint: lsEndpoint, account: accountInfo });
+         } catch (e) {
+           return json(res, 200, { ok: false, error: e.message });
+         }
+diff --git a/ui/public/model-config.js b/ui/public/model-config.js
+index bdfa3b828..e27adec3e 100644
+--- a/ui/public/model-config.js
++++ b/ui/public/model-config.js
+@@ -329,19 +329,51 @@ function saveProfile(profileName) {
+ }
+ 
+ function testConnection(profileName) {
+-  showToast('Testing ' + profileName.toUpperCase() + ' connection...', 'success');
++  var btn = document.getElementById('btnTest' + profileName.charAt(0).toUpperCase() + profileName.slice(1));
++  if (btn) { btn.disabled = true; btn.textContent = 'Testing...'; }
++  var resultId = profileName + '-test-result';
++  var existing = document.getElementById(resultId);
++  if (existing) existing.remove();
++
+   apiFetch('/api/ig/config/test', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ profile: profileName })
+   }).then(function(r) { return r.json(); }).then(function(data) {
++    if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
++    var card = document.getElementById(profileName + 'ProfileCard');
++    var resultDiv = document.createElement('div');
++    resultDiv.id = resultId;
++    resultDiv.style.cssText = 'margin-top:12px;padding:12px;border-radius:6px;font-size:13px;';
++
+     if (data.ok) {
+-      showToast(profileName.toUpperCase() + ' connection successful!' + (data.lightstreamerEndpoint ? ' Streaming: ' + data.lightstreamerEndpoint : ''), 'success');
+-      loadIgConfig();
++      resultDiv.style.background = 'rgba(35,134,54,.15)';
++      resultDiv.style.border = '1px solid rgba(63,185,80,.3)';
++      resultDiv.style.color = '#3fb950';
++      var html = '<strong>Connection successful</strong>';
++      if (data.account) {
++        var a = data.account;
++        var cur = a.currency || '';
++        html += '<div style="margin-top:8px;color:#c9d1d9;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">';
++        html += '<span style="color:#8b949e">Account:</span><span style="font-family:monospace">' + escHtml(a.accountId || '') + (a.accountName ? ' (' + escHtml(a.accountName) + ')' : '') + '</span>';
++        html += '<span style="color:#8b949e">Balance:</span><span style="font-family:monospace;color:#e6edf3;font-weight:600">' + cur + ' ' + (a.balance != null ? a.balance.toLocaleString() : '?') + '</span>';
++        html += '<span style="color:#8b949e">Available:</span><span style="font-family:monospace">' + cur + ' ' + (a.available != null ? a.available.toLocaleString() : '?') + '</span>';
++        html += '<span style="color:#8b949e">P&L:</span><span style="font-family:monospace;color:' + (a.profitLoss != null ? (a.profitLoss >= 0 ? '#3fb950' : '#f85149') : '#8b949e') + '">' + cur + ' ' + (a.profitLoss != null ? (a.profitLoss >= 0 ? '+' : '') + a.profitLoss.toLocaleString() : '?') + '</span>';
++        html += '<span style="color:#8b949e">Margin used:</span><span style="font-family:monospace">' + cur + ' ' + (a.deposit != null ? a.deposit.toLocaleString() : '?') + '</span>';
++        html += '</div>';
++      }
++      resultDiv.innerHTML = html;
++      showToast(profileName.toUpperCase() + ' connected — balance loaded', 'success');
+     } else {
+-      showToast(profileName.toUpperCase() + ' connection failed: ' + (data.error || 'Unknown error'), 'error');
++      resultDiv.style.background = 'rgba(248,81,73,.1)';
++      resultDiv.style.border = '1px solid rgba(248,81,73,.3)';
++      resultDiv.style.color = '#f85149';
++      resultDiv.innerHTML = '<strong>Connection failed:</strong> ' + escHtml(data.error || 'Unknown error');
++      showToast(profileName.toUpperCase() + ' connection failed', 'error');
+     }
++    if (card) card.appendChild(resultDiv);
+   }).catch(function(e) {
++    if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+     showToast('Error: ' + e.message, 'error');
+   });
+ }
+-- 
+2.40.0.windows.1
+

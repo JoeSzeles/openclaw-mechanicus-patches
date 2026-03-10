@@ -1,0 +1,2420 @@
+From a2e980cb4e685aedb8a8577b8a3aed32472d5381 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 08:41:52 +0000
+Subject: [PATCH 186/244] Saved progress at the end of the loop
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 906b397c-0d51-4c51-938d-028fd77f33b5
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 2f3a46e3-7952-4e82-8f96-22c6c5963269
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/906b397c-0d51-4c51-938d-028fd77f33b5/Lg99RrH
+Replit-Helium-Checkpoint-Created: true
+---
+ ...4XqBkEM.js => audio-preflight-DuMVdl_n.js} |   8 +-
+ dist/bundled/boot-md/handler.js               |  14 +-
+ dist/bundled/session-memory/handler.js        |  12 +-
+ ...{chrome-BhzZmGA3.js => chrome-BkJNYiGr.js} |  14 +-
+ dist/control-ui/model-config.html             |   6 +-
+ dist/control-ui/processes.html                |   6 +-
+ dist/control-ui/workers.html                  |   6 +-
+ ...eliver-CheLNh5z.js => deliver-C5yVKlxW.js} |   2 +-
+ dist/{image-Dxec4m3g.js => image-gq_6ZuCX.js} |   2 +-
+ dist/llm-slug-generator.js                    |  12 +-
+ ...ed-D4lfL_eV.js => pi-embedded-DM6nqYys.js} |  30 ++---
+ ...uW2.js => pi-embedded-helpers-DJVxuVBT.js} |   8 +-
+ ...ounts-BSywe9Bq.js => accounts-WG-Hmhh4.js} |   4 +-
+ ...iMSzcgN.js => active-listener-DqgfJFYZ.js} |   2 +-
+ ...pe-BmRbl8vE.js => agent-scope-DGo2Lh53.js} |   4 +-
+ ...Db4XAqS.js => audio-preflight-BQxEKCrO.js} |  44 +++---
+ ...dings-BGhRgiFJ.js => bindings-BkL2h399.js} |   4 +-
+ ...eb-TwaDyEL1.js => channel-web-DS6K0kPN.js} |  32 ++---
+ ...{chrome-CNaxD22L.js => chrome-WS-Z8NHV.js} |   4 +-
+ .../{chunk-COfiKqBF.js => chunk-Cfb0gRms.js}  |   2 +-
+ ...Ee4ot.js => commands-registry-D11KItt-.js} |   6 +-
+ ...{common-CH6orOBi.js => common-CXH6PFr2.js} |   4 +-
+ ...{config-YVBCrP94.js => config-BUR5GFvw.js} |  18 +--
+ ...eliver-DJcNV-mo.js => deliver-BPHUbnv3.js} |  22 +--
+ ...tic-BXaKch4H.js => diagnostic-Dji1iUVa.js} |   2 +-
+ .../{env-DNXtq8Zy.js => env-CjjrqHd2.js}      |   2 +-
+ .../{exec-CBwIXprv.js => exec-CikK1sTs.js}    |   4 +-
+ .../{fetch-CO6Olj9O.js => fetch-CRvmXstS.js}  |   4 +-
+ .../{image-C9KFN-f3.js => image-JmJ4zLpW.js}  |   8 +-
+ dist/plugin-sdk/index.js                      |  84 ++++++------
+ .../{ir-WzWc9-m7.js => ir-D6km9t7C.js}        |  10 +-
+ .../{login-BFFvu-On.js => login-iiIGmoYx.js}  |  12 +-
+ ...in-qr-D10iC2m8.js => login-qr-DXR6T2ND.js} |  20 +--
+ ...anager-k7kFLYLb.js => manager-D2yAgEL4.js} |  12 +-
+ ...S6PBU.js => manifest-registry-B8hfUlu9.js} |   2 +-
+ ...H5WoQHz.js => markdown-tables-Cyc-LieP.js} |   2 +-
+ ...zbBSsGC.js => message-channel-CaoRC6Bw.js} |   2 +-
+ ...B9IIVWU.js => model-selection-CcII_ph5.js} |   8 +-
+ ...lize-mEjrgr3H.js => normalize-nbycZ809.js} |   8 +-
+ ...bound-ClQW7VvZ.js => outbound-B6uL5Vxh.js} |  12 +-
+ ...n-67RepLeb.js => pi-auth-json-CSmfjTDE.js} |  12 +-
+ ...AMs.js => pi-embedded-helpers-BBn71qTx.js} |  34 ++---
+ ...lugins-BBPPyP5O.js => plugins-BNWuvEuT.js} |   6 +-
+ .../{pw-ai-DycKgxIG.js => pw-ai-C5qALfwn.js}  |   8 +-
+ ...er-Dt1StnNb.js => qmd-manager-Dt3Yd_pR.js} |  10 +-
+ ...istry-CvUzfgyU.js => registry-DFcSCP5o.js} |   4 +-
+ ...eplies-BiiH6JwC.js => replies-CuZ5TRTI.js} |  16 +--
+ .../{reply-CgfssYjy.js => reply-BquBuqcS.js}  | 126 +++++++++---------
+ ...x-D07Ikdod.js => reply-prefix-CRXqek3R.js} |   2 +-
+ ...-6uB6pV_J.js => resolve-route-CeeVouVs.js} |   8 +-
+ ...{runner-DqwnPJ8U.js => runner-AYensfnh.js} |  16 +--
+ ...ession-BXtNnVIi.js => session-DFhRfCQL.js} |   6 +-
+ ...wPQ0Iu38.js => skill-commands-CO-avSo-.js} |  10 +-
+ ...{skills-CreY3Zqs.js => skills-DNzuu_Hz.js} |  14 +-
+ ...{sqlite-Bp81ACN0.js => sqlite-DlEMMihB.js} |   2 +-
+ .../{ssrf--zCZt1NJ.js => ssrf-CIYAMVQH.js}    |   2 +-
+ ...stem-CPwOCKbN.js => subsystem-CNxEMAhB.js} |   2 +-
+ ...nking-CtxhcKkY.js => thinking-CL3Zx3n9.js} |   6 +-
+ ...{tokens-D9QrMV6b.js => tokens-w1xZM7qi.js} |   2 +-
+ ...es-B8CfQtJH.js => tool-images-DZscW5Qf.js} |   4 +-
+ ...f8v.js => tool-loop-detection-Bnr0a7ZM.js} |   4 +-
+ dist/plugin-sdk/web-D0X2ZNbD.js               |  53 --------
+ dist/plugin-sdk/web-DZkp_x7T.js               |  53 ++++++++
+ ...YNzNbe.js => whatsapp-actions-CnRfy5zm.js} |  44 +++---
+ dist/{pw-ai-CT2SpDpw.js => pw-ai-BQ14pMEk.js} |   2 +-
+ ...{runner-BrFhLhf5.js => runner-Cruand-O.js} |   2 +-
+ dist/{web-BxpQp_rh.js => web-CD-gITPz.js}     |  12 +-
+ 67 files changed, 459 insertions(+), 459 deletions(-)
+ rename dist/{audio-preflight-B4XqBkEM.js => audio-preflight-DuMVdl_n.js} (94%)
+ rename dist/{chrome-BhzZmGA3.js => chrome-BkJNYiGr.js} (99%)
+ rename dist/{deliver-CheLNh5z.js => deliver-C5yVKlxW.js} (99%)
+ rename dist/{image-Dxec4m3g.js => image-gq_6ZuCX.js} (99%)
+ rename dist/{pi-embedded-D4lfL_eV.js => pi-embedded-DM6nqYys.js} (99%)
+ rename dist/{pi-embedded-helpers-DkPUQuW2.js => pi-embedded-helpers-DJVxuVBT.js} (99%)
+ rename dist/plugin-sdk/{accounts-BSywe9Bq.js => accounts-WG-Hmhh4.js} (98%)
+ rename dist/plugin-sdk/{active-listener-BiMSzcgN.js => active-listener-DqgfJFYZ.js} (97%)
+ rename dist/plugin-sdk/{agent-scope-BmRbl8vE.js => agent-scope-DGo2Lh53.js} (99%)
+ rename dist/plugin-sdk/{audio-preflight-CDb4XAqS.js => audio-preflight-BQxEKCrO.js} (73%)
+ rename dist/plugin-sdk/{bindings-BGhRgiFJ.js => bindings-BkL2h399.js} (92%)
+ rename dist/plugin-sdk/{channel-web-TwaDyEL1.js => channel-web-DS6K0kPN.js} (99%)
+ rename dist/plugin-sdk/{chrome-CNaxD22L.js => chrome-WS-Z8NHV.js} (99%)
+ rename dist/plugin-sdk/{chunk-COfiKqBF.js => chunk-Cfb0gRms.js} (99%)
+ rename dist/plugin-sdk/{commands-registry-CMKEe4ot.js => commands-registry-D11KItt-.js} (99%)
+ rename dist/plugin-sdk/{common-CH6orOBi.js => common-CXH6PFr2.js} (96%)
+ rename dist/plugin-sdk/{config-YVBCrP94.js => config-BUR5GFvw.js} (99%)
+ rename dist/plugin-sdk/{deliver-DJcNV-mo.js => deliver-BPHUbnv3.js} (99%)
+ rename dist/plugin-sdk/{diagnostic-BXaKch4H.js => diagnostic-Dji1iUVa.js} (98%)
+ rename dist/plugin-sdk/{env-DNXtq8Zy.js => env-CjjrqHd2.js} (89%)
+ rename dist/plugin-sdk/{exec-CBwIXprv.js => exec-CikK1sTs.js} (98%)
+ rename dist/plugin-sdk/{fetch-CO6Olj9O.js => fetch-CRvmXstS.js} (98%)
+ rename dist/plugin-sdk/{image-C9KFN-f3.js => image-JmJ4zLpW.js} (99%)
+ rename dist/plugin-sdk/{ir-WzWc9-m7.js => ir-D6km9t7C.js} (98%)
+ rename dist/plugin-sdk/{login-BFFvu-On.js => login-iiIGmoYx.js} (88%)
+ rename dist/plugin-sdk/{login-qr-D10iC2m8.js => login-qr-DXR6T2ND.js} (95%)
+ rename dist/plugin-sdk/{manager-k7kFLYLb.js => manager-D2yAgEL4.js} (99%)
+ rename dist/plugin-sdk/{manifest-registry-C0jS6PBU.js => manifest-registry-B8hfUlu9.js} (99%)
+ rename dist/plugin-sdk/{markdown-tables-MH5WoQHz.js => markdown-tables-Cyc-LieP.js} (95%)
+ rename dist/plugin-sdk/{message-channel-CzbBSsGC.js => message-channel-CaoRC6Bw.js} (97%)
+ rename dist/plugin-sdk/{model-selection-CB9IIVWU.js => model-selection-CcII_ph5.js} (99%)
+ rename dist/plugin-sdk/{normalize-mEjrgr3H.js => normalize-nbycZ809.js} (98%)
+ rename dist/plugin-sdk/{outbound-ClQW7VvZ.js => outbound-B6uL5Vxh.js} (95%)
+ rename dist/plugin-sdk/{pi-auth-json-67RepLeb.js => pi-auth-json-CSmfjTDE.js} (93%)
+ rename dist/plugin-sdk/{pi-embedded-helpers-BmFSmAMs.js => pi-embedded-helpers-BBn71qTx.js} (99%)
+ rename dist/plugin-sdk/{plugins-BBPPyP5O.js => plugins-BNWuvEuT.js} (98%)
+ rename dist/plugin-sdk/{pw-ai-DycKgxIG.js => pw-ai-C5qALfwn.js} (99%)
+ rename dist/plugin-sdk/{qmd-manager-Dt1StnNb.js => qmd-manager-Dt3Yd_pR.js} (99%)
+ rename dist/plugin-sdk/{registry-CvUzfgyU.js => registry-DFcSCP5o.js} (99%)
+ rename dist/plugin-sdk/{replies-BiiH6JwC.js => replies-CuZ5TRTI.js} (98%)
+ rename dist/plugin-sdk/{reply-CgfssYjy.js => reply-BquBuqcS.js} (99%)
+ rename dist/plugin-sdk/{reply-prefix-D07Ikdod.js => reply-prefix-CRXqek3R.js} (98%)
+ rename dist/plugin-sdk/{resolve-route-6uB6pV_J.js => resolve-route-CeeVouVs.js} (97%)
+ rename dist/plugin-sdk/{runner-DqwnPJ8U.js => runner-AYensfnh.js} (99%)
+ rename dist/plugin-sdk/{session-BXtNnVIi.js => session-DFhRfCQL.js} (97%)
+ rename dist/plugin-sdk/{skill-commands-wPQ0Iu38.js => skill-commands-CO-avSo-.js} (97%)
+ rename dist/plugin-sdk/{skills-CreY3Zqs.js => skills-DNzuu_Hz.js} (99%)
+ rename dist/plugin-sdk/{sqlite-Bp81ACN0.js => sqlite-DlEMMihB.js} (99%)
+ rename dist/plugin-sdk/{ssrf--zCZt1NJ.js => ssrf-CIYAMVQH.js} (99%)
+ rename dist/plugin-sdk/{subsystem-CPwOCKbN.js => subsystem-CNxEMAhB.js} (99%)
+ rename dist/plugin-sdk/{thinking-CtxhcKkY.js => thinking-CL3Zx3n9.js} (99%)
+ rename dist/plugin-sdk/{tokens-D9QrMV6b.js => tokens-w1xZM7qi.js} (85%)
+ rename dist/plugin-sdk/{tool-images-B8CfQtJH.js => tool-images-DZscW5Qf.js} (98%)
+ rename dist/plugin-sdk/{tool-loop-detection-B5ewQf8v.js => tool-loop-detection-Bnr0a7ZM.js} (99%)
+ delete mode 100644 dist/plugin-sdk/web-D0X2ZNbD.js
+ create mode 100644 dist/plugin-sdk/web-DZkp_x7T.js
+ rename dist/plugin-sdk/{whatsapp-actions-DgYNzNbe.js => whatsapp-actions-CnRfy5zm.js} (63%)
+ rename dist/{pw-ai-CT2SpDpw.js => pw-ai-BQ14pMEk.js} (99%)
+ rename dist/{runner-BrFhLhf5.js => runner-Cruand-O.js} (99%)
+ rename dist/{web-BxpQp_rh.js => web-CD-gITPz.js} (99%)
+
+diff --git a/dist/audio-preflight-B4XqBkEM.js b/dist/audio-preflight-DuMVdl_n.js
+similarity index 94%
+rename from dist/audio-preflight-B4XqBkEM.js
+rename to dist/audio-preflight-DuMVdl_n.js
+index d6f76d4e4..d35fb645b 100644
+--- a/dist/audio-preflight-B4XqBkEM.js
++++ b/dist/audio-preflight-DuMVdl_n.js
+@@ -16,10 +16,10 @@ import "./model-auth-CxlTW8uU.js";
+ import "./github-copilot-token-D5ISrFy7.js";
+ import "./pi-model-discovery-CKatqe2T.js";
+ import "./message-channel-BSPy_J6t.js";
+-import "./pi-embedded-helpers-DkPUQuW2.js";
++import "./pi-embedded-helpers-DJVxuVBT.js";
+ import "./config-CZmBKuLv.js";
+ import "./manifest-registry-BGtqiFuf.js";
+-import "./chrome-BhzZmGA3.js";
++import "./chrome-BkJNYiGr.js";
+ import "./frontmatter-BPvsEU3m.js";
+ import "./skills-CSRzV6uM.js";
+ import "./redact-9hYpOXID.js";
+@@ -29,9 +29,9 @@ import "./thinking-jgR7yC2c.js";
+ import "./accounts-CrNX3S4t.js";
+ import "./paths-gnW-md4M.js";
+ import "./tool-images-ClEFO-t-.js";
+-import "./image-Dxec4m3g.js";
++import "./image-gq_6ZuCX.js";
+ import "./fetch-CL56T8xy.js";
+-import { a as runCapability, l as isAudioAttachment, n as createMediaAttachmentCache, r as normalizeMediaAttachments, t as buildProviderRegistry } from "./runner-BrFhLhf5.js";
++import { a as runCapability, l as isAudioAttachment, n as createMediaAttachmentCache, r as normalizeMediaAttachments, t as buildProviderRegistry } from "./runner-Cruand-O.js";
+ 
+ //#region src/media-understanding/audio-preflight.ts
+ /**
+diff --git a/dist/bundled/boot-md/handler.js b/dist/bundled/boot-md/handler.js
+index 83769ff15..db0016700 100644
+--- a/dist/bundled/boot-md/handler.js
++++ b/dist/bundled/boot-md/handler.js
+@@ -6,7 +6,7 @@ import { r as defaultRuntime, t as createSubsystemLogger } from "../../subsystem
+ import "../../exec-BcuB7agq.js";
+ import { l as ensureAgentWorkspace } from "../../workspace-BBSUSFTB.js";
+ import { n as SILENT_REPLY_TOKEN } from "../../tokens-BIWsvHaB.js";
+-import { B as resolveAgentTimeoutMs, C as hasNonzeroUsage, D as clearSessionAuthProfileOverride, E as lookupContextTokens, G as registerAgentRunContext, H as AGENT_LANE_SUBAGENT, O as applyModelOverrideToSessionEntry, S as deriveSessionTotalTokens, T as resolveSendPolicy, U as clearAgentRunContext, V as AGENT_LANE_NESTED, W as emitAgentEvent, _ as resolveOutboundTarget, g as runCliAgent, h as setCliSessionId, k as applyVerboseOverride, m as getCliSessionId, t as runEmbeddedPiAgent, v as resolveSessionDeliveryTarget, y as runWithModelFallback } from "../../pi-embedded-D4lfL_eV.js";
++import { B as resolveAgentTimeoutMs, C as hasNonzeroUsage, D as clearSessionAuthProfileOverride, E as lookupContextTokens, G as registerAgentRunContext, H as AGENT_LANE_SUBAGENT, O as applyModelOverrideToSessionEntry, S as deriveSessionTotalTokens, T as resolveSendPolicy, U as clearAgentRunContext, V as AGENT_LANE_NESTED, W as emitAgentEvent, _ as resolveOutboundTarget, g as runCliAgent, h as setCliSessionId, k as applyVerboseOverride, m as getCliSessionId, t as runEmbeddedPiAgent, v as resolveSessionDeliveryTarget, y as runWithModelFallback } from "../../pi-embedded-DM6nqYys.js";
+ import "../../accounts-DmbLHz3-.js";
+ import "../../normalize-Cve15Q9q.js";
+ import "../../boolean-CE7i9tBR.js";
+@@ -16,7 +16,7 @@ import { t as formatCliCommand } from "../../command-format-DUn-q_CN.js";
+ import "../../send-BRSQ9eYh.js";
+ import { r as normalizeChannelId, t as getChannelPlugin } from "../../plugins-Dy_YZOpV.js";
+ import "../../send-BJ5Eq8nL.js";
+-import { a as normalizeOutboundPayloadsForJson, i as normalizeOutboundPayloads, r as formatOutboundPayloadLog, t as deliverOutboundPayloads } from "../../deliver-CheLNh5z.js";
++import { a as normalizeOutboundPayloadsForJson, i as normalizeOutboundPayloads, r as formatOutboundPayloadLog, t as deliverOutboundPayloads } from "../../deliver-C5yVKlxW.js";
+ import "../../diagnostic-CJC2Qdcb.js";
+ import "../../diagnostic-session-state-C1vRJs5w.js";
+ import "../../accounts-BFVCDHLN.js";
+@@ -26,10 +26,10 @@ import { C as buildAllowedModelSet, D as isCliProvider, F as resolveThinkingDefa
+ import "../../github-copilot-token-D5ISrFy7.js";
+ import "../../pi-model-discovery-CKatqe2T.js";
+ import { i as isInternalMessageChannel, l as resolveMessageChannel, n as isDeliverableMessageChannel, r as isGatewayMessageChannel, s as normalizeMessageChannel, t as INTERNAL_MESSAGE_CHANNEL } from "../../message-channel-BSPy_J6t.js";
+-import { $ as normalizeAccountId, B as loadSessionStore, W as updateSessionStore, bt as resolveMainSessionKey, dt as evaluateSessionFreshness, ft as resolveChannelResetConfig, mt as resolveSessionResetType, pt as resolveSessionResetPolicy, ut as resolveSessionKey, yt as resolveExplicitAgentSessionKey } from "../../pi-embedded-helpers-DkPUQuW2.js";
++import { $ as normalizeAccountId, B as loadSessionStore, W as updateSessionStore, bt as resolveMainSessionKey, dt as evaluateSessionFreshness, ft as resolveChannelResetConfig, mt as resolveSessionResetType, pt as resolveSessionResetPolicy, ut as resolveSessionKey, yt as resolveExplicitAgentSessionKey } from "../../pi-embedded-helpers-DJVxuVBT.js";
+ import { n as loadConfig } from "../../config-CZmBKuLv.js";
+ import "../../manifest-registry-BGtqiFuf.js";
+-import "../../chrome-BhzZmGA3.js";
++import "../../chrome-BkJNYiGr.js";
+ import "../../frontmatter-BPvsEU3m.js";
+ import { n as buildWorkspaceSkillSnapshot } from "../../skills-CSRzV6uM.js";
+ import "../../redact-9hYpOXID.js";
+@@ -39,7 +39,7 @@ import { c as normalizeVerboseLevel, n as formatXHighModelHint, o as normalizeTh
+ import "../../accounts-CrNX3S4t.js";
+ import { n as resolveSessionFilePath, s as resolveStorePath } from "../../paths-gnW-md4M.js";
+ import "../../tool-images-ClEFO-t-.js";
+-import "../../image-Dxec4m3g.js";
++import "../../image-gq_6ZuCX.js";
+ import "../../reply-prefix-CBsUYPbZ.js";
+ import "../../manager-D93sxzRU.js";
+ import "../../sqlite-wwudzAAI.js";
+@@ -51,7 +51,7 @@ import "../../fetch-CL56T8xy.js";
+ import "../../ir-CZf3ql48.js";
+ import "../../render-DwEu-aCr.js";
+ import "../../commands-registry-DZPpkBY3.js";
+-import { s as loadModelCatalog } from "../../runner-BrFhLhf5.js";
++import { s as loadModelCatalog } from "../../runner-Cruand-O.js";
+ import { c as getSkillsSnapshotVersion, o as getRemoteSkillEligibility } from "../../skill-commands-dSfDO9Xr.js";
+ import "../../fetch-BBkSX75a.js";
+ import "../../send-BX84vHMI.js";
+@@ -70,7 +70,7 @@ import crypto from "node:crypto";
+ function createDefaultDeps() {
+ 	return {
+ 		sendMessageWhatsApp: async (...args) => {
+-			const { sendMessageWhatsApp } = await import("../../web-BxpQp_rh.js");
++			const { sendMessageWhatsApp } = await import("../../web-CD-gITPz.js");
+ 			return await sendMessageWhatsApp(...args);
+ 		},
+ 		sendMessageTelegram: async (...args) => {
+diff --git a/dist/bundled/session-memory/handler.js b/dist/bundled/session-memory/handler.js
+index 80ea818f1..23745dc50 100644
+--- a/dist/bundled/session-memory/handler.js
++++ b/dist/bundled/session-memory/handler.js
+@@ -6,7 +6,7 @@ import { t as createSubsystemLogger } from "../../subsystem-12Cr1qkN.js";
+ import "../../exec-BcuB7agq.js";
+ import "../../workspace-BBSUSFTB.js";
+ import "../../tokens-BIWsvHaB.js";
+-import "../../pi-embedded-D4lfL_eV.js";
++import "../../pi-embedded-DM6nqYys.js";
+ import "../../accounts-DmbLHz3-.js";
+ import "../../normalize-Cve15Q9q.js";
+ import "../../boolean-CE7i9tBR.js";
+@@ -15,7 +15,7 @@ import "../../bindings-Dxat9suu.js";
+ import "../../send-BRSQ9eYh.js";
+ import "../../plugins-Dy_YZOpV.js";
+ import "../../send-BJ5Eq8nL.js";
+-import "../../deliver-CheLNh5z.js";
++import "../../deliver-C5yVKlxW.js";
+ import "../../diagnostic-CJC2Qdcb.js";
+ import "../../diagnostic-session-state-C1vRJs5w.js";
+ import "../../accounts-BFVCDHLN.js";
+@@ -25,10 +25,10 @@ import "../../model-auth-CxlTW8uU.js";
+ import "../../github-copilot-token-D5ISrFy7.js";
+ import "../../pi-model-discovery-CKatqe2T.js";
+ import "../../message-channel-BSPy_J6t.js";
+-import { ot as hasInterSessionUserProvenance } from "../../pi-embedded-helpers-DkPUQuW2.js";
++import { ot as hasInterSessionUserProvenance } from "../../pi-embedded-helpers-DJVxuVBT.js";
+ import "../../config-CZmBKuLv.js";
+ import "../../manifest-registry-BGtqiFuf.js";
+-import "../../chrome-BhzZmGA3.js";
++import "../../chrome-BkJNYiGr.js";
+ import "../../frontmatter-BPvsEU3m.js";
+ import "../../skills-CSRzV6uM.js";
+ import "../../redact-9hYpOXID.js";
+@@ -38,7 +38,7 @@ import "../../thinking-jgR7yC2c.js";
+ import "../../accounts-CrNX3S4t.js";
+ import "../../paths-gnW-md4M.js";
+ import "../../tool-images-ClEFO-t-.js";
+-import "../../image-Dxec4m3g.js";
++import "../../image-gq_6ZuCX.js";
+ import "../../reply-prefix-CBsUYPbZ.js";
+ import "../../manager-D93sxzRU.js";
+ import "../../sqlite-wwudzAAI.js";
+@@ -50,7 +50,7 @@ import "../../fetch-CL56T8xy.js";
+ import "../../ir-CZf3ql48.js";
+ import "../../render-DwEu-aCr.js";
+ import "../../commands-registry-DZPpkBY3.js";
+-import "../../runner-BrFhLhf5.js";
++import "../../runner-Cruand-O.js";
+ import "../../skill-commands-dSfDO9Xr.js";
+ import "../../fetch-BBkSX75a.js";
+ import "../../send-BX84vHMI.js";
+diff --git a/dist/chrome-BhzZmGA3.js b/dist/chrome-BkJNYiGr.js
+similarity index 99%
+rename from dist/chrome-BhzZmGA3.js
+rename to dist/chrome-BkJNYiGr.js
+index 1114b09f7..8a630a77c 100644
+--- a/dist/chrome-BhzZmGA3.js
++++ b/dist/chrome-BkJNYiGr.js
+@@ -9,7 +9,7 @@ import { execFileSync, spawn } from "node:child_process";
+ import { randomBytes } from "node:crypto";
+ import net from "node:net";
+ import { createServer } from "node:http";
+-import WebSocket$1, { WebSocketServer } from "ws";
++import WebSocket, { WebSocketServer } from "ws";
+ import { Buffer as Buffer$1 } from "node:buffer";
+ 
+ //#region src/browser/constants.ts
+@@ -173,7 +173,7 @@ async function ensureChromeExtensionRelayServer(opts) {
+ 	let nextExtensionId = 1;
+ 	const sendToExtension = async (payload) => {
+ 		const ws = extensionWs;
+-		if (!ws || ws.readyState !== WebSocket$1.OPEN) throw new Error("Chrome extension not connected");
++		if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("Chrome extension not connected");
+ 		ws.send(JSON.stringify(payload));
+ 		return await new Promise((resolve, reject) => {
+ 			const timer = setTimeout(() => {
+@@ -190,12 +190,12 @@ async function ensureChromeExtensionRelayServer(opts) {
+ 	const broadcastToCdpClients = (evt) => {
+ 		const msg = JSON.stringify(evt);
+ 		for (const ws of cdpClients) {
+-			if (ws.readyState !== WebSocket$1.OPEN) continue;
++			if (ws.readyState !== WebSocket.OPEN) continue;
+ 			ws.send(msg);
+ 		}
+ 	};
+ 	const sendResponseToCdp = (ws, res) => {
+-		if (ws.readyState !== WebSocket$1.OPEN) return;
++		if (ws.readyState !== WebSocket.OPEN) return;
+ 		ws.send(JSON.stringify(res));
+ 	};
+ 	const ensureTargetEventsForClient = (ws, mode) => {
+@@ -415,7 +415,7 @@ async function ensureChromeExtensionRelayServer(opts) {
+ 	wssExtension.on("connection", (ws) => {
+ 		extensionWs = ws;
+ 		const ping = setInterval(() => {
+-			if (ws.readyState !== WebSocket$1.OPEN) return;
++			if (ws.readyState !== WebSocket.OPEN) return;
+ 			ws.send(JSON.stringify({ method: "ping" }));
+ 		}, 5e3);
+ 		ws.on("message", (data) => {
+@@ -727,7 +727,7 @@ async function fetchOk(url, timeoutMs = 1500, init) {
+ }
+ async function withCdpSocket(wsUrl, fn, opts) {
+ 	const headers = getHeadersWithAuth(wsUrl, opts?.headers ?? {});
+-	const ws = new WebSocket$1(wsUrl, {
++	const ws = new WebSocket(wsUrl, {
+ 		handshakeTimeout: typeof opts?.handshakeTimeoutMs === "number" && Number.isFinite(opts.handshakeTimeoutMs) ? Math.max(1, Math.floor(opts.handshakeTimeoutMs)) : 5e3,
+ 		...Object.keys(headers).length ? { headers } : {}
+ 	});
+@@ -1582,7 +1582,7 @@ async function getChromeWebSocketUrl(cdpUrl, timeoutMs = 500) {
+ async function canOpenWebSocket(wsUrl, timeoutMs = 800) {
+ 	return await new Promise((resolve) => {
+ 		const headers = getHeadersWithAuth(wsUrl);
+-		const ws = new WebSocket$1(wsUrl, {
++		const ws = new WebSocket(wsUrl, {
+ 			handshakeTimeout: timeoutMs,
+ 			...Object.keys(headers).length ? { headers } : {}
+ 		});
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 5b33d8bf8..75e9004c7 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772354454"></script>
+-<script src="/model-config.js?v=1772354454"></script>
+-<script src="/nav-inject.js?v=1772354454"></script>
++<script src="/token-init.js?v=1772354500"></script>
++<script src="/model-config.js?v=1772354500"></script>
++<script src="/nav-inject.js?v=1772354500"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index 863fd62e2..e87829927 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772354454"></script>
+-<script src="/processes.js?v=1772354454"></script>
+-<script src="/nav-inject.js?v=1772354454"></script>
++<script src="/token-init.js?v=1772354500"></script>
++<script src="/processes.js?v=1772354500"></script>
++<script src="/nav-inject.js?v=1772354500"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 619119532..0d28ce7d2 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772354454"></script>
+-<script src="/workers.js?v=1772354454"></script>
+-<script src="/nav-inject.js?v=1772354454"></script>
++<script src="/token-init.js?v=1772354500"></script>
++<script src="/workers.js?v=1772354500"></script>
++<script src="/nav-inject.js?v=1772354500"></script>
+ </body>
+ </html>
+diff --git a/dist/deliver-CheLNh5z.js b/dist/deliver-C5yVKlxW.js
+similarity index 99%
+rename from dist/deliver-CheLNh5z.js
+rename to dist/deliver-C5yVKlxW.js
+index 80d799cac..04d4ad804 100644
+--- a/dist/deliver-CheLNh5z.js
++++ b/dist/deliver-C5yVKlxW.js
+@@ -5,7 +5,7 @@ import { b as triggerInternalHook, c as getActivePluginRegistry, v as createInte
+ import { t as createSubsystemLogger } from "./subsystem-12Cr1qkN.js";
+ import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-BIWsvHaB.js";
+ import { r as normalizeChannelId, t as getChannelPlugin } from "./plugins-Dy_YZOpV.js";
+-import { R as appendAssistantMessageToSessionTranscript, i as isMessagingToolDuplicate, z as resolveMirroredTranscriptText } from "./pi-embedded-helpers-DkPUQuW2.js";
++import { R as appendAssistantMessageToSessionTranscript, i as isMessagingToolDuplicate, z as resolveMirroredTranscriptText } from "./pi-embedded-helpers-DJVxuVBT.js";
+ import { d as getChannelDock } from "./thinking-jgR7yC2c.js";
+ import { c as resolveChunkMode, f as parseFenceSpans, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit, n as chunkByParagraph } from "./chunk-CTULoyP3.js";
+ import { n as resolveMarkdownTableMode } from "./markdown-tables-C6ikgcr9.js";
+diff --git a/dist/image-Dxec4m3g.js b/dist/image-gq_6ZuCX.js
+similarity index 99%
+rename from dist/image-Dxec4m3g.js
+rename to dist/image-gq_6ZuCX.js
+index b6dc72f5e..a05422ee8 100644
+--- a/dist/image-Dxec4m3g.js
++++ b/dist/image-gq_6ZuCX.js
+@@ -2,7 +2,7 @@ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { R as shortenHomeInString, k as isRecord } from "./registry-B3v_dMjW.js";
+ import { B as resolveImplicitProviders, L as normalizeProviders, R as resolveImplicitBedrockProvider, q as normalizeSecretInput, r as requireApiKey, t as getApiKeyForModel, y as resolveOpenClawAgentDir, z as resolveImplicitCopilotProvider } from "./model-auth-CxlTW8uU.js";
+ import { n as discoverModels, t as discoverAuthStorage } from "./pi-model-discovery-CKatqe2T.js";
+-import { N as sanitizeUserFacingText } from "./pi-embedded-helpers-DkPUQuW2.js";
++import { N as sanitizeUserFacingText } from "./pi-embedded-helpers-DJVxuVBT.js";
+ import { n as loadConfig } from "./config-CZmBKuLv.js";
+ import { n as redactToolDetail } from "./redact-9hYpOXID.js";
+ import fs from "node:fs/promises";
+diff --git a/dist/llm-slug-generator.js b/dist/llm-slug-generator.js
+index 28c64ad51..6b33f2f29 100644
+--- a/dist/llm-slug-generator.js
++++ b/dist/llm-slug-generator.js
+@@ -5,7 +5,7 @@ import "./subsystem-12Cr1qkN.js";
+ import "./exec-BcuB7agq.js";
+ import "./workspace-BBSUSFTB.js";
+ import "./tokens-BIWsvHaB.js";
+-import { t as runEmbeddedPiAgent } from "./pi-embedded-D4lfL_eV.js";
++import { t as runEmbeddedPiAgent } from "./pi-embedded-DM6nqYys.js";
+ import "./accounts-DmbLHz3-.js";
+ import "./normalize-Cve15Q9q.js";
+ import "./boolean-CE7i9tBR.js";
+@@ -14,7 +14,7 @@ import "./bindings-Dxat9suu.js";
+ import "./send-BRSQ9eYh.js";
+ import "./plugins-Dy_YZOpV.js";
+ import "./send-BJ5Eq8nL.js";
+-import "./deliver-CheLNh5z.js";
++import "./deliver-C5yVKlxW.js";
+ import "./diagnostic-CJC2Qdcb.js";
+ import "./diagnostic-session-state-C1vRJs5w.js";
+ import "./accounts-BFVCDHLN.js";
+@@ -24,10 +24,10 @@ import "./model-auth-CxlTW8uU.js";
+ import "./github-copilot-token-D5ISrFy7.js";
+ import "./pi-model-discovery-CKatqe2T.js";
+ import "./message-channel-BSPy_J6t.js";
+-import "./pi-embedded-helpers-DkPUQuW2.js";
++import "./pi-embedded-helpers-DJVxuVBT.js";
+ import "./config-CZmBKuLv.js";
+ import "./manifest-registry-BGtqiFuf.js";
+-import "./chrome-BhzZmGA3.js";
++import "./chrome-BkJNYiGr.js";
+ import "./frontmatter-BPvsEU3m.js";
+ import "./skills-CSRzV6uM.js";
+ import "./redact-9hYpOXID.js";
+@@ -37,7 +37,7 @@ import "./thinking-jgR7yC2c.js";
+ import "./accounts-CrNX3S4t.js";
+ import "./paths-gnW-md4M.js";
+ import "./tool-images-ClEFO-t-.js";
+-import "./image-Dxec4m3g.js";
++import "./image-gq_6ZuCX.js";
+ import "./reply-prefix-CBsUYPbZ.js";
+ import "./manager-D93sxzRU.js";
+ import "./sqlite-wwudzAAI.js";
+@@ -49,7 +49,7 @@ import "./fetch-CL56T8xy.js";
+ import "./ir-CZf3ql48.js";
+ import "./render-DwEu-aCr.js";
+ import "./commands-registry-DZPpkBY3.js";
+-import "./runner-BrFhLhf5.js";
++import "./runner-Cruand-O.js";
+ import "./skill-commands-dSfDO9Xr.js";
+ import "./fetch-BBkSX75a.js";
+ import "./send-BX84vHMI.js";
+diff --git a/dist/pi-embedded-D4lfL_eV.js b/dist/pi-embedded-DM6nqYys.js
+similarity index 99%
+rename from dist/pi-embedded-D4lfL_eV.js
+rename to dist/pi-embedded-DM6nqYys.js
+index c9dec9e8b..12310fe38 100644
+--- a/dist/pi-embedded-D4lfL_eV.js
++++ b/dist/pi-embedded-DM6nqYys.js
+@@ -16,7 +16,7 @@ import { n as resolveCliName, t as formatCliCommand } from "./command-format-DUn
+ import { a as resolveSlackWebClientOptions, c as buildSlackBlocksFallbackText, i as createSlackWebClient, l as parseSlackTarget, o as parseSlackBlocksInput, s as validateSlackBlocksArray, t as sendMessageSlack, u as resolveSlackChannelId } from "./send-BRSQ9eYh.js";
+ import { n as listChannelPlugins, r as normalizeChannelId$1, t as getChannelPlugin } from "./plugins-Dy_YZOpV.js";
+ import { $ as createDiscordClient, A as addRoleDiscord, B as removeRoleDiscord, C as fetchMessageDiscord, Ct as buildChannelKeyCandidates, D as readMessagesDiscord, E as pinMessageDiscord, F as fetchRoleInfoDiscord, G as createChannelDiscord, H as listGuildEmojisDiscord, I as fetchVoiceStatusDiscord, J as moveChannelDiscord, K as deleteChannelDiscord, L as kickMemberDiscord, M as createScheduledEventDiscord, N as fetchChannelInfoDiscord, O as searchMessagesDiscord, P as fetchMemberInfoDiscord, Q as fetchChannelPermissionsDiscord, R as listGuildChannelsDiscord, S as editMessageDiscord, St as applyChannelMatchMeta, T as listThreadsDiscord, U as uploadEmojiDiscord, V as timeoutMemberDiscord, W as uploadStickerDiscord, X as setChannelPermissionDiscord, Y as removeChannelPermissionDiscord, Z as stripUndefinedFields, _ as sendPollDiscord, _t as formatDiscordReactionEmoji, a as removeReactionDiscord, at as allowListMatches$1, b as createThreadDiscord, bt as resolveTimestampMs, c as formatDiscordComponentEventText, ct as normalizeDiscordSlug, d as parseDiscordModalCustomId, dt as resolveDiscordGuildEntry, et as chunkDiscordTextWithMode, f as parseDiscordModalCustomIdForCarbon, ft as resolveDiscordMemberAccessState, g as sendMessageDiscord, gt as shouldEmitDiscordReactionNotification, h as resolveDiscordModalEntry, ht as resolveGroupDmAllow, i as removeOwnReactionsDiscord, it as listDiscordDirectoryPeersLive, j as banMemberDiscord, k as unpinMessageDiscord, l as parseDiscordComponentCustomId, lt as resolveDiscordAllowListMatch, m as resolveDiscordComponentEntry, mt as resolveDiscordShouldRequireMention, n as fetchReactionsDiscord, nt as resolveDiscordChannelId, o as sendDiscordComponentMessage, ot as isDiscordGroupAllowedByPolicy, p as readDiscordComponentSpec, pt as resolveDiscordOwnerAllowFrom, q as editChannelDiscord, r as reactMessageDiscord, rt as listDiscordDirectoryGroupsLive, s as createDiscordFormModal, st as normalizeDiscordAllowList, tt as parseDiscordTarget, u as parseDiscordComponentCustomIdForCarbon, ut as resolveDiscordChannelConfigWithFallback, v as sendStickerDiscord, vt as formatDiscordUserTag, w as listPinsDiscord, wt as resolveChannelEntryMatchWithFallback, x as deleteMessageDiscord, xt as fetchDiscord, y as sendVoiceMessageDiscord, yt as resolveDiscordSystemLocation, z as listScheduledEventsDiscord } from "./send-BJ5Eq8nL.js";
+-import { C as getGlobalHookRunner, S as parseInlineDirectives$1, _ as normalizeTargetForProvider, b as MEDIA_TOKEN_RE, c as applyReplyThreading, d as isRenderablePayload, f as shouldSuppressMessagingToolReplies, g as normalizeChannelTargetInput, h as buildTargetResolverSignature, l as filterMessagingToolDuplicates, m as resolveReplyToMode, o as normalizeReplyPayloadsForDelivery, p as createReplyToModeFilterForChannel, s as applyReplyTagsToPayload, t as deliverOutboundPayloads, u as filterMessagingToolMediaDuplicates, v as throwIfAborted, w as initializeGlobalHookRunner, x as splitMediaFromOutput, y as parseReplyDirectives } from "./deliver-CheLNh5z.js";
++import { C as getGlobalHookRunner, S as parseInlineDirectives$1, _ as normalizeTargetForProvider, b as MEDIA_TOKEN_RE, c as applyReplyThreading, d as isRenderablePayload, f as shouldSuppressMessagingToolReplies, g as normalizeChannelTargetInput, h as buildTargetResolverSignature, l as filterMessagingToolDuplicates, m as resolveReplyToMode, o as normalizeReplyPayloadsForDelivery, p as createReplyToModeFilterForChannel, s as applyReplyTagsToPayload, t as deliverOutboundPayloads, u as filterMessagingToolMediaDuplicates, v as throwIfAborted, w as initializeGlobalHookRunner, x as splitMediaFromOutput, y as parseReplyDirectives } from "./deliver-C5yVKlxW.js";
+ import { a as logMessageProcessed, c as logWebhookError, d as startDiagnosticHeartbeat, f as stopDiagnosticHeartbeat, i as logLaneEnqueue, l as logWebhookProcessed, m as isDiagnosticsEnabled, o as logMessageQueued, p as emitDiagnosticEvent, r as logLaneDequeue, s as logSessionStateChange, t as diag, u as logWebhookReceived } from "./diagnostic-CJC2Qdcb.js";
+ import { r as getDiagnosticSessionState } from "./diagnostic-session-state-C1vRJs5w.js";
+ import { n as resolveSignalAccount, t as listEnabledSignalAccounts } from "./accounts-BFVCDHLN.js";
+@@ -26,10 +26,10 @@ import { A as normalizeProviderId, C as buildAllowedModelSet, D as isCliProvider
+ import { a as saveJsonFile, i as loadJsonFile } from "./github-copilot-token-D5ISrFy7.js";
+ import { n as discoverModels, t as discoverAuthStorage } from "./pi-model-discovery-CKatqe2T.js";
+ import { a as isMarkdownCapableMessageChannel, c as resolveGatewayMessageChannel, d as GATEWAY_CLIENT_MODES, f as GATEWAY_CLIENT_NAMES, i as isInternalMessageChannel, l as resolveMessageChannel, n as isDeliverableMessageChannel, o as listDeliverableMessageChannels, s as normalizeMessageChannel, t as INTERNAL_MESSAGE_CHANNEL, u as GATEWAY_CLIENT_IDS } from "./message-channel-BSPy_J6t.js";
+-import { A as isTransientHttpError, At as ensureBrowserControlAuth, B as loadSessionStore, Bt as resolveToolProfilePolicy, C as isContextOverflowError, Ct as createBrowserRouteContext, D as isRateLimitAssistantError, Dt as DEFAULT_UPLOAD_DIR, E as isLikelyContextOverflowError, Et as resolveProfile, F as resolveSandboxContext, Ft as collectExplicitAllowlist, G as updateSessionStoreEntry, Gt as ensureSessionHeader, H as recordSessionMetaFromInbound, Ht as compileGlobPatterns, I as resolveSandboxRuntimeStatus, It as expandPolicyWithPluginGroups, J as deliveryContextFromSession, Jt as sanitizeGoogleTurnOrdering, K as isCacheEnabled, Kt as resolveBootstrapMaxChars, L as extractDeliveryInfo, Lt as expandToolGroups, M as parseImageSizeError, Mt as resolveSandboxConfigForAgent, N as sanitizeUserFacingText, Nt as applyOwnerOnlyToolPolicy, O as isRawApiErrorPayload, Ot as resolvePathsWithinRoot, P as ensureSandboxWorkspaceForSession, Pt as buildPluginToolGroups, Q as normalizeSessionDeliveryFields, R as appendAssistantMessageToSessionTranscript, Rt as mergeAlsoAllowPolicy, S as isCompactionFailureError, St as resolveGroupSessionKey, T as isFailoverErrorMessage, Tt as resolveBrowserConfig, U as updateLastRoute, Ut as matchesAnyGlobPattern, V as readSessionUpdatedAt, Vt as stripPluginOnlyAllowlist, W as updateSessionStore, Wt as buildBootstrapContextFiles, X as mergeDeliveryContext, Y as deliveryContextKey, Z as normalizeDeliveryContext, _ as formatRawAssistantErrorForUi, _t as resolveFreshSessionTotalTokens, a as isMessagingToolDuplicateNormalized, at as applyInputProvenanceToUserMessage, b as isBillingAssistantError, bt as resolveMainSessionKey, c as extractToolCallsFromAssistant, ct as acquireSessionWriteLock, d as isAntigravityClaude, dt as evaluateSessionFreshness, et as archiveSessionTranscripts, f as isGoogleModelApi, ft as resolveChannelResetConfig, g as formatBillingErrorMessage, gt as DEFAULT_RESET_TRIGGERS, h as formatAssistantErrorText, ht as resolveThreadFlag, it as INPUT_PROVENANCE_KIND_VALUES, j as parseImageDimensionError, jt as resolveBrowserControlAuth, k as isTimeoutErrorMessage, kt as getBridgeAuthForPort, l as extractToolResultId, lt as resolveSessionLockMaxHoldFromTimeout, m as classifyFailoverReason, mt as resolveSessionResetType, n as validateGeminiTurns, nt as countToolResults, o as normalizeTextForComparison, ot as hasInterSessionUserProvenance, p as BILLING_ERROR_USER_MESSAGE, pt as resolveSessionResetPolicy, q as resolveCacheTtlMs$1, qt as resolveBootstrapTotalMaxChars, r as pickFallbackThinkingLevel, rt as extractToolCallNames, s as sanitizeSessionMessagesImages, st as normalizeInputProvenance, t as validateAnthropicTurns, tt as capArrayByJsonBytes, u as downgradeOpenAIReasoningBlocks, ut as resolveSessionKey, v as getApiErrorPayloadFingerprint, vt as canonicalizeMainSessionAlias, w as isFailoverAssistantError, wt as registerBrowserRoutes, x as isCloudCodeAssistFormatError, xt as deriveSessionMetaPatch, y as isAuthAssistantError, zt as normalizeToolName } from "./pi-embedded-helpers-DkPUQuW2.js";
++import { A as isTransientHttpError, At as ensureBrowserControlAuth, B as loadSessionStore, Bt as resolveToolProfilePolicy, C as isContextOverflowError, Ct as createBrowserRouteContext, D as isRateLimitAssistantError, Dt as DEFAULT_UPLOAD_DIR, E as isLikelyContextOverflowError, Et as resolveProfile, F as resolveSandboxContext, Ft as collectExplicitAllowlist, G as updateSessionStoreEntry, Gt as ensureSessionHeader, H as recordSessionMetaFromInbound, Ht as compileGlobPatterns, I as resolveSandboxRuntimeStatus, It as expandPolicyWithPluginGroups, J as deliveryContextFromSession, Jt as sanitizeGoogleTurnOrdering, K as isCacheEnabled, Kt as resolveBootstrapMaxChars, L as extractDeliveryInfo, Lt as expandToolGroups, M as parseImageSizeError, Mt as resolveSandboxConfigForAgent, N as sanitizeUserFacingText, Nt as applyOwnerOnlyToolPolicy, O as isRawApiErrorPayload, Ot as resolvePathsWithinRoot, P as ensureSandboxWorkspaceForSession, Pt as buildPluginToolGroups, Q as normalizeSessionDeliveryFields, R as appendAssistantMessageToSessionTranscript, Rt as mergeAlsoAllowPolicy, S as isCompactionFailureError, St as resolveGroupSessionKey, T as isFailoverErrorMessage, Tt as resolveBrowserConfig, U as updateLastRoute, Ut as matchesAnyGlobPattern, V as readSessionUpdatedAt, Vt as stripPluginOnlyAllowlist, W as updateSessionStore, Wt as buildBootstrapContextFiles, X as mergeDeliveryContext, Y as deliveryContextKey, Z as normalizeDeliveryContext, _ as formatRawAssistantErrorForUi, _t as resolveFreshSessionTotalTokens, a as isMessagingToolDuplicateNormalized, at as applyInputProvenanceToUserMessage, b as isBillingAssistantError, bt as resolveMainSessionKey, c as extractToolCallsFromAssistant, ct as acquireSessionWriteLock, d as isAntigravityClaude, dt as evaluateSessionFreshness, et as archiveSessionTranscripts, f as isGoogleModelApi, ft as resolveChannelResetConfig, g as formatBillingErrorMessage, gt as DEFAULT_RESET_TRIGGERS, h as formatAssistantErrorText, ht as resolveThreadFlag, it as INPUT_PROVENANCE_KIND_VALUES, j as parseImageDimensionError, jt as resolveBrowserControlAuth, k as isTimeoutErrorMessage, kt as getBridgeAuthForPort, l as extractToolResultId, lt as resolveSessionLockMaxHoldFromTimeout, m as classifyFailoverReason, mt as resolveSessionResetType, n as validateGeminiTurns, nt as countToolResults, o as normalizeTextForComparison, ot as hasInterSessionUserProvenance, p as BILLING_ERROR_USER_MESSAGE, pt as resolveSessionResetPolicy, q as resolveCacheTtlMs$1, qt as resolveBootstrapTotalMaxChars, r as pickFallbackThinkingLevel, rt as extractToolCallNames, s as sanitizeSessionMessagesImages, st as normalizeInputProvenance, t as validateAnthropicTurns, tt as capArrayByJsonBytes, u as downgradeOpenAIReasoningBlocks, ut as resolveSessionKey, v as getApiErrorPayloadFingerprint, vt as canonicalizeMainSessionAlias, w as isFailoverAssistantError, wt as registerBrowserRoutes, x as isCloudCodeAssistFormatError, xt as deriveSessionMetaPatch, y as isAuthAssistantError, zt as normalizeToolName } from "./pi-embedded-helpers-DJVxuVBT.js";
+ import { C as VERSION, S as resolveAgentMaxConcurrent, _ as getConfigValueAtPath, a as writeConfigFile, b as unsetConfigValueAtPath, c as TELEGRAM_COMMAND_NAME_PATTERN, d as parseDurationMs, f as validateJsonSchemaValue, g as unsetConfigOverride, h as setConfigOverride, i as resolveConfigSnapshotHash, l as normalizeTelegramCommandName, m as resetConfigOverrides, n as loadConfig, o as validateConfigObjectWithPlugins, p as getConfigOverrides, r as readConfigFileSnapshot, u as resolveTelegramCustomCommands, v as parseConfigPath, x as isSafeExecutableValue, y as setConfigValueAtPath } from "./config-CZmBKuLv.js";
+ import { a as resolveEnableState, i as normalizePluginsConfig, n as discoverOpenClawPlugins, o as resolveMemorySlotDecision, r as applyTestPluginDefaults, t as loadPluginManifestRegistry } from "./manifest-registry-BGtqiFuf.js";
+-import { C as pickPrimaryTailnetIPv4, E as DEFAULT_AI_SNAPSHOT_MAX_CHARS, S as pickPrimaryLanIPv4, b as rawDataToString, v as ensureChromeExtensionRelayServer } from "./chrome-BhzZmGA3.js";
++import { C as pickPrimaryTailnetIPv4, E as DEFAULT_AI_SNAPSHOT_MAX_CHARS, S as pickPrimaryLanIPv4, b as rawDataToString, v as ensureChromeExtensionRelayServer } from "./chrome-BkJNYiGr.js";
+ import { c as assertSandboxPath, d as resolveSandboxedMediaSource, f as applySkillEnvOverrides, i as resolveSkillsPromptForRun, l as resolveSandboxInputPath, n as buildWorkspaceSkillSnapshot, p as applySkillEnvOverridesFromSnapshot, r as loadWorkspaceSkillEntries, s as assertMediaNotDataUrl } from "./skills-CSRzV6uM.js";
+ import { n as formatErrorMessage, r as formatUncaughtError } from "./errors-pj0CRkCB.js";
+ import { n as getMediaDir, r as saveMediaBuffer } from "./store-nrEpGThw.js";
+@@ -39,7 +39,7 @@ import { t as resolveIMessageAccount } from "./accounts-CrNX3S4t.js";
+ import { i as resolveSessionTranscriptPath, n as resolveSessionFilePath, o as resolveSessionTranscriptsDirForAgent, r as resolveSessionFilePathOptions, s as resolveStorePath, t as resolveDefaultSessionStorePath } from "./paths-gnW-md4M.js";
+ import { t as emitSessionTranscriptUpdate } from "./transcript-events-CZ8CG4ht.js";
+ import { i as resolveImageSanitizationLimits, n as sanitizeImageBlocks, r as sanitizeToolResultImages } from "./tool-images-ClEFO-t-.js";
+-import { S as ensureOpenClawModelsJson, _ as stripMinimaxToolCallXml, a as decodeDataUrl, b as stripReasoningTagsFromText, c as extractAssistantText$1, d as extractThinkingFromTaggedText, f as formatReasoningMessage, g as stripDowngradedToolCallText, h as promoteThinkingTagsToBlocks, i as coerceImageModelConfig, l as extractAssistantThinking, m as isAssistantMessage, o as resolveProviderVisionModelFromConfig, p as inferToolMetaFromArgs, r as coerceImageAssistantText, s as minimaxUnderstandImage, u as extractThinkingFromTaggedStream, v as stripThinkingTagsFromText, x as extractTextFromChatContent, y as resolveToolDisplay } from "./image-Dxec4m3g.js";
++import { S as ensureOpenClawModelsJson, _ as stripMinimaxToolCallXml, a as decodeDataUrl, b as stripReasoningTagsFromText, c as extractAssistantText$1, d as extractThinkingFromTaggedText, f as formatReasoningMessage, g as stripDowngradedToolCallText, h as promoteThinkingTagsToBlocks, i as coerceImageModelConfig, l as extractAssistantThinking, m as isAssistantMessage, o as resolveProviderVisionModelFromConfig, p as inferToolMetaFromArgs, r as coerceImageAssistantText, s as minimaxUnderstandImage, u as extractThinkingFromTaggedStream, v as stripThinkingTagsFromText, x as extractTextFromChatContent, y as resolveToolDisplay } from "./image-gq_6ZuCX.js";
+ import { a as resolveEffectiveMessagesConfig, i as resolveAckReaction, o as resolveHumanDelayConfig, r as resolveResponsePrefixTemplate, t as createReplyPrefixOptions } from "./reply-prefix-CBsUYPbZ.js";
+ import { n as resolveMemorySearchConfig } from "./manager-D93sxzRU.js";
+ import { d as listMemoryFiles, f as normalizeExtraMemoryPaths } from "./sqlite-wwudzAAI.js";
+@@ -52,7 +52,7 @@ import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, r as readResponseWithLi
+ import { a as loadWebMedia, i as getDefaultLocalRoots, s as getAgentScopedMediaLocalRoots } from "./ir-CZf3ql48.js";
+ import { a as listChatCommandsForConfig, c as normalizeCommandBody, d as resolveCommandArgMenu, f as serializeCommandArgs, i as listChatCommands, l as parseCommandArgs, o as listNativeCommandSpecs, p as shouldHandleTextCommands, r as findCommandByNativeName, s as listNativeCommandSpecsForConfig, t as buildCommandTextFromArgs, u as resolveCommandArgChoices } from "./commands-registry-DZPpkBY3.js";
+ import { r as normalizeInboundTextNewlines, t as finalizeInboundContext } from "./inbound-context-zFBy5ZXA.js";
+-import { _ as applyTemplate, a as runCapability, c as modelSupportsVision, d as registerUnhandledRejectionHandler, f as resolveConcurrency, g as CLI_OUTPUT_MAX_BUFFER, h as resolveMediaUnderstandingScope, i as resolveAutoImageModel, m as normalizeMediaUnderstandingChatType, n as createMediaAttachmentCache, o as findModelInCatalog, p as resolveTimeoutMs$1, r as normalizeMediaAttachments, s as loadModelCatalog, t as buildProviderRegistry, u as resolveAttachmentKind } from "./runner-BrFhLhf5.js";
++import { _ as applyTemplate, a as runCapability, c as modelSupportsVision, d as registerUnhandledRejectionHandler, f as resolveConcurrency, g as CLI_OUTPUT_MAX_BUFFER, h as resolveMediaUnderstandingScope, i as resolveAutoImageModel, m as normalizeMediaUnderstandingChatType, n as createMediaAttachmentCache, o as findModelInCatalog, p as resolveTimeoutMs$1, r as normalizeMediaAttachments, s as loadModelCatalog, t as buildProviderRegistry, u as resolveAttachmentKind } from "./runner-Cruand-O.js";
+ import { c as getSkillsSnapshotVersion, i as resolveSkillCommandInvocation, n as listSkillCommandsForAgents, o as getRemoteSkillEligibility, r as listSkillCommandsForWorkspace, s as ensureSkillsWatcher, t as listReservedChatSlashCommandNames } from "./skill-commands-dSfDO9Xr.js";
+ import { n as wrapFetchWithAbortSignal, t as resolveFetch } from "./fetch-BBkSX75a.js";
+ import { n as recordCommandPoll, r as resetCommandPollCount } from "./command-poll-backoff-BGS2SHjF.js";
+@@ -84,7 +84,7 @@ import crypto, { X509Certificate, randomUUID } from "node:crypto";
+ import AjvPkg from "ajv";
+ import { createServer } from "node:http";
+ import { ProxyAgent, fetch as fetch$1 } from "undici";
+-import WebSocket$1, { WebSocket } from "ws";
++import WebSocket, { WebSocket as WebSocket$1 } from "ws";
+ import { Buffer as Buffer$1 } from "node:buffer";
+ import { createJiti } from "jiti";
+ import { Type } from "@sinclair/typebox";
+@@ -5688,7 +5688,7 @@ var GatewayClient = class {
+ 				if (fingerprint !== expected) return /* @__PURE__ */ new Error("gateway tls fingerprint mismatch");
+ 			});
+ 		}
+-		this.ws = new WebSocket(url, wsOptions);
++		this.ws = new WebSocket$1(url, wsOptions);
+ 		this.ws.on("open", () => {
+ 			if (url.startsWith("wss://") && this.opts.tlsFingerprint) {
+ 				const tlsError = this.validateTlsFingerprint();
+@@ -5903,7 +5903,7 @@ var GatewayClient = class {
+ 		return null;
+ 	}
+ 	async request(method, params, opts) {
+-		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error("gateway not connected");
++		if (!this.ws || this.ws.readyState !== WebSocket$1.OPEN) throw new Error("gateway not connected");
+ 		const id = randomUUID();
+ 		const frame = {
+ 			type: "req",
+@@ -6949,7 +6949,7 @@ async function routeReply(params) {
+ 	const resolvedReplyToId = replyToId ?? (channelId === "slack" && threadId != null && threadId !== "" ? String(threadId) : void 0);
+ 	const resolvedThreadId = channelId === "slack" ? null : threadId ?? null;
+ 	try {
+-		const { deliverOutboundPayloads } = await import("./deliver-CheLNh5z.js").then((n) => n.n);
++		const { deliverOutboundPayloads } = await import("./deliver-C5yVKlxW.js").then((n) => n.n);
+ 		return {
+ 			ok: true,
+ 			messageId: (await deliverOutboundPayloads({
+@@ -38447,7 +38447,7 @@ async function deliverSessionMaintenanceWarning(params) {
+ 		return;
+ 	}
+ 	try {
+-		const { deliverOutboundPayloads } = await import("./deliver-CheLNh5z.js").then((n) => n.n);
++		const { deliverOutboundPayloads } = await import("./deliver-C5yVKlxW.js").then((n) => n.n);
+ 		await deliverOutboundPayloads({
+ 			cfg: params.cfg,
+ 			channel,
+@@ -41810,7 +41810,7 @@ async function describeStickerImage(params) {
+ 	logVerbose(`telegram: describing sticker with ${provider}/${model}`);
+ 	try {
+ 		const buffer = await fs.readFile(imagePath);
+-		const { describeImageWithModel } = await import("./image-Dxec4m3g.js").then((n) => n.n);
++		const { describeImageWithModel } = await import("./image-gq_6ZuCX.js").then((n) => n.n);
+ 		return (await describeImageWithModel({
+ 			buffer,
+ 			fileName: "sticker.webp",
+@@ -44099,7 +44099,7 @@ async function preflightDiscordMessage(params) {
+ 	let preflightTranscript;
+ 	const hasAudioAttachment = message.attachments?.some((att) => att.contentType?.startsWith("audio/"));
+ 	if (!isDirectMessage && shouldRequireMention && hasAudioAttachment && !baseText && mentionRegexes.length > 0) try {
+-		const { transcribeFirstAudio } = await import("./audio-preflight-B4XqBkEM.js");
++		const { transcribeFirstAudio } = await import("./audio-preflight-DuMVdl_n.js");
+ 		const audioPaths = message.attachments?.filter((att) => att.contentType?.startsWith("audio/")).map((att) => att.url) ?? [];
+ 		if (audioPaths.length > 0) preflightTranscript = await transcribeFirstAudio({
+ 			ctx: {
+@@ -47799,7 +47799,7 @@ function createDiscordGatewayPlugin(params) {
+ 				super(options);
+ 			}
+ 			createWebSocket(url) {
+-				return new WebSocket$1(url, { agent });
++				return new WebSocket(url, { agent });
+ 			}
+ 		}
+ 		return new ProxyGatewayPlugin();
+@@ -57362,7 +57362,7 @@ const buildTelegramMessageContext = async ({ primaryCtx, allMedia, storeAllowFro
+ 	const hasAudio = allMedia.some((media) => media.contentType?.startsWith("audio/"));
+ 	let preflightTranscript;
+ 	if (isGroup && requireMention && hasAudio && !hasUserText && mentionRegexes.length > 0) try {
+-		const { transcribeFirstAudio } = await import("./audio-preflight-B4XqBkEM.js");
++		const { transcribeFirstAudio } = await import("./audio-preflight-DuMVdl_n.js");
+ 		preflightTranscript = await transcribeFirstAudio({
+ 			ctx: {
+ 				MediaPaths: allMedia.length > 0 ? allMedia.map((m) => m.path) : void 0,
+@@ -59384,7 +59384,7 @@ function loadWebLoginQr() {
+ 	return webLoginQrPromise;
+ }
+ function loadWebChannel() {
+-	webChannelPromise ??= import("./web-BxpQp_rh.js");
++	webChannelPromise ??= import("./web-CD-gITPz.js");
+ 	return webChannelPromise;
+ }
+ function loadWhatsAppActions() {
+diff --git a/dist/pi-embedded-helpers-DkPUQuW2.js b/dist/pi-embedded-helpers-DJVxuVBT.js
+similarity index 99%
+rename from dist/pi-embedded-helpers-DkPUQuW2.js
+rename to dist/pi-embedded-helpers-DJVxuVBT.js
+index 30d5557ea..422c1f07d 100644
+--- a/dist/pi-embedded-helpers-DkPUQuW2.js
++++ b/dist/pi-embedded-helpers-DJVxuVBT.js
+@@ -13,7 +13,7 @@ import { a as resizeToJpeg, n as getImageMetadata } from "./image-ops-CqQZXJ9D.j
+ import { S as isPidAlive, x as resolveProcessScopedMap } from "./model-auth-CxlTW8uU.js";
+ import { o as listDeliverableMessageChannels, s as normalizeMessageChannel } from "./message-channel-BSPy_J6t.js";
+ import { a as writeConfigFile, d as parseDurationMs, n as loadConfig, s as parseByteSize, t as createConfigIO } from "./config-CZmBKuLv.js";
+-import { A as DEFAULT_OPENCLAW_BROWSER_ENABLED, D as DEFAULT_BROWSER_DEFAULT_PROFILE_NAME, E as DEFAULT_AI_SNAPSHOT_MAX_CHARS, O as DEFAULT_BROWSER_EVALUATE_ENABLED, T as DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS, a as resolveOpenClawUserDataDir, c as captureScreenshot, d as normalizeCdpWsUrl, f as snapshotAria, h as fetchOk, i as launchOpenClawChrome, j as DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME, k as DEFAULT_OPENCLAW_BROWSER_COLOR, l as createTargetViaCdp, m as fetchJson, n as isChromeCdpReady, o as stopOpenClawChrome, p as appendCdpPath, r as isChromeReachable, s as resolveBrowserExecutableForPlatform, v as ensureChromeExtensionRelayServer, w as DEFAULT_AI_SNAPSHOT_EFFICIENT_DEPTH, x as isLoopbackHost, y as stopChromeExtensionRelayServer } from "./chrome-BhzZmGA3.js";
++import { A as DEFAULT_OPENCLAW_BROWSER_ENABLED, D as DEFAULT_BROWSER_DEFAULT_PROFILE_NAME, E as DEFAULT_AI_SNAPSHOT_MAX_CHARS, O as DEFAULT_BROWSER_EVALUATE_ENABLED, T as DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS, a as resolveOpenClawUserDataDir, c as captureScreenshot, d as normalizeCdpWsUrl, f as snapshotAria, h as fetchOk, i as launchOpenClawChrome, j as DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME, k as DEFAULT_OPENCLAW_BROWSER_COLOR, l as createTargetViaCdp, m as fetchJson, n as isChromeCdpReady, o as stopOpenClawChrome, p as appendCdpPath, r as isChromeReachable, s as resolveBrowserExecutableForPlatform, v as ensureChromeExtensionRelayServer, w as DEFAULT_AI_SNAPSHOT_EFFICIENT_DEPTH, x as isLoopbackHost, y as stopChromeExtensionRelayServer } from "./chrome-BkJNYiGr.js";
+ import { a as syncSkillsToWorkspace, l as resolveSandboxInputPath, u as resolveSandboxPath } from "./skills-CSRzV6uM.js";
+ import { n as formatErrorMessage, t as extractErrorCode } from "./errors-pj0CRkCB.js";
+ import { r as saveMediaBuffer, t as ensureMediaDir } from "./store-nrEpGThw.js";
+@@ -814,7 +814,7 @@ function isModuleNotFoundError(err) {
+ }
+ async function loadPwAiModule(mode) {
+ 	try {
+-		return await import("./pw-ai-CT2SpDpw.js");
++		return await import("./pw-ai-BQ14pMEk.js");
+ 	} catch (err) {
+ 		if (mode === "soft") return null;
+ 		if (isModuleNotFoundError(err)) return null;
+@@ -3194,11 +3194,11 @@ function createProfileContext(opts, profile) {
+ 		const userDataDir = resolveOpenClawUserDataDir(profile.name);
+ 		const profileState = getProfileState();
+ 		if (await isHttpReachable(300) && !profileState.running) try {
+-			await (await import("./pw-ai-CT2SpDpw.js")).closePlaywrightBrowserConnection();
++			await (await import("./pw-ai-BQ14pMEk.js")).closePlaywrightBrowserConnection();
+ 		} catch {}
+ 		if (profileState.running) await stopRunningBrowser();
+ 		try {
+-			await (await import("./pw-ai-CT2SpDpw.js")).closePlaywrightBrowserConnection();
++			await (await import("./pw-ai-BQ14pMEk.js")).closePlaywrightBrowserConnection();
+ 		} catch {}
+ 		if (!fs$1.existsSync(userDataDir)) return {
+ 			moved: false,
+diff --git a/dist/plugin-sdk/accounts-BSywe9Bq.js b/dist/plugin-sdk/accounts-WG-Hmhh4.js
+similarity index 98%
+rename from dist/plugin-sdk/accounts-BSywe9Bq.js
+rename to dist/plugin-sdk/accounts-WG-Hmhh4.js
+index f59cc2fdb..ecae82cb6 100644
+--- a/dist/plugin-sdk/accounts-BSywe9Bq.js
++++ b/dist/plugin-sdk/accounts-WG-Hmhh4.js
+@@ -1,7 +1,7 @@
+ import { c as normalizeAccountId, t as DEFAULT_ACCOUNT_ID } from "./session-key-9yEYlIQe.js";
+-import { B as info, E as jidToE164, K as success, Z as getChildLogger, j as resolveUserPath } from "./registry-CvUzfgyU.js";
++import { B as info, E as jidToE164, K as success, Z as getChildLogger, j as resolveUserPath } from "./registry-DFcSCP5o.js";
+ import { a as resolveOAuthDir } from "./paths-DJmOcr7Q.js";
+-import { i as defaultRuntime } from "./subsystem-CPwOCKbN.js";
++import { i as defaultRuntime } from "./subsystem-CNxEMAhB.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+ import path from "node:path";
+ import fs from "node:fs";
+diff --git a/dist/plugin-sdk/active-listener-BiMSzcgN.js b/dist/plugin-sdk/active-listener-DqgfJFYZ.js
+similarity index 97%
+rename from dist/plugin-sdk/active-listener-BiMSzcgN.js
+rename to dist/plugin-sdk/active-listener-DqgfJFYZ.js
+index 82c4f1813..a7e6ca31a 100644
+--- a/dist/plugin-sdk/active-listener-BiMSzcgN.js
++++ b/dist/plugin-sdk/active-listener-DqgfJFYZ.js
+@@ -1,6 +1,6 @@
+ import { t as DEFAULT_ACCOUNT_ID } from "./session-key-9yEYlIQe.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { r as markdownToIRWithMeta } from "./ir-WzWc9-m7.js";
++import { r as markdownToIRWithMeta } from "./ir-D6km9t7C.js";
+ import { t as renderMarkdownWithMarkers } from "./render-95l30zcf.js";
+ 
+ //#region src/polls.ts
+diff --git a/dist/plugin-sdk/agent-scope-BmRbl8vE.js b/dist/plugin-sdk/agent-scope-DGo2Lh53.js
+similarity index 99%
+rename from dist/plugin-sdk/agent-scope-BmRbl8vE.js
+rename to dist/plugin-sdk/agent-scope-DGo2Lh53.js
+index 1f46b7bd9..92ac2272c 100644
+--- a/dist/plugin-sdk/agent-scope-BmRbl8vE.js
++++ b/dist/plugin-sdk/agent-scope-DGo2Lh53.js
+@@ -1,7 +1,7 @@
+ import { _ as isSubagentSessionKey, g as isCronSessionKey, l as normalizeAgentId, n as DEFAULT_AGENT_ID, v as parseAgentSessionKey } from "./session-key-9yEYlIQe.js";
+-import { O as pathExists, j as resolveUserPath } from "./registry-CvUzfgyU.js";
++import { O as pathExists, j as resolveUserPath } from "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir, u as resolveRequiredHomeDir } from "./paths-DJmOcr7Q.js";
+-import { t as runCommandWithTimeout } from "./exec-CBwIXprv.js";
++import { t as runCommandWithTimeout } from "./exec-CikK1sTs.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+diff --git a/dist/plugin-sdk/audio-preflight-CDb4XAqS.js b/dist/plugin-sdk/audio-preflight-BQxEKCrO.js
+similarity index 73%
+rename from dist/plugin-sdk/audio-preflight-CDb4XAqS.js
+rename to dist/plugin-sdk/audio-preflight-BQxEKCrO.js
+index 9d2ff69d5..ecdfbc4b0 100644
+--- a/dist/plugin-sdk/audio-preflight-CDb4XAqS.js
++++ b/dist/plugin-sdk/audio-preflight-BQxEKCrO.js
+@@ -1,30 +1,30 @@
+-import "./accounts-BSywe9Bq.js";
+-import { G as shouldLogVerbose, H as logVerbose } from "./registry-CvUzfgyU.js";
++import "./accounts-WG-Hmhh4.js";
++import { G as shouldLogVerbose, H as logVerbose } from "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import "./model-selection-CB9IIVWU.js";
+-import "./config-YVBCrP94.js";
+-import "./ssrf--zCZt1NJ.js";
+-import "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
+-import "./tool-images-B8CfQtJH.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import "./skills-CreY3Zqs.js";
++import "./model-selection-CcII_ph5.js";
++import "./config-BUR5GFvw.js";
++import "./ssrf-CIYAMVQH.js";
++import "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
++import "./tool-images-DZscW5Qf.js";
++import "./agent-scope-DGo2Lh53.js";
++import "./skills-DNzuu_Hz.js";
+ import "./redact-BUgsXMP1.js";
+ import "./errors-7SO55DQM.js";
+-import "./fetch-CO6Olj9O.js";
+-import "./chrome-CNaxD22L.js";
+-import "./env-DNXtq8Zy.js";
+-import "./thinking-CtxhcKkY.js";
+-import "./normalize-mEjrgr3H.js";
+-import "./bindings-BGhRgiFJ.js";
+-import "./plugins-BBPPyP5O.js";
+-import "./message-channel-CzbBSsGC.js";
+-import "./pi-embedded-helpers-BmFSmAMs.js";
++import "./fetch-CRvmXstS.js";
++import "./chrome-WS-Z8NHV.js";
++import "./env-CjjrqHd2.js";
++import "./thinking-CL3Zx3n9.js";
++import "./normalize-nbycZ809.js";
++import "./bindings-BkL2h399.js";
++import "./plugins-BNWuvEuT.js";
++import "./message-channel-CaoRC6Bw.js";
++import "./pi-embedded-helpers-BBn71qTx.js";
+ import "./github-copilot-token-Dtvm_sTU.js";
+-import "./manifest-registry-C0jS6PBU.js";
++import "./manifest-registry-B8hfUlu9.js";
+ import "./paths-CyXoO9iV.js";
+-import { a as runCapability, l as isAudioAttachment, n as createMediaAttachmentCache, r as normalizeMediaAttachments, t as buildProviderRegistry } from "./runner-DqwnPJ8U.js";
+-import "./image-C9KFN-f3.js";
++import { a as runCapability, l as isAudioAttachment, n as createMediaAttachmentCache, r as normalizeMediaAttachments, t as buildProviderRegistry } from "./runner-AYensfnh.js";
++import "./image-JmJ4zLpW.js";
+ import "./pi-model-discovery-BEgrTVvT.js";
+ 
+ //#region src/media-understanding/audio-preflight.ts
+diff --git a/dist/plugin-sdk/bindings-BGhRgiFJ.js b/dist/plugin-sdk/bindings-BkL2h399.js
+similarity index 92%
+rename from dist/plugin-sdk/bindings-BGhRgiFJ.js
+rename to dist/plugin-sdk/bindings-BkL2h399.js
+index 614d84860..19112d393 100644
+--- a/dist/plugin-sdk/bindings-BGhRgiFJ.js
++++ b/dist/plugin-sdk/bindings-BkL2h399.js
+@@ -1,6 +1,6 @@
+ import { c as normalizeAccountId, l as normalizeAgentId } from "./session-key-9yEYlIQe.js";
+-import { o as normalizeChatChannelId } from "./registry-CvUzfgyU.js";
+-import { c as resolveDefaultAgentId } from "./agent-scope-BmRbl8vE.js";
++import { o as normalizeChatChannelId } from "./registry-DFcSCP5o.js";
++import { c as resolveDefaultAgentId } from "./agent-scope-DGo2Lh53.js";
+ 
+ //#region src/routing/bindings.ts
+ function normalizeBindingChannelId(raw) {
+diff --git a/dist/plugin-sdk/channel-web-TwaDyEL1.js b/dist/plugin-sdk/channel-web-DS6K0kPN.js
+similarity index 99%
+rename from dist/plugin-sdk/channel-web-TwaDyEL1.js
+rename to dist/plugin-sdk/channel-web-DS6K0kPN.js
+index 815db5959..4ad1f357b 100644
+--- a/dist/plugin-sdk/channel-web-TwaDyEL1.js
++++ b/dist/plugin-sdk/channel-web-DS6K0kPN.js
+@@ -1,23 +1,23 @@
+ import { i as buildAgentMainSessionKey, l as normalizeAgentId, o as buildGroupHistoryKey, r as DEFAULT_MAIN_KEY } from "./session-key-9yEYlIQe.js";
+-import { f as readWebSelfId, o as getWebAuthAgeMs, r as resolveWhatsAppAccount } from "./accounts-BSywe9Bq.js";
+-import { B as recordChannelActivity, Ft as createDedupeCache, O as enqueueSystemEvent, X as toLocationContext, Y as formatLocationText, _ as resolveInboundDebounceMs, b as hasControlCommand, c as computeBackoff, ct as DEFAULT_GROUP_HISTORY_LIMIT, d as formatDurationPrecise, f as readChannelAllowFromStore, g as createInboundDebouncer, gt as normalizeMentionText, ht as buildMentionRegexes, it as resolveMentionGating, l as sleepWithAbort, lt as buildHistoryContextFromEntries, m as dispatchReplyWithBufferedBlockDispatcher, mt as recordPendingHistoryEntryIfEnabled, n as normalizeGroupActivation, p as upsertChannelPairingRequest, r as parseActivationCommand, rt as shouldAckReactionForWhatsApp, t as getReplyFromConfig, u as buildPairingReply, v as formatInboundEnvelope, x as shouldComputeCommandAuthorized, y as resolveEnvelopeFormatOptions } from "./reply-CgfssYjy.js";
+-import { A as resolveJidToE164, D as normalizeE164, E as jidToE164, F as sleep, G as shouldLogVerbose, H as logVerbose, L as toWhatsappJid, T as isSelfChatMode, Z as getChildLogger, _ as clamp, o as normalizeChatChannelId } from "./registry-CvUzfgyU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { c as resolveIdentityNamePrefix, l as resolveMessagePrefix, n as createReplyPrefixOptions } from "./reply-prefix-D07Ikdod.js";
+-import { L as resolveChannelGroupPolicy, R as resolveChannelGroupRequireMention } from "./thinking-CtxhcKkY.js";
++import { f as readWebSelfId, o as getWebAuthAgeMs, r as resolveWhatsAppAccount } from "./accounts-WG-Hmhh4.js";
++import { B as recordChannelActivity, Ft as createDedupeCache, O as enqueueSystemEvent, X as toLocationContext, Y as formatLocationText, _ as resolveInboundDebounceMs, b as hasControlCommand, c as computeBackoff, ct as DEFAULT_GROUP_HISTORY_LIMIT, d as formatDurationPrecise, f as readChannelAllowFromStore, g as createInboundDebouncer, gt as normalizeMentionText, ht as buildMentionRegexes, it as resolveMentionGating, l as sleepWithAbort, lt as buildHistoryContextFromEntries, m as dispatchReplyWithBufferedBlockDispatcher, mt as recordPendingHistoryEntryIfEnabled, n as normalizeGroupActivation, p as upsertChannelPairingRequest, r as parseActivationCommand, rt as shouldAckReactionForWhatsApp, t as getReplyFromConfig, u as buildPairingReply, v as formatInboundEnvelope, x as shouldComputeCommandAuthorized, y as resolveEnvelopeFormatOptions } from "./reply-BquBuqcS.js";
++import { A as resolveJidToE164, D as normalizeE164, E as jidToE164, F as sleep, G as shouldLogVerbose, H as logVerbose, L as toWhatsappJid, T as isSelfChatMode, Z as getChildLogger, _ as clamp, o as normalizeChatChannelId } from "./registry-DFcSCP5o.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { c as resolveIdentityNamePrefix, l as resolveMessagePrefix, n as createReplyPrefixOptions } from "./reply-prefix-CRXqek3R.js";
++import { L as resolveChannelGroupPolicy, R as resolveChannelGroupRequireMention } from "./thinking-CL3Zx3n9.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { Yt as resolveGroupSessionKey, _t as recordSessionMetaFromInbound, dt as saveMediaBuffer, gt as readSessionUpdatedAt, ht as loadSessionStore, vt as updateLastRoute } from "./pi-embedded-helpers-BmFSmAMs.js";
++import { Yt as resolveGroupSessionKey, _t as recordSessionMetaFromInbound, dt as saveMediaBuffer, gt as readSessionUpdatedAt, ht as loadSessionStore, vt as updateLastRoute } from "./pi-embedded-helpers-BBn71qTx.js";
+ import { s as resolveStorePath } from "./paths-CyXoO9iV.js";
+-import { i as convertMarkdownTables, r as setActiveWebListener } from "./active-listener-BiMSzcgN.js";
+-import { a as loadWebMedia, s as getAgentScopedMediaLocalRoots } from "./ir-WzWc9-m7.js";
+-import { c as resolveChunkMode, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit } from "./chunk-COfiKqBF.js";
+-import { n as resolveMarkdownTableMode } from "./markdown-tables-MH5WoQHz.js";
++import { i as convertMarkdownTables, r as setActiveWebListener } from "./active-listener-DqgfJFYZ.js";
++import { a as loadWebMedia, s as getAgentScopedMediaLocalRoots } from "./ir-D6km9t7C.js";
++import { c as resolveChunkMode, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit } from "./chunk-Cfb0gRms.js";
++import { n as resolveMarkdownTableMode } from "./markdown-tables-Cyc-LieP.js";
+ import { t as finalizeInboundContext } from "./inbound-context-DSVrDz6Q.js";
+-import { d as registerUnhandledRejectionHandler } from "./runner-DqwnPJ8U.js";
+-import { n as resolveAgentRoute, t as buildAgentSessionKey } from "./resolve-route-6uB6pV_J.js";
+-import { i as markdownToWhatsApp, r as sendReactionWhatsApp } from "./outbound-ClQW7VvZ.js";
+-import { i as waitForWaConnection, n as formatError, r as getStatusCode, t as createWaSocket } from "./session-BXtNnVIi.js";
++import { d as registerUnhandledRejectionHandler } from "./runner-AYensfnh.js";
++import { n as resolveAgentRoute, t as buildAgentSessionKey } from "./resolve-route-CeeVouVs.js";
++import { i as markdownToWhatsApp, r as sendReactionWhatsApp } from "./outbound-B6uL5Vxh.js";
++import { i as waitForWaConnection, n as formatError, r as getStatusCode, t as createWaSocket } from "./session-DFhRfCQL.js";
+ import { randomUUID } from "node:crypto";
+ import { DisconnectReason, downloadMediaMessage, extractMessageContent, getContentType, isJidGroup, normalizeMessageContent } from "@whiskeysockets/baileys";
+ 
+diff --git a/dist/plugin-sdk/chrome-CNaxD22L.js b/dist/plugin-sdk/chrome-WS-Z8NHV.js
+similarity index 99%
+rename from dist/plugin-sdk/chrome-CNaxD22L.js
+rename to dist/plugin-sdk/chrome-WS-Z8NHV.js
+index 57672e541..2f7022f36 100644
+--- a/dist/plugin-sdk/chrome-CNaxD22L.js
++++ b/dist/plugin-sdk/chrome-WS-Z8NHV.js
+@@ -1,5 +1,5 @@
+-import { g as CONFIG_DIR } from "./registry-CvUzfgyU.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { g as CONFIG_DIR } from "./registry-DFcSCP5o.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ import { i as isErrno } from "./errors-7SO55DQM.js";
+ import path from "node:path";
+ import fs from "node:fs";
+diff --git a/dist/plugin-sdk/chunk-COfiKqBF.js b/dist/plugin-sdk/chunk-Cfb0gRms.js
+similarity index 99%
+rename from dist/plugin-sdk/chunk-COfiKqBF.js
+rename to dist/plugin-sdk/chunk-Cfb0gRms.js
+index 34eaf5e4a..33b5fa96f 100644
+--- a/dist/plugin-sdk/chunk-COfiKqBF.js
++++ b/dist/plugin-sdk/chunk-Cfb0gRms.js
+@@ -1,6 +1,6 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { c as normalizeAccountId } from "./session-key-9yEYlIQe.js";
+-import { t as INTERNAL_MESSAGE_CHANNEL } from "./message-channel-CzbBSsGC.js";
++import { t as INTERNAL_MESSAGE_CHANNEL } from "./message-channel-CaoRC6Bw.js";
+ 
+ //#region src/markdown/fences.ts
+ function parseFenceSpans(buffer) {
+diff --git a/dist/plugin-sdk/commands-registry-CMKEe4ot.js b/dist/plugin-sdk/commands-registry-D11KItt-.js
+similarity index 99%
+rename from dist/plugin-sdk/commands-registry-CMKEe4ot.js
+rename to dist/plugin-sdk/commands-registry-D11KItt-.js
+index 0f6df9223..a53535e5a 100644
+--- a/dist/plugin-sdk/commands-registry-CMKEe4ot.js
++++ b/dist/plugin-sdk/commands-registry-D11KItt-.js
+@@ -1,7 +1,7 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { s as getActivePluginRegistry, x as escapeRegExp } from "./registry-CvUzfgyU.js";
+-import { U as DEFAULT_MODEL, W as DEFAULT_PROVIDER, u as resolveConfiguredModelRef } from "./model-selection-CB9IIVWU.js";
+-import { f as listChannelDocks, r as listThinkingLevels } from "./thinking-CtxhcKkY.js";
++import { s as getActivePluginRegistry, x as escapeRegExp } from "./registry-DFcSCP5o.js";
++import { U as DEFAULT_MODEL, W as DEFAULT_PROVIDER, u as resolveConfiguredModelRef } from "./model-selection-CcII_ph5.js";
++import { f as listChannelDocks, r as listThinkingLevels } from "./thinking-CL3Zx3n9.js";
+ 
+ //#region src/auto-reply/commands-args.ts
+ function normalizeArgValue(value) {
+diff --git a/dist/plugin-sdk/common-CH6orOBi.js b/dist/plugin-sdk/common-CXH6PFr2.js
+similarity index 96%
+rename from dist/plugin-sdk/common-CH6orOBi.js
+rename to dist/plugin-sdk/common-CXH6PFr2.js
+index 7993ccff5..0a6517584 100644
+--- a/dist/plugin-sdk/common-CH6orOBi.js
++++ b/dist/plugin-sdk/common-CXH6PFr2.js
+@@ -1,5 +1,5 @@
+-import { p as detectMime } from "./ssrf--zCZt1NJ.js";
+-import { r as sanitizeToolResultImages } from "./tool-images-B8CfQtJH.js";
++import { p as detectMime } from "./ssrf-CIYAMVQH.js";
++import { r as sanitizeToolResultImages } from "./tool-images-DZscW5Qf.js";
+ import fs from "node:fs/promises";
+ 
+ //#region src/agents/tools/common.ts
+diff --git a/dist/plugin-sdk/config-YVBCrP94.js b/dist/plugin-sdk/config-BUR5GFvw.js
+similarity index 99%
+rename from dist/plugin-sdk/config-YVBCrP94.js
+rename to dist/plugin-sdk/config-BUR5GFvw.js
+index df300617a..78dbc4305 100644
+--- a/dist/plugin-sdk/config-YVBCrP94.js
++++ b/dist/plugin-sdk/config-BUR5GFvw.js
+@@ -1,14 +1,14 @@
+ import { l as normalizeAgentId, n as DEFAULT_AGENT_ID } from "./session-key-9yEYlIQe.js";
+-import { C as isPlainObject$2, j as resolveUserPath, k as resolveConfigDir, o as normalizeChatChannelId, t as CHANNEL_IDS, w as isRecord } from "./registry-CvUzfgyU.js";
++import { C as isPlainObject$2, j as resolveUserPath, k as resolveConfigDir, o as normalizeChatChannelId, t as CHANNEL_IDS, w as isRecord } from "./registry-DFcSCP5o.js";
+ import { n as resolveConfigPath, r as resolveDefaultConfigCandidates, s as resolveStateDir, u as resolveRequiredHomeDir } from "./paths-DJmOcr7Q.js";
+-import { H as DEFAULT_CONTEXT_TOKENS, J as shouldDeferShellEnvFallback, K as loadShellEnvFallback, Y as shouldEnableShellEnvFallback, l as parseModelRef, q as resolveShellEnvFallbackTimeoutMs } from "./model-selection-CB9IIVWU.js";
+-import { c as resolveDefaultAgentId, s as resolveAgentWorkspaceDir } from "./agent-scope-BmRbl8vE.js";
+-import { c as resolveMemorySlotDecision, o as normalizePluginsConfig, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-C0jS6PBU.js";
++import { H as DEFAULT_CONTEXT_TOKENS, J as shouldDeferShellEnvFallback, K as loadShellEnvFallback, Y as shouldEnableShellEnvFallback, l as parseModelRef, q as resolveShellEnvFallbackTimeoutMs } from "./model-selection-CcII_ph5.js";
++import { c as resolveDefaultAgentId, s as resolveAgentWorkspaceDir } from "./agent-scope-DGo2Lh53.js";
++import { c as resolveMemorySlotDecision, o as normalizePluginsConfig, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-B8hfUlu9.js";
+ import { createRequire } from "node:module";
+ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+-import json5 from "json5";
++import JSON5 from "json5";
+ import { z } from "zod";
+ import { isDeepStrictEqual } from "node:util";
+ import crypto from "node:crypto";
+@@ -2764,7 +2764,7 @@ var IncludeProcessor = class IncludeProcessor {
+ };
+ const defaultResolver = {
+ 	readFile: (p) => fs.readFileSync(p, "utf-8"),
+-	parseJson: (raw) => json5.parse(raw)
++	parseJson: (raw) => JSON5.parse(raw)
+ };
+ /**
+ * Resolves all $include directives in a parsed config object.
+@@ -5261,7 +5261,7 @@ function resolveConfigPathForDeps(deps) {
+ function normalizeDeps(overrides = {}) {
+ 	return {
+ 		fs: overrides.fs ?? fs,
+-		json5: overrides.json5 ?? json5,
++		json5: overrides.json5 ?? JSON5,
+ 		env: overrides.env ?? process.env,
+ 		homedir: overrides.homedir ?? (() => resolveRequiredHomeDir(overrides.env ?? process.env, os.homedir)),
+ 		configPath: overrides.configPath ?? "",
+@@ -5272,11 +5272,11 @@ function maybeLoadDotEnvForConfig(env) {
+ 	if (env !== process.env) return;
+ 	loadDotEnv({ quiet: true });
+ }
+-function parseConfigJson5(raw, json5$1 = json5) {
++function parseConfigJson5(raw, json5 = JSON5) {
+ 	try {
+ 		return {
+ 			ok: true,
+-			parsed: json5$1.parse(raw)
++			parsed: json5.parse(raw)
+ 		};
+ 	} catch (err) {
+ 		return {
+diff --git a/dist/plugin-sdk/deliver-DJcNV-mo.js b/dist/plugin-sdk/deliver-BPHUbnv3.js
+similarity index 99%
+rename from dist/plugin-sdk/deliver-DJcNV-mo.js
+rename to dist/plugin-sdk/deliver-BPHUbnv3.js
+index 9736d99fd..b6cae0e38 100644
+--- a/dist/plugin-sdk/deliver-DJcNV-mo.js
++++ b/dist/plugin-sdk/deliver-BPHUbnv3.js
+@@ -1,18 +1,18 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { c as normalizeAccountId$1 } from "./session-key-9yEYlIQe.js";
+-import { ct as triggerInternalHook, s as getActivePluginRegistry, st as createInternalHookEvent } from "./registry-CvUzfgyU.js";
++import { ct as triggerInternalHook, s as getActivePluginRegistry, st as createInternalHookEvent } from "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { C as mediaKindFromMime } from "./ssrf--zCZt1NJ.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-D9QrMV6b.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { C as mediaKindFromMime } from "./ssrf-CIYAMVQH.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-w1xZM7qi.js";
+ import { n as fetchWithTimeout, t as bindAbortRelay } from "./fetch-timeout-IIHFohfs.js";
+-import { N as resolveSignalAccount, d as getChannelDock } from "./thinking-CtxhcKkY.js";
+-import { r as normalizeChannelId, t as getChannelPlugin } from "./plugins-BBPPyP5O.js";
+-import { dt as saveMediaBuffer, i as isMessagingToolDuplicate, mt as resolveMirroredTranscriptText, pt as appendAssistantMessageToSessionTranscript } from "./pi-embedded-helpers-BmFSmAMs.js";
+-import { a as loadWebMedia, n as markdownToIR, s as getAgentScopedMediaLocalRoots, t as chunkMarkdownIR } from "./ir-WzWc9-m7.js";
+-import { c as resolveChunkMode, f as parseFenceSpans, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit, n as chunkByParagraph } from "./chunk-COfiKqBF.js";
+-import { n as resolveMarkdownTableMode } from "./markdown-tables-MH5WoQHz.js";
++import { N as resolveSignalAccount, d as getChannelDock } from "./thinking-CL3Zx3n9.js";
++import { r as normalizeChannelId, t as getChannelPlugin } from "./plugins-BNWuvEuT.js";
++import { dt as saveMediaBuffer, i as isMessagingToolDuplicate, mt as resolveMirroredTranscriptText, pt as appendAssistantMessageToSessionTranscript } from "./pi-embedded-helpers-BBn71qTx.js";
++import { a as loadWebMedia, n as markdownToIR, s as getAgentScopedMediaLocalRoots, t as chunkMarkdownIR } from "./ir-D6km9t7C.js";
++import { c as resolveChunkMode, f as parseFenceSpans, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit, n as chunkByParagraph } from "./chunk-Cfb0gRms.js";
++import { n as resolveMarkdownTableMode } from "./markdown-tables-Cyc-LieP.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import crypto, { randomUUID } from "node:crypto";
+diff --git a/dist/plugin-sdk/diagnostic-BXaKch4H.js b/dist/plugin-sdk/diagnostic-Dji1iUVa.js
+similarity index 98%
+rename from dist/plugin-sdk/diagnostic-BXaKch4H.js
+rename to dist/plugin-sdk/diagnostic-Dji1iUVa.js
+index 9a2c5ada3..d02112dfc 100644
+--- a/dist/plugin-sdk/diagnostic-BXaKch4H.js
++++ b/dist/plugin-sdk/diagnostic-Dji1iUVa.js
+@@ -1,5 +1,5 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ import { i as pruneDiagnosticSessionStates, r as getDiagnosticSessionState, t as diagnosticSessionStates } from "./diagnostic-session-state-QblLcZFC.js";
+ 
+ //#region src/infra/diagnostic-events.ts
+diff --git a/dist/plugin-sdk/env-DNXtq8Zy.js b/dist/plugin-sdk/env-CjjrqHd2.js
+similarity index 89%
+rename from dist/plugin-sdk/env-DNXtq8Zy.js
+rename to dist/plugin-sdk/env-CjjrqHd2.js
+index e6133c9f0..3a1f37107 100644
+--- a/dist/plugin-sdk/env-DNXtq8Zy.js
++++ b/dist/plugin-sdk/env-CjjrqHd2.js
+@@ -1,4 +1,4 @@
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ 
+ //#region src/utils/boolean.ts
+ const DEFAULT_TRUTHY = [
+diff --git a/dist/plugin-sdk/exec-CBwIXprv.js b/dist/plugin-sdk/exec-CikK1sTs.js
+similarity index 98%
+rename from dist/plugin-sdk/exec-CBwIXprv.js
+rename to dist/plugin-sdk/exec-CikK1sTs.js
+index 6b8e35f7b..b0961629b 100644
+--- a/dist/plugin-sdk/exec-CBwIXprv.js
++++ b/dist/plugin-sdk/exec-CikK1sTs.js
+@@ -1,5 +1,5 @@
+-import { B as info, G as shouldLogVerbose, Q as getLogger, U as logVerboseConsole, q as warn, z as danger } from "./registry-CvUzfgyU.js";
+-import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { B as info, G as shouldLogVerbose, Q as getLogger, U as logVerboseConsole, q as warn, z as danger } from "./registry-DFcSCP5o.js";
++import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ import path from "node:path";
+ import { promisify } from "node:util";
+ import { execFile, spawn } from "node:child_process";
+diff --git a/dist/plugin-sdk/fetch-CO6Olj9O.js b/dist/plugin-sdk/fetch-CRvmXstS.js
+similarity index 98%
+rename from dist/plugin-sdk/fetch-CO6Olj9O.js
+rename to dist/plugin-sdk/fetch-CRvmXstS.js
+index 48f40399b..a2ebbaf66 100644
+--- a/dist/plugin-sdk/fetch-CO6Olj9O.js
++++ b/dist/plugin-sdk/fetch-CRvmXstS.js
+@@ -1,5 +1,5 @@
+-import { m as extensionForMime, n as closeDispatcher, o as resolvePinnedHostnameWithPolicy, p as detectMime, r as createPinnedDispatcher, t as SsrFBlockedError } from "./ssrf--zCZt1NJ.js";
+-import { s as logWarn } from "./exec-CBwIXprv.js";
++import { m as extensionForMime, n as closeDispatcher, o as resolvePinnedHostnameWithPolicy, p as detectMime, r as createPinnedDispatcher, t as SsrFBlockedError } from "./ssrf-CIYAMVQH.js";
++import { s as logWarn } from "./exec-CikK1sTs.js";
+ import { t as bindAbortRelay } from "./fetch-timeout-IIHFohfs.js";
+ import path from "node:path";
+ 
+diff --git a/dist/plugin-sdk/image-C9KFN-f3.js b/dist/plugin-sdk/image-JmJ4zLpW.js
+similarity index 99%
+rename from dist/plugin-sdk/image-C9KFN-f3.js
+rename to dist/plugin-sdk/image-JmJ4zLpW.js
+index dd64da1d7..0475cb127 100644
+--- a/dist/plugin-sdk/image-C9KFN-f3.js
++++ b/dist/plugin-sdk/image-JmJ4zLpW.js
+@@ -1,9 +1,9 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { N as shortenHomeInString, w as isRecord } from "./registry-CvUzfgyU.js";
+-import { B as normalizeSecretInput, C as requireApiKey, _ as resolveImplicitCopilotProvider, g as resolveImplicitBedrockProvider, h as normalizeProviders, v as resolveImplicitProviders, x as getApiKeyForModel, z as resolveOpenClawAgentDir } from "./model-selection-CB9IIVWU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
++import { N as shortenHomeInString, w as isRecord } from "./registry-DFcSCP5o.js";
++import { B as normalizeSecretInput, C as requireApiKey, _ as resolveImplicitCopilotProvider, g as resolveImplicitBedrockProvider, h as normalizeProviders, v as resolveImplicitProviders, x as getApiKeyForModel, z as resolveOpenClawAgentDir } from "./model-selection-CcII_ph5.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
+ import { n as redactToolDetail } from "./redact-BUgsXMP1.js";
+-import { N as sanitizeUserFacingText } from "./pi-embedded-helpers-BmFSmAMs.js";
++import { N as sanitizeUserFacingText } from "./pi-embedded-helpers-BBn71qTx.js";
+ import { n as discoverModels, t as discoverAuthStorage } from "./pi-model-discovery-BEgrTVvT.js";
+ import path from "node:path";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/index.js b/dist/plugin-sdk/index.js
+index 472d32b74..daf8c2b37 100644
+--- a/dist/plugin-sdk/index.js
++++ b/dist/plugin-sdk/index.js
+@@ -1,56 +1,56 @@
+ import { c as normalizeAccountId, t as DEFAULT_ACCOUNT_ID } from "./session-key-9yEYlIQe.js";
+-import { _ as createAccountListHelpers, i as resolveWhatsAppAuthDir, n as resolveDefaultWhatsAppAccountId, r as resolveWhatsAppAccount, t as listWhatsAppAccountIds } from "./accounts-BSywe9Bq.js";
+-import { $ as logTypingFailure, A as resolveSlackChannelAllowlist, At as installRequestBodyLimitGuard, Bt as formatAllowFromLowercase, C as hasMarkdownToConvert, Ct as resolveNestedAllowlistDecision, D as attachFooterText, Dt as DEFAULT_WEBHOOK_BODY_TIMEOUT_MS, E as createReceiptCard, Et as isWSLSync, F as resolveServicePrefixedTarget, Ft as createDedupeCache, G as optionalStringEnum, Gt as BLUEBUBBLES_GROUP_ACTIONS, H as normalizeDiscordSlug, Ht as registerPluginHttpRoute, I as detectBinary, It as normalizeDeviceAuthScopes, J as resolveControlCommandGate, K as stringEnum, Kt as CHANNEL_MESSAGE_ACTION_NAMES, L as resolveDiscordUserAllowlist, Lt as readJsonFileWithFallback, M as parseChatAllowTargetPrefixes, Mt as readJsonBodyWithLimit, N as parseChatTargetPrefixesOrThrow, Nt as readRequestBodyWithLimit, Ot as DEFAULT_WEBHOOK_MAX_BODY_BYTES, P as resolveServicePrefixedAllowTarget, Pt as requestBodyErrorToText, Q as logInboundDrop, R as resolveDiscordChannelAllowlist, Rt as writeJsonFileAtomically, St as resolveChannelEntryMatchWithFallback, T as stripMarkdown, Tt as isWSLEnv, U as missingTargetError, Ut as BLUEBUBBLES_ACTIONS, V as parseDiscordTarget, Vt as isAllowedParsedChatSender, W as formatDocsLink, Wt as BLUEBUBBLES_ACTION_NAMES, X as toLocationContext, Y as formatLocationText, Z as logAckFailure, _t as formatAllowlistMatchMeta, a as normalizeAccountId$1, at as resolveMentionGatingWithBypass, bt as normalizeChannelSlug, ct as DEFAULT_GROUP_HISTORY_LIMIT, dt as clearHistoryEntries, et as createTypingCallbacks, ft as clearHistoryEntriesIfEnabled, i as listLineAccountIds, it as resolveMentionGating, j as normalizeIMessageHandle, jt as isRequestBodyLimitError, k as resolveSlackUserAllowlist, kt as RequestBodyLimitError, mt as recordPendingHistoryEntryIfEnabled, nt as shouldAckReaction, o as resolveDefaultLineAccountId, ot as mergeAllowlist, pt as recordPendingHistoryEntry, q as recordInboundSession, rt as shouldAckReactionForWhatsApp, s as resolveLineAccount, st as summarizeMapping, tt as removeAckReactionAfterReply, ut as buildPendingHistoryContextFromMap, vt as resolveAllowlistMatchSimple, w as processLineMessage, wt as isWSL2Sync, xt as resolveChannelEntryMatch, yt as buildChannelKeyCandidates, z as collectDiscordAuditChannelIds, zt as extractToolSend } from "./reply-CgfssYjy.js";
+-import { D as normalizeE164, F as sleep, M as safeParseJson, O as pathExists, _ as clamp, et as registerLogTransport, g as CONFIG_DIR, lt as normalizePluginHttpPath, r as getChatChannelMeta, w as isRecord, x as escapeRegExp } from "./registry-CvUzfgyU.js";
++import { _ as createAccountListHelpers, i as resolveWhatsAppAuthDir, n as resolveDefaultWhatsAppAccountId, r as resolveWhatsAppAccount, t as listWhatsAppAccountIds } from "./accounts-WG-Hmhh4.js";
++import { $ as logTypingFailure, A as resolveSlackChannelAllowlist, At as installRequestBodyLimitGuard, Bt as formatAllowFromLowercase, C as hasMarkdownToConvert, Ct as resolveNestedAllowlistDecision, D as attachFooterText, Dt as DEFAULT_WEBHOOK_BODY_TIMEOUT_MS, E as createReceiptCard, Et as isWSLSync, F as resolveServicePrefixedTarget, Ft as createDedupeCache, G as optionalStringEnum, Gt as BLUEBUBBLES_GROUP_ACTIONS, H as normalizeDiscordSlug, Ht as registerPluginHttpRoute, I as detectBinary, It as normalizeDeviceAuthScopes, J as resolveControlCommandGate, K as stringEnum, Kt as CHANNEL_MESSAGE_ACTION_NAMES, L as resolveDiscordUserAllowlist, Lt as readJsonFileWithFallback, M as parseChatAllowTargetPrefixes, Mt as readJsonBodyWithLimit, N as parseChatTargetPrefixesOrThrow, Nt as readRequestBodyWithLimit, Ot as DEFAULT_WEBHOOK_MAX_BODY_BYTES, P as resolveServicePrefixedAllowTarget, Pt as requestBodyErrorToText, Q as logInboundDrop, R as resolveDiscordChannelAllowlist, Rt as writeJsonFileAtomically, St as resolveChannelEntryMatchWithFallback, T as stripMarkdown, Tt as isWSLEnv, U as missingTargetError, Ut as BLUEBUBBLES_ACTIONS, V as parseDiscordTarget, Vt as isAllowedParsedChatSender, W as formatDocsLink, Wt as BLUEBUBBLES_ACTION_NAMES, X as toLocationContext, Y as formatLocationText, Z as logAckFailure, _t as formatAllowlistMatchMeta, a as normalizeAccountId$1, at as resolveMentionGatingWithBypass, bt as normalizeChannelSlug, ct as DEFAULT_GROUP_HISTORY_LIMIT, dt as clearHistoryEntries, et as createTypingCallbacks, ft as clearHistoryEntriesIfEnabled, i as listLineAccountIds, it as resolveMentionGating, j as normalizeIMessageHandle, jt as isRequestBodyLimitError, k as resolveSlackUserAllowlist, kt as RequestBodyLimitError, mt as recordPendingHistoryEntryIfEnabled, nt as shouldAckReaction, o as resolveDefaultLineAccountId, ot as mergeAllowlist, pt as recordPendingHistoryEntry, q as recordInboundSession, rt as shouldAckReactionForWhatsApp, s as resolveLineAccount, st as summarizeMapping, tt as removeAckReactionAfterReply, ut as buildPendingHistoryContextFromMap, vt as resolveAllowlistMatchSimple, w as processLineMessage, wt as isWSL2Sync, xt as resolveChannelEntryMatch, yt as buildChannelKeyCandidates, z as collectDiscordAuditChannelIds, zt as extractToolSend } from "./reply-BquBuqcS.js";
++import { D as normalizeE164, F as sleep, M as safeParseJson, O as pathExists, _ as clamp, et as registerLogTransport, g as CONFIG_DIR, lt as normalizePluginHttpPath, r as getChatChannelMeta, w as isRecord, x as escapeRegExp } from "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import { X as acquireFileLock, Z as withFileLock } from "./model-selection-CB9IIVWU.js";
+-import { A as DmPolicySchema, C as MSTeamsConfigSchema, D as ToolPolicySchema, E as TelegramConfigSchema, F as TtsConfigSchema, I as TtsModeSchema, L as TtsProviderSchema, M as MarkdownConfigSchema, N as MarkdownTableModeSchema, O as BlockStreamingCoalesceSchema, P as TtsAutoSchema, R as normalizeAllowFrom, S as IMessageConfigSchema, T as SlackConfigSchema, b as DiscordConfigSchema, j as GroupPolicySchema, k as DmConfigSchema, w as SignalConfigSchema, x as GoogleChatConfigSchema, y as WhatsAppConfigSchema, z as requireOpenAllowFrom } from "./config-YVBCrP94.js";
+-import { a as isPrivateIpAddress, h as getFileExtension, i as isBlockedHostname, m as extensionForMime, p as detectMime, t as SsrFBlockedError } from "./ssrf--zCZt1NJ.js";
+-import { n as stripAnsi } from "./subsystem-CPwOCKbN.js";
+-import { t as runCommandWithTimeout } from "./exec-CBwIXprv.js";
+-import "./tool-images-B8CfQtJH.js";
+-import { a as readNumberParam, i as jsonResult, l as readStringParam, o as readReactionParams, t as createActionGate } from "./common-CH6orOBi.js";
+-import { u as parseSlackBlocksInput } from "./replies-BiiH6JwC.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import { a as resolveAckReaction, n as createReplyPrefixOptions, t as createReplyPrefixContext } from "./reply-prefix-D07Ikdod.js";
+-import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-D9QrMV6b.js";
+-import { d as resolvePairingPaths, f as createAsyncLock, l as generatePairingToken, m as writeJsonAtomic, p as readJsonFile, u as pruneExpiredPending } from "./skill-commands-wPQ0Iu38.js";
+-import "./skills-CreY3Zqs.js";
++import { X as acquireFileLock, Z as withFileLock } from "./model-selection-CcII_ph5.js";
++import { A as DmPolicySchema, C as MSTeamsConfigSchema, D as ToolPolicySchema, E as TelegramConfigSchema, F as TtsConfigSchema, I as TtsModeSchema, L as TtsProviderSchema, M as MarkdownConfigSchema, N as MarkdownTableModeSchema, O as BlockStreamingCoalesceSchema, P as TtsAutoSchema, R as normalizeAllowFrom, S as IMessageConfigSchema, T as SlackConfigSchema, b as DiscordConfigSchema, j as GroupPolicySchema, k as DmConfigSchema, w as SignalConfigSchema, x as GoogleChatConfigSchema, y as WhatsAppConfigSchema, z as requireOpenAllowFrom } from "./config-BUR5GFvw.js";
++import { a as isPrivateIpAddress, h as getFileExtension, i as isBlockedHostname, m as extensionForMime, p as detectMime, t as SsrFBlockedError } from "./ssrf-CIYAMVQH.js";
++import { n as stripAnsi } from "./subsystem-CNxEMAhB.js";
++import { t as runCommandWithTimeout } from "./exec-CikK1sTs.js";
++import "./tool-images-DZscW5Qf.js";
++import { a as readNumberParam, i as jsonResult, l as readStringParam, o as readReactionParams, t as createActionGate } from "./common-CXH6PFr2.js";
++import { u as parseSlackBlocksInput } from "./replies-CuZ5TRTI.js";
++import "./agent-scope-DGo2Lh53.js";
++import { a as resolveAckReaction, n as createReplyPrefixOptions, t as createReplyPrefixContext } from "./reply-prefix-CRXqek3R.js";
++import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-w1xZM7qi.js";
++import { d as resolvePairingPaths, f as createAsyncLock, l as generatePairingToken, m as writeJsonAtomic, p as readJsonFile, u as pruneExpiredPending } from "./skill-commands-CO-avSo-.js";
++import "./skills-DNzuu_Hz.js";
+ import "./redact-BUgsXMP1.js";
+ import { n as formatErrorMessage } from "./errors-7SO55DQM.js";
+-import { i as fetchWithSsrFGuard } from "./fetch-CO6Olj9O.js";
+-import { j as rawDataToString } from "./chrome-CNaxD22L.js";
+-import { t as isTruthyEnvValue } from "./env-DNXtq8Zy.js";
+-import { B as resolveToolsBySender, C as resolveSlackGroupRequireMention, D as resolveWhatsAppGroupRequireMention, E as resolveTelegramGroupToolPolicy, F as resolveDefaultIMessageAccountId, I as resolveIMessageAccount, M as resolveDefaultSignalAccountId, N as resolveSignalAccount, O as resolveWhatsAppGroupToolPolicy, P as listIMessageAccountIds, S as resolveIMessageGroupToolPolicy, T as resolveTelegramGroupRequireMention, _ as resolveDiscordGroupRequireMention, b as resolveGoogleChatGroupToolPolicy, g as resolveBlueBubblesGroupToolPolicy, h as resolveBlueBubblesGroupRequireMention, j as listSignalAccountIds, k as buildSlackThreadingToolContext, m as normalizeSignalMessagingTarget, p as looksLikeSignalTargetId, v as resolveDiscordGroupToolPolicy, w as resolveSlackGroupToolPolicy, x as resolveIMessageGroupRequireMention, y as resolveGoogleChatGroupRequireMention } from "./thinking-CtxhcKkY.js";
+-import { _ as listDiscordAccountIds, a as listTelegramAccountIds, b as resolveDiscordAccount, d as resolveDefaultSlackAccountId, f as resolveSlackAccount, l as listEnabledSlackAccounts, n as normalizeWhatsAppTarget, o as resolveDefaultTelegramAccountId, p as resolveSlackReplyToMode, s as resolveTelegramAccount, t as isWhatsAppGroupJid, u as listSlackAccountIds, y as resolveDefaultDiscordAccountId } from "./normalize-mEjrgr3H.js";
+-import "./bindings-BGhRgiFJ.js";
++import { i as fetchWithSsrFGuard } from "./fetch-CRvmXstS.js";
++import { j as rawDataToString } from "./chrome-WS-Z8NHV.js";
++import { t as isTruthyEnvValue } from "./env-CjjrqHd2.js";
++import { B as resolveToolsBySender, C as resolveSlackGroupRequireMention, D as resolveWhatsAppGroupRequireMention, E as resolveTelegramGroupToolPolicy, F as resolveDefaultIMessageAccountId, I as resolveIMessageAccount, M as resolveDefaultSignalAccountId, N as resolveSignalAccount, O as resolveWhatsAppGroupToolPolicy, P as listIMessageAccountIds, S as resolveIMessageGroupToolPolicy, T as resolveTelegramGroupRequireMention, _ as resolveDiscordGroupRequireMention, b as resolveGoogleChatGroupToolPolicy, g as resolveBlueBubblesGroupToolPolicy, h as resolveBlueBubblesGroupRequireMention, j as listSignalAccountIds, k as buildSlackThreadingToolContext, m as normalizeSignalMessagingTarget, p as looksLikeSignalTargetId, v as resolveDiscordGroupToolPolicy, w as resolveSlackGroupToolPolicy, x as resolveIMessageGroupRequireMention, y as resolveGoogleChatGroupRequireMention } from "./thinking-CL3Zx3n9.js";
++import { _ as listDiscordAccountIds, a as listTelegramAccountIds, b as resolveDiscordAccount, d as resolveDefaultSlackAccountId, f as resolveSlackAccount, l as listEnabledSlackAccounts, n as normalizeWhatsAppTarget, o as resolveDefaultTelegramAccountId, p as resolveSlackReplyToMode, s as resolveTelegramAccount, t as isWhatsAppGroupJid, u as listSlackAccountIds, y as resolveDefaultDiscordAccountId } from "./normalize-nbycZ809.js";
++import "./bindings-BkL2h399.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { a as listDiscordDirectoryPeersFromConfig, c as listTelegramDirectoryGroupsFromConfig, d as listWhatsAppDirectoryPeersFromConfig, f as looksLikeSlackTargetId, i as listDiscordDirectoryGroupsFromConfig, l as listTelegramDirectoryPeersFromConfig, o as listSlackDirectoryGroupsFromConfig, p as normalizeSlackMessagingTarget, s as listSlackDirectoryPeersFromConfig, u as listWhatsAppDirectoryGroupsFromConfig } from "./plugins-BBPPyP5O.js";
+-import { M as resolveChannelMediaMaxBytes } from "./deliver-DJcNV-mo.js";
+-import "./message-channel-CzbBSsGC.js";
+-import { lt as extractOriginalFilename } from "./pi-embedded-helpers-BmFSmAMs.js";
++import { a as listDiscordDirectoryPeersFromConfig, c as listTelegramDirectoryGroupsFromConfig, d as listWhatsAppDirectoryPeersFromConfig, f as looksLikeSlackTargetId, i as listDiscordDirectoryGroupsFromConfig, l as listTelegramDirectoryPeersFromConfig, o as listSlackDirectoryGroupsFromConfig, p as normalizeSlackMessagingTarget, s as listSlackDirectoryPeersFromConfig, u as listWhatsAppDirectoryGroupsFromConfig } from "./plugins-BNWuvEuT.js";
++import { M as resolveChannelMediaMaxBytes } from "./deliver-BPHUbnv3.js";
++import "./message-channel-CaoRC6Bw.js";
++import { lt as extractOriginalFilename } from "./pi-embedded-helpers-BBn71qTx.js";
+ import "./github-copilot-token-Dtvm_sTU.js";
+-import "./manifest-registry-C0jS6PBU.js";
++import "./manifest-registry-B8hfUlu9.js";
+ import "./paths-CyXoO9iV.js";
+-import { h as onDiagnosticEvent, m as isDiagnosticsEnabled, p as emitDiagnosticEvent } from "./diagnostic-BXaKch4H.js";
+-import "./active-listener-BiMSzcgN.js";
+-import { a as loadWebMedia } from "./ir-WzWc9-m7.js";
+-import "./chunk-COfiKqBF.js";
+-import "./manager-k7kFLYLb.js";
+-import "./markdown-tables-MH5WoQHz.js";
++import { h as onDiagnosticEvent, m as isDiagnosticsEnabled, p as emitDiagnosticEvent } from "./diagnostic-Dji1iUVa.js";
++import "./active-listener-DqgfJFYZ.js";
++import { a as loadWebMedia } from "./ir-D6km9t7C.js";
++import "./chunk-Cfb0gRms.js";
++import "./manager-D2yAgEL4.js";
++import "./markdown-tables-Cyc-LieP.js";
+ import "./render-95l30zcf.js";
+-import { r as resolveWhatsAppHeartbeatRecipients } from "./channel-web-TwaDyEL1.js";
+-import "./runner-DqwnPJ8U.js";
+-import "./image-C9KFN-f3.js";
++import { r as resolveWhatsAppHeartbeatRecipients } from "./channel-web-DS6K0kPN.js";
++import "./runner-AYensfnh.js";
++import "./image-JmJ4zLpW.js";
+ import "./pi-model-discovery-BEgrTVvT.js";
+ import "./diagnostic-session-state-QblLcZFC.js";
+-import "./sqlite-Bp81ACN0.js";
+-import "./commands-registry-CMKEe4ot.js";
++import "./sqlite-DlEMMihB.js";
++import "./commands-registry-D11KItt-.js";
+ import "./proxy-Cbu5iJdR.js";
+-import "./resolve-route-6uB6pV_J.js";
+-import "./outbound-ClQW7VvZ.js";
+-import "./session-BXtNnVIi.js";
+-import { t as loginWeb } from "./login-BFFvu-On.js";
++import "./resolve-route-CeeVouVs.js";
++import "./outbound-B6uL5Vxh.js";
++import "./session-DFhRfCQL.js";
++import { t as loginWeb } from "./login-iiIGmoYx.js";
+ import path from "node:path";
+ import fs, { createWriteStream } from "node:fs";
+ import os from "node:os";
+diff --git a/dist/plugin-sdk/ir-WzWc9-m7.js b/dist/plugin-sdk/ir-D6km9t7C.js
+similarity index 98%
+rename from dist/plugin-sdk/ir-WzWc9-m7.js
+rename to dist/plugin-sdk/ir-D6km9t7C.js
+index fd5ddfea4..451f0d44e 100644
+--- a/dist/plugin-sdk/ir-WzWc9-m7.js
++++ b/dist/plugin-sdk/ir-D6km9t7C.js
+@@ -1,9 +1,9 @@
+-import { G as shouldLogVerbose, H as logVerbose, j as resolveUserPath } from "./registry-CvUzfgyU.js";
++import { G as shouldLogVerbose, H as logVerbose, j as resolveUserPath } from "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { C as mediaKindFromMime, S as maxBytesForKind, c as convertHeicToJpeg, d as optimizeImageToPng, f as resizeToJpeg, m as extensionForMime, p as detectMime, u as hasAlphaChannel } from "./ssrf--zCZt1NJ.js";
+-import { s as resolveAgentWorkspaceDir } from "./agent-scope-BmRbl8vE.js";
+-import { n as fetchRemoteMedia } from "./fetch-CO6Olj9O.js";
+-import { a as chunkText } from "./chunk-COfiKqBF.js";
++import { C as mediaKindFromMime, S as maxBytesForKind, c as convertHeicToJpeg, d as optimizeImageToPng, f as resizeToJpeg, m as extensionForMime, p as detectMime, u as hasAlphaChannel } from "./ssrf-CIYAMVQH.js";
++import { s as resolveAgentWorkspaceDir } from "./agent-scope-DGo2Lh53.js";
++import { n as fetchRemoteMedia } from "./fetch-CRvmXstS.js";
++import { a as chunkText } from "./chunk-Cfb0gRms.js";
+ import path from "node:path";
+ import os from "node:os";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/login-BFFvu-On.js b/dist/plugin-sdk/login-iiIGmoYx.js
+similarity index 88%
+rename from dist/plugin-sdk/login-BFFvu-On.js
+rename to dist/plugin-sdk/login-iiIGmoYx.js
+index 00f509b46..6b73e62bd 100644
+--- a/dist/plugin-sdk/login-BFFvu-On.js
++++ b/dist/plugin-sdk/login-iiIGmoYx.js
+@@ -1,11 +1,11 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { c as logoutWeb, r as resolveWhatsAppAccount } from "./accounts-BSywe9Bq.js";
+-import { B as info, K as success, z as danger } from "./registry-CvUzfgyU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { i as defaultRuntime } from "./subsystem-CPwOCKbN.js";
+-import { o as logInfo } from "./exec-CBwIXprv.js";
++import { c as logoutWeb, r as resolveWhatsAppAccount } from "./accounts-WG-Hmhh4.js";
++import { B as info, K as success, z as danger } from "./registry-DFcSCP5o.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { i as defaultRuntime } from "./subsystem-CNxEMAhB.js";
++import { o as logInfo } from "./exec-CikK1sTs.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { i as waitForWaConnection, n as formatError, t as createWaSocket } from "./session-BXtNnVIi.js";
++import { i as waitForWaConnection, n as formatError, t as createWaSocket } from "./session-DFhRfCQL.js";
+ import { DisconnectReason } from "@whiskeysockets/baileys";
+ 
+ //#region src/web/login.ts
+diff --git a/dist/plugin-sdk/login-qr-D10iC2m8.js b/dist/plugin-sdk/login-qr-DXR6T2ND.js
+similarity index 95%
+rename from dist/plugin-sdk/login-qr-D10iC2m8.js
+rename to dist/plugin-sdk/login-qr-DXR6T2ND.js
+index 0cf6df680..e903b8f20 100644
+--- a/dist/plugin-sdk/login-qr-D10iC2m8.js
++++ b/dist/plugin-sdk/login-qr-DXR6T2ND.js
+@@ -1,15 +1,15 @@
+-import { c as logoutWeb, f as readWebSelfId, g as webAuthExists, r as resolveWhatsAppAccount } from "./accounts-BSywe9Bq.js";
+-import { B as info, K as success, z as danger } from "./registry-CvUzfgyU.js";
++import { c as logoutWeb, f as readWebSelfId, g as webAuthExists, r as resolveWhatsAppAccount } from "./accounts-WG-Hmhh4.js";
++import { B as info, K as success, z as danger } from "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import "./model-selection-CB9IIVWU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { i as defaultRuntime } from "./subsystem-CPwOCKbN.js";
+-import { o as logInfo } from "./exec-CBwIXprv.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import "./env-DNXtq8Zy.js";
++import "./model-selection-CcII_ph5.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { i as defaultRuntime } from "./subsystem-CNxEMAhB.js";
++import { o as logInfo } from "./exec-CikK1sTs.js";
++import "./agent-scope-DGo2Lh53.js";
++import "./env-CjjrqHd2.js";
+ import "./github-copilot-token-Dtvm_sTU.js";
+-import "./manifest-registry-C0jS6PBU.js";
+-import { i as waitForWaConnection, n as formatError, r as getStatusCode, t as createWaSocket } from "./session-BXtNnVIi.js";
++import "./manifest-registry-B8hfUlu9.js";
++import { i as waitForWaConnection, n as formatError, r as getStatusCode, t as createWaSocket } from "./session-DFhRfCQL.js";
+ import { randomUUID } from "node:crypto";
+ import { DisconnectReason } from "@whiskeysockets/baileys";
+ import QRCodeModule from "qrcode-terminal/vendor/QRCode/index.js";
+diff --git a/dist/plugin-sdk/manager-k7kFLYLb.js b/dist/plugin-sdk/manager-D2yAgEL4.js
+similarity index 99%
+rename from dist/plugin-sdk/manager-k7kFLYLb.js
+rename to dist/plugin-sdk/manager-D2yAgEL4.js
+index 4a5e74c5c..0d1c4498b 100644
+--- a/dist/plugin-sdk/manager-k7kFLYLb.js
++++ b/dist/plugin-sdk/manager-D2yAgEL4.js
+@@ -1,15 +1,15 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { F as sleep, R as truncateUtf16Safe, j as resolveUserPath, v as clampInt, y as clampNumber$1 } from "./registry-CvUzfgyU.js";
++import { F as sleep, R as truncateUtf16Safe, j as resolveUserPath, v as clampInt, y as clampNumber$1 } from "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { C as requireApiKey, w as resolveApiKeyForProvider } from "./model-selection-CB9IIVWU.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { n as resolveAgentConfig, r as resolveAgentDir, s as resolveAgentWorkspaceDir } from "./agent-scope-BmRbl8vE.js";
++import { C as requireApiKey, w as resolveApiKeyForProvider } from "./model-selection-CcII_ph5.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { n as resolveAgentConfig, r as resolveAgentDir, s as resolveAgentWorkspaceDir } from "./agent-scope-DGo2Lh53.js";
+ import { n as formatErrorMessage } from "./errors-7SO55DQM.js";
+-import { t as isTruthyEnvValue } from "./env-DNXtq8Zy.js";
++import { t as isTruthyEnvValue } from "./env-CjjrqHd2.js";
+ import { o as resolveSessionTranscriptsDirForAgent } from "./paths-CyXoO9iV.js";
+ import { n as onSessionTranscriptUpdate } from "./transcript-events-Rj8UphZE.js";
+ import { t as parseGeminiAuth } from "./gemini-auth-C2IlUK3f.js";
+-import { a as buildFileEntry, c as ensureDir, d as listMemoryFiles, f as normalizeExtraMemoryPaths, h as runWithConcurrency, i as sessionPathForFile, l as hashText, m as remapChunkLines, n as buildSessionEntry, o as chunkMarkdown, p as parseEmbedding, r as listSessionFilesForAgent, s as cosineSimilarity, t as requireNodeSqlite, u as isMemoryPath } from "./sqlite-Bp81ACN0.js";
++import { a as buildFileEntry, c as ensureDir, d as listMemoryFiles, f as normalizeExtraMemoryPaths, h as runWithConcurrency, i as sessionPathForFile, l as hashText, m as remapChunkLines, n as buildSessionEntry, o as chunkMarkdown, p as parseEmbedding, r as listSessionFilesForAgent, s as cosineSimilarity, t as requireNodeSqlite, u as isMemoryPath } from "./sqlite-DlEMMihB.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+diff --git a/dist/plugin-sdk/manifest-registry-C0jS6PBU.js b/dist/plugin-sdk/manifest-registry-B8hfUlu9.js
+similarity index 99%
+rename from dist/plugin-sdk/manifest-registry-C0jS6PBU.js
+rename to dist/plugin-sdk/manifest-registry-B8hfUlu9.js
+index e99f836ff..6a4e25c19 100644
+--- a/dist/plugin-sdk/manifest-registry-C0jS6PBU.js
++++ b/dist/plugin-sdk/manifest-registry-B8hfUlu9.js
+@@ -1,4 +1,4 @@
+-import { j as resolveUserPath, k as resolveConfigDir, w as isRecord } from "./registry-CvUzfgyU.js";
++import { j as resolveUserPath, k as resolveConfigDir, w as isRecord } from "./registry-DFcSCP5o.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import { fileURLToPath } from "node:url";
+diff --git a/dist/plugin-sdk/markdown-tables-MH5WoQHz.js b/dist/plugin-sdk/markdown-tables-Cyc-LieP.js
+similarity index 95%
+rename from dist/plugin-sdk/markdown-tables-MH5WoQHz.js
+rename to dist/plugin-sdk/markdown-tables-Cyc-LieP.js
+index 67d301599..15665d63e 100644
+--- a/dist/plugin-sdk/markdown-tables-MH5WoQHz.js
++++ b/dist/plugin-sdk/markdown-tables-Cyc-LieP.js
+@@ -1,6 +1,6 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { c as normalizeAccountId } from "./session-key-9yEYlIQe.js";
+-import { r as normalizeChannelId } from "./plugins-BBPPyP5O.js";
++import { r as normalizeChannelId } from "./plugins-BNWuvEuT.js";
+ 
+ //#region src/config/markdown-tables.ts
+ var markdown_tables_exports = /* @__PURE__ */ __exportAll({ resolveMarkdownTableMode: () => resolveMarkdownTableMode });
+diff --git a/dist/plugin-sdk/message-channel-CzbBSsGC.js b/dist/plugin-sdk/message-channel-CaoRC6Bw.js
+similarity index 97%
+rename from dist/plugin-sdk/message-channel-CzbBSsGC.js
+rename to dist/plugin-sdk/message-channel-CaoRC6Bw.js
+index c745be26d..d222848c7 100644
+--- a/dist/plugin-sdk/message-channel-CzbBSsGC.js
++++ b/dist/plugin-sdk/message-channel-CaoRC6Bw.js
+@@ -1,4 +1,4 @@
+-import { o as normalizeChatChannelId, s as getActivePluginRegistry, t as CHANNEL_IDS } from "./registry-CvUzfgyU.js";
++import { o as normalizeChatChannelId, s as getActivePluginRegistry, t as CHANNEL_IDS } from "./registry-DFcSCP5o.js";
+ 
+ //#region src/gateway/protocol/client-info.ts
+ const GATEWAY_CLIENT_IDS = {
+diff --git a/dist/plugin-sdk/model-selection-CB9IIVWU.js b/dist/plugin-sdk/model-selection-CcII_ph5.js
+similarity index 99%
+rename from dist/plugin-sdk/model-selection-CB9IIVWU.js
+rename to dist/plugin-sdk/model-selection-CcII_ph5.js
+index 2fc9047fe..7bcb91b3f 100644
+--- a/dist/plugin-sdk/model-selection-CB9IIVWU.js
++++ b/dist/plugin-sdk/model-selection-CcII_ph5.js
+@@ -1,10 +1,10 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { n as DEFAULT_AGENT_ID } from "./session-key-9yEYlIQe.js";
+-import { j as resolveUserPath } from "./registry-CvUzfgyU.js";
++import { j as resolveUserPath } from "./registry-DFcSCP5o.js";
+ import { o as resolveOAuthPath, s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { a as resolveAgentModelPrimary } from "./agent-scope-BmRbl8vE.js";
+-import { t as isTruthyEnvValue } from "./env-DNXtq8Zy.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { a as resolveAgentModelPrimary } from "./agent-scope-DGo2Lh53.js";
++import { t as isTruthyEnvValue } from "./env-CjjrqHd2.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+ import { a as saveJsonFile, i as loadJsonFile, r as resolveCopilotApiToken, t as DEFAULT_COPILOT_API_BASE_URL } from "./github-copilot-token-Dtvm_sTU.js";
+ import path from "node:path";
+diff --git a/dist/plugin-sdk/normalize-mEjrgr3H.js b/dist/plugin-sdk/normalize-nbycZ809.js
+similarity index 98%
+rename from dist/plugin-sdk/normalize-mEjrgr3H.js
+rename to dist/plugin-sdk/normalize-nbycZ809.js
+index 8de1e8a9d..4cc5d7285 100644
+--- a/dist/plugin-sdk/normalize-mEjrgr3H.js
++++ b/dist/plugin-sdk/normalize-nbycZ809.js
+@@ -1,9 +1,9 @@
+ import { c as normalizeAccountId, t as DEFAULT_ACCOUNT_ID } from "./session-key-9yEYlIQe.js";
+-import { _ as createAccountListHelpers } from "./accounts-BSywe9Bq.js";
+-import { D as normalizeE164 } from "./registry-CvUzfgyU.js";
+-import { t as isTruthyEnvValue } from "./env-DNXtq8Zy.js";
++import { _ as createAccountListHelpers } from "./accounts-WG-Hmhh4.js";
++import { D as normalizeE164 } from "./registry-DFcSCP5o.js";
++import { t as isTruthyEnvValue } from "./env-CjjrqHd2.js";
+ import { t as normalizeChatType } from "./chat-type-CE6cJOyt.js";
+-import { n as listBoundAccountIds, r as resolveDefaultAgentBoundAccountId } from "./bindings-BGhRgiFJ.js";
++import { n as listBoundAccountIds, r as resolveDefaultAgentBoundAccountId } from "./bindings-BkL2h399.js";
+ import fs from "node:fs";
+ 
+ //#region src/discord/token.ts
+diff --git a/dist/plugin-sdk/outbound-ClQW7VvZ.js b/dist/plugin-sdk/outbound-B6uL5Vxh.js
+similarity index 95%
+rename from dist/plugin-sdk/outbound-ClQW7VvZ.js
+rename to dist/plugin-sdk/outbound-B6uL5Vxh.js
+index c17a0ae93..ed3a63ef4 100644
+--- a/dist/plugin-sdk/outbound-ClQW7VvZ.js
++++ b/dist/plugin-sdk/outbound-B6uL5Vxh.js
+@@ -1,10 +1,10 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { L as toWhatsappJid, Z as getChildLogger, x as escapeRegExp } from "./registry-CvUzfgyU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { i as convertMarkdownTables, n as requireActiveWebListener, o as normalizePollInput } from "./active-listener-BiMSzcgN.js";
+-import { a as loadWebMedia } from "./ir-WzWc9-m7.js";
+-import { n as resolveMarkdownTableMode } from "./markdown-tables-MH5WoQHz.js";
++import { L as toWhatsappJid, Z as getChildLogger, x as escapeRegExp } from "./registry-DFcSCP5o.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { i as convertMarkdownTables, n as requireActiveWebListener, o as normalizePollInput } from "./active-listener-DqgfJFYZ.js";
++import { a as loadWebMedia } from "./ir-D6km9t7C.js";
++import { n as resolveMarkdownTableMode } from "./markdown-tables-Cyc-LieP.js";
+ import { randomUUID } from "node:crypto";
+ 
+ //#region src/markdown/whatsapp.ts
+diff --git a/dist/plugin-sdk/pi-auth-json-67RepLeb.js b/dist/plugin-sdk/pi-auth-json-CSmfjTDE.js
+similarity index 93%
+rename from dist/plugin-sdk/pi-auth-json-67RepLeb.js
+rename to dist/plugin-sdk/pi-auth-json-CSmfjTDE.js
+index 315bd4300..446aca742 100644
+--- a/dist/plugin-sdk/pi-auth-json-67RepLeb.js
++++ b/dist/plugin-sdk/pi-auth-json-CSmfjTDE.js
+@@ -1,10 +1,10 @@
+-import "./registry-CvUzfgyU.js";
++import "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import { L as ensureAuthProfileStore, c as normalizeProviderId } from "./model-selection-CB9IIVWU.js";
+-import "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import "./env-DNXtq8Zy.js";
++import { L as ensureAuthProfileStore, c as normalizeProviderId } from "./model-selection-CcII_ph5.js";
++import "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
++import "./agent-scope-DGo2Lh53.js";
++import "./env-CjjrqHd2.js";
+ import "./github-copilot-token-Dtvm_sTU.js";
+ import path from "node:path";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/pi-embedded-helpers-BmFSmAMs.js b/dist/plugin-sdk/pi-embedded-helpers-BBn71qTx.js
+similarity index 99%
+rename from dist/plugin-sdk/pi-embedded-helpers-BmFSmAMs.js
+rename to dist/plugin-sdk/pi-embedded-helpers-BBn71qTx.js
+index f654eebc1..ef710c5b9 100644
+--- a/dist/plugin-sdk/pi-embedded-helpers-BmFSmAMs.js
++++ b/dist/plugin-sdk/pi-embedded-helpers-BBn71qTx.js
+@@ -1,22 +1,22 @@
+ import { d as resolveAgentIdFromSessionKey, i as buildAgentMainSessionKey, l as normalizeAgentId, n as DEFAULT_AGENT_ID, u as normalizeMainKey } from "./session-key-9yEYlIQe.js";
+-import { D as normalizeE164, R as truncateUtf16Safe, j as resolveUserPath, k as resolveConfigDir, ot as resolvePreferredOpenClawTmpDir, t as CHANNEL_IDS } from "./registry-CvUzfgyU.js";
++import { D as normalizeE164, R as truncateUtf16Safe, j as resolveUserPath, k as resolveConfigDir, ot as resolvePreferredOpenClawTmpDir, t as CHANNEL_IDS } from "./registry-DFcSCP5o.js";
+ import { i as resolveGatewayPort, t as STATE_DIR, u as resolveRequiredHomeDir } from "./paths-DJmOcr7Q.js";
+-import { $ as isPidAlive, Q as resolveProcessScopedMap } from "./model-selection-CB9IIVWU.js";
+-import { V as parseDurationMs, a as writeConfigFile, n as loadConfig, s as parseByteSize, t as createConfigIO } from "./config-YVBCrP94.js";
+-import { f as resizeToJpeg, l as getImageMetadata, m as extensionForMime, p as detectMime } from "./ssrf--zCZt1NJ.js";
+-import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { n as runExec } from "./exec-CBwIXprv.js";
+-import { t as sanitizeContentBlocksImages } from "./tool-images-B8CfQtJH.js";
+-import { _ as DEFAULT_TOOLS_FILENAME, d as DEFAULT_AGENTS_FILENAME, f as DEFAULT_AGENT_WORKSPACE_DIR, g as DEFAULT_SOUL_FILENAME, h as DEFAULT_IDENTITY_FILENAME, l as resolveSessionAgentId, m as DEFAULT_HEARTBEAT_FILENAME, n as resolveAgentConfig, p as DEFAULT_BOOTSTRAP_FILENAME, v as DEFAULT_USER_FILENAME, y as ensureAgentWorkspace } from "./agent-scope-BmRbl8vE.js";
+-import { a as syncSkillsToWorkspace, l as resolveSandboxInputPath, m as safeEqualSecret, u as resolveSandboxPath } from "./skills-CreY3Zqs.js";
++import { $ as isPidAlive, Q as resolveProcessScopedMap } from "./model-selection-CcII_ph5.js";
++import { V as parseDurationMs, a as writeConfigFile, n as loadConfig, s as parseByteSize, t as createConfigIO } from "./config-BUR5GFvw.js";
++import { f as resizeToJpeg, l as getImageMetadata, m as extensionForMime, p as detectMime } from "./ssrf-CIYAMVQH.js";
++import { i as defaultRuntime, t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { n as runExec } from "./exec-CikK1sTs.js";
++import { t as sanitizeContentBlocksImages } from "./tool-images-DZscW5Qf.js";
++import { _ as DEFAULT_TOOLS_FILENAME, d as DEFAULT_AGENTS_FILENAME, f as DEFAULT_AGENT_WORKSPACE_DIR, g as DEFAULT_SOUL_FILENAME, h as DEFAULT_IDENTITY_FILENAME, l as resolveSessionAgentId, m as DEFAULT_HEARTBEAT_FILENAME, n as resolveAgentConfig, p as DEFAULT_BOOTSTRAP_FILENAME, v as DEFAULT_USER_FILENAME, y as ensureAgentWorkspace } from "./agent-scope-DGo2Lh53.js";
++import { a as syncSkillsToWorkspace, l as resolveSandboxInputPath, m as safeEqualSecret, u as resolveSandboxPath } from "./skills-DNzuu_Hz.js";
+ import { n as formatErrorMessage, t as extractErrorCode } from "./errors-7SO55DQM.js";
+-import { C as DEFAULT_BROWSER_DEFAULT_PROFILE_NAME, D as DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME, E as DEFAULT_OPENCLAW_BROWSER_ENABLED, O as isLoopbackHost, S as DEFAULT_AI_SNAPSHOT_MAX_CHARS, T as DEFAULT_OPENCLAW_BROWSER_COLOR, a as resolveOpenClawUserDataDir, b as DEFAULT_AI_SNAPSHOT_EFFICIENT_DEPTH, c as captureScreenshot, d as normalizeCdpWsUrl, f as snapshotAria, h as fetchOk, i as launchOpenClawChrome, l as createTargetViaCdp, m as fetchJson, n as isChromeCdpReady, o as stopOpenClawChrome, p as appendCdpPath, r as isChromeReachable, s as resolveBrowserExecutableForPlatform, v as ensureChromeExtensionRelayServer, w as DEFAULT_BROWSER_EVALUATE_ENABLED, x as DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS, y as stopChromeExtensionRelayServer } from "./chrome-CNaxD22L.js";
+-import { n as parseBooleanValue } from "./env-DNXtq8Zy.js";
+-import { d as getChannelDock, o as normalizeThinkLevel } from "./thinking-CtxhcKkY.js";
++import { C as DEFAULT_BROWSER_DEFAULT_PROFILE_NAME, D as DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME, E as DEFAULT_OPENCLAW_BROWSER_ENABLED, O as isLoopbackHost, S as DEFAULT_AI_SNAPSHOT_MAX_CHARS, T as DEFAULT_OPENCLAW_BROWSER_COLOR, a as resolveOpenClawUserDataDir, b as DEFAULT_AI_SNAPSHOT_EFFICIENT_DEPTH, c as captureScreenshot, d as normalizeCdpWsUrl, f as snapshotAria, h as fetchOk, i as launchOpenClawChrome, l as createTargetViaCdp, m as fetchJson, n as isChromeCdpReady, o as stopOpenClawChrome, p as appendCdpPath, r as isChromeReachable, s as resolveBrowserExecutableForPlatform, v as ensureChromeExtensionRelayServer, w as DEFAULT_BROWSER_EVALUATE_ENABLED, x as DEFAULT_AI_SNAPSHOT_EFFICIENT_MAX_CHARS, y as stopChromeExtensionRelayServer } from "./chrome-WS-Z8NHV.js";
++import { n as parseBooleanValue } from "./env-CjjrqHd2.js";
++import { d as getChannelDock, o as normalizeThinkLevel } from "./thinking-CL3Zx3n9.js";
+ import { t as normalizeChatType } from "./chat-type-CE6cJOyt.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { r as normalizeChannelId } from "./plugins-BBPPyP5O.js";
+-import { a as listDeliverableMessageChannels, o as normalizeMessageChannel } from "./message-channel-CzbBSsGC.js";
++import { r as normalizeChannelId } from "./plugins-BNWuvEuT.js";
++import { a as listDeliverableMessageChannels, o as normalizeMessageChannel } from "./message-channel-CaoRC6Bw.js";
+ import { n as resolveConversationLabel } from "./conversation-label-DQ4L1K37.js";
+ import { a as resolveSessionTranscriptPathInDir, i as resolveSessionTranscriptPath, n as resolveSessionFilePath, s as resolveStorePath, t as resolveDefaultSessionStorePath } from "./paths-CyXoO9iV.js";
+ import { t as emitSessionTranscriptUpdate } from "./transcript-events-Rj8UphZE.js";
+@@ -2405,7 +2405,7 @@ function isModuleNotFoundError(err) {
+ }
+ async function loadPwAiModule(mode) {
+ 	try {
+-		return await import("./pw-ai-DycKgxIG.js");
++		return await import("./pw-ai-C5qALfwn.js");
+ 	} catch (err) {
+ 		if (mode === "soft") return null;
+ 		if (isModuleNotFoundError(err)) return null;
+@@ -4785,11 +4785,11 @@ function createProfileContext(opts, profile) {
+ 		const userDataDir = resolveOpenClawUserDataDir(profile.name);
+ 		const profileState = getProfileState();
+ 		if (await isHttpReachable(300) && !profileState.running) try {
+-			await (await import("./pw-ai-DycKgxIG.js")).closePlaywrightBrowserConnection();
++			await (await import("./pw-ai-C5qALfwn.js")).closePlaywrightBrowserConnection();
+ 		} catch {}
+ 		if (profileState.running) await stopRunningBrowser();
+ 		try {
+-			await (await import("./pw-ai-DycKgxIG.js")).closePlaywrightBrowserConnection();
++			await (await import("./pw-ai-C5qALfwn.js")).closePlaywrightBrowserConnection();
+ 		} catch {}
+ 		if (!fs.existsSync(userDataDir)) return {
+ 			moved: false,
+diff --git a/dist/plugin-sdk/plugins-BBPPyP5O.js b/dist/plugin-sdk/plugins-BNWuvEuT.js
+similarity index 98%
+rename from dist/plugin-sdk/plugins-BBPPyP5O.js
+rename to dist/plugin-sdk/plugins-BNWuvEuT.js
+index 1b9fd0953..de8fadb9b 100644
+--- a/dist/plugin-sdk/plugins-BBPPyP5O.js
++++ b/dist/plugin-sdk/plugins-BNWuvEuT.js
+@@ -1,6 +1,6 @@
+-import { r as resolveWhatsAppAccount } from "./accounts-BSywe9Bq.js";
+-import { c as requireActivePluginRegistry, i as normalizeAnyChannelId, n as CHAT_CHANNEL_ORDER } from "./registry-CvUzfgyU.js";
+-import { b as resolveDiscordAccount, f as resolveSlackAccount, n as normalizeWhatsAppTarget, s as resolveTelegramAccount, t as isWhatsAppGroupJid } from "./normalize-mEjrgr3H.js";
++import { r as resolveWhatsAppAccount } from "./accounts-WG-Hmhh4.js";
++import { c as requireActivePluginRegistry, i as normalizeAnyChannelId, n as CHAT_CHANNEL_ORDER } from "./registry-DFcSCP5o.js";
++import { b as resolveDiscordAccount, f as resolveSlackAccount, n as normalizeWhatsAppTarget, s as resolveTelegramAccount, t as isWhatsAppGroupJid } from "./normalize-nbycZ809.js";
+ 
+ //#region src/channels/targets.ts
+ function normalizeTargetId(kind, id) {
+diff --git a/dist/plugin-sdk/pw-ai-DycKgxIG.js b/dist/plugin-sdk/pw-ai-C5qALfwn.js
+similarity index 99%
+rename from dist/plugin-sdk/pw-ai-DycKgxIG.js
+rename to dist/plugin-sdk/pw-ai-C5qALfwn.js
+index 7f41d926c..982ab8eb9 100644
+--- a/dist/plugin-sdk/pw-ai-DycKgxIG.js
++++ b/dist/plugin-sdk/pw-ai-C5qALfwn.js
+@@ -1,10 +1,10 @@
+-import { ot as resolvePreferredOpenClawTmpDir } from "./registry-CvUzfgyU.js";
++import { ot as resolvePreferredOpenClawTmpDir } from "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
++import "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
+ import "./redact-BUgsXMP1.js";
+ import { n as formatErrorMessage } from "./errors-7SO55DQM.js";
+-import { _ as withCdpSocket, d as normalizeCdpWsUrl, g as getHeadersWithAuth, m as fetchJson, p as appendCdpPath, t as getChromeWebSocketUrl, u as formatAriaSnapshot } from "./chrome-CNaxD22L.js";
++import { _ as withCdpSocket, d as normalizeCdpWsUrl, g as getHeadersWithAuth, m as fetchJson, p as appendCdpPath, t as getChromeWebSocketUrl, u as formatAriaSnapshot } from "./chrome-WS-Z8NHV.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+ import path from "node:path";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/qmd-manager-Dt1StnNb.js b/dist/plugin-sdk/qmd-manager-Dt3Yd_pR.js
+similarity index 99%
+rename from dist/plugin-sdk/qmd-manager-Dt1StnNb.js
+rename to dist/plugin-sdk/qmd-manager-Dt3Yd_pR.js
+index 8eebc7e6b..0a504bf6d 100644
+--- a/dist/plugin-sdk/qmd-manager-Dt1StnNb.js
++++ b/dist/plugin-sdk/qmd-manager-Dt3Yd_pR.js
+@@ -1,12 +1,12 @@
+ import { v as parseAgentSessionKey } from "./session-key-9yEYlIQe.js";
+-import "./registry-CvUzfgyU.js";
++import "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
+-import { s as resolveAgentWorkspaceDir } from "./agent-scope-BmRbl8vE.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
++import { s as resolveAgentWorkspaceDir } from "./agent-scope-DGo2Lh53.js";
+ import "./redact-BUgsXMP1.js";
+ import "./paths-CyXoO9iV.js";
+-import { n as buildSessionEntry, r as listSessionFilesForAgent, t as requireNodeSqlite } from "./sqlite-Bp81ACN0.js";
++import { n as buildSessionEntry, r as listSessionFilesForAgent, t as requireNodeSqlite } from "./sqlite-DlEMMihB.js";
+ import path from "node:path";
+ import os from "node:os";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/registry-CvUzfgyU.js b/dist/plugin-sdk/registry-DFcSCP5o.js
+similarity index 99%
+rename from dist/plugin-sdk/registry-CvUzfgyU.js
+rename to dist/plugin-sdk/registry-DFcSCP5o.js
+index ac89fbe89..d6794523a 100644
+--- a/dist/plugin-sdk/registry-CvUzfgyU.js
++++ b/dist/plugin-sdk/registry-DFcSCP5o.js
+@@ -4,7 +4,7 @@ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+ import { Logger } from "tslog";
+-import json5 from "json5";
++import JSON5 from "json5";
+ import chalk, { Chalk } from "chalk";
+ 
+ //#region src/plugins/http-path.ts
+@@ -152,7 +152,7 @@ function readLoggingConfig() {
+ 	try {
+ 		if (!fs.existsSync(configPath)) return;
+ 		const raw = fs.readFileSync(configPath, "utf-8");
+-		const logging = json5.parse(raw)?.logging;
++		const logging = JSON5.parse(raw)?.logging;
+ 		if (!logging || typeof logging !== "object" || Array.isArray(logging)) return;
+ 		return logging;
+ 	} catch {
+diff --git a/dist/plugin-sdk/replies-BiiH6JwC.js b/dist/plugin-sdk/replies-CuZ5TRTI.js
+similarity index 98%
+rename from dist/plugin-sdk/replies-BiiH6JwC.js
+rename to dist/plugin-sdk/replies-CuZ5TRTI.js
+index 40823090a..4fe245b8a 100644
+--- a/dist/plugin-sdk/replies-BiiH6JwC.js
++++ b/dist/plugin-sdk/replies-CuZ5TRTI.js
+@@ -1,12 +1,12 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { H as logVerbose } from "./registry-CvUzfgyU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-D9QrMV6b.js";
+-import { f as resolveSlackAccount, h as resolveSlackBotToken } from "./normalize-mEjrgr3H.js";
+-import { m as parseSlackTarget } from "./plugins-BBPPyP5O.js";
+-import { a as loadWebMedia, n as markdownToIR, t as chunkMarkdownIR } from "./ir-WzWc9-m7.js";
+-import { c as resolveChunkMode, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit } from "./chunk-COfiKqBF.js";
+-import { n as resolveMarkdownTableMode } from "./markdown-tables-MH5WoQHz.js";
++import { H as logVerbose } from "./registry-DFcSCP5o.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText } from "./tokens-w1xZM7qi.js";
++import { f as resolveSlackAccount, h as resolveSlackBotToken } from "./normalize-nbycZ809.js";
++import { m as parseSlackTarget } from "./plugins-BNWuvEuT.js";
++import { a as loadWebMedia, n as markdownToIR, t as chunkMarkdownIR } from "./ir-D6km9t7C.js";
++import { c as resolveChunkMode, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit } from "./chunk-Cfb0gRms.js";
++import { n as resolveMarkdownTableMode } from "./markdown-tables-Cyc-LieP.js";
+ import { t as renderMarkdownWithMarkers } from "./render-95l30zcf.js";
+ import { WebClient } from "@slack/web-api";
+ 
+diff --git a/dist/plugin-sdk/reply-CgfssYjy.js b/dist/plugin-sdk/reply-BquBuqcS.js
+similarity index 99%
+rename from dist/plugin-sdk/reply-CgfssYjy.js
+rename to dist/plugin-sdk/reply-BquBuqcS.js
+index b8748f323..e199e40f0 100644
+--- a/dist/plugin-sdk/reply-CgfssYjy.js
++++ b/dist/plugin-sdk/reply-BquBuqcS.js
+@@ -1,56 +1,56 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { _ as isSubagentSessionKey, c as normalizeAccountId$2, d as resolveAgentIdFromSessionKey, f as resolveThreadSessionKeys, g as isCronSessionKey, h as isAcpSessionKey, i as buildAgentMainSessionKey, l as normalizeAgentId, m as getSubagentDepth, n as DEFAULT_AGENT_ID, p as sanitizeAgentId, s as classifySessionKeyShape, t as DEFAULT_ACCOUNT_ID$1, u as normalizeMainKey, v as parseAgentSessionKey, y as resolveThreadParentSessionKey } from "./session-key-9yEYlIQe.js";
+-import { c as logoutWeb, f as readWebSelfId, g as webAuthExists, o as getWebAuthAgeMs, r as resolveWhatsAppAccount, s as logWebSelfId } from "./accounts-BSywe9Bq.js";
+-import { C as isPlainObject, D as normalizeE164, F as sleep$1, G as shouldLogVerbose, H as logVerbose, I as sliceUtf16Safe, J as colorize, M as safeParseJson, N as shortenHomeInString, P as shortenHomePath, R as truncateUtf16Safe, S as formatTerminalLink, W as setVerbose, X as theme, Y as isRich, Z as getChildLogger, a as normalizeChannelId, b as ensureDir$3, c as requireActivePluginRegistry, ct as triggerInternalHook, d as clearPluginCommands, f as executePluginCommand, g as CONFIG_DIR, h as matchPluginCommand, i as normalizeAnyChannelId, it as normalizeLogLevel, j as resolveUserPath, l as setActivePluginRegistry, lt as normalizePluginHttpPath, m as listPluginCommands, n as CHAT_CHANNEL_ORDER, ot as resolvePreferredOpenClawTmpDir, p as getPluginCommandSpecs, q as warn, st as createInternalHookEvent, u as createPluginRegistry, v as clampInt, w as isRecord$1, x as escapeRegExp, z as danger } from "./registry-CvUzfgyU.js";
++import { c as logoutWeb, f as readWebSelfId, g as webAuthExists, o as getWebAuthAgeMs, r as resolveWhatsAppAccount, s as logWebSelfId } from "./accounts-WG-Hmhh4.js";
++import { C as isPlainObject, D as normalizeE164, F as sleep$1, G as shouldLogVerbose, H as logVerbose, I as sliceUtf16Safe, J as colorize, M as safeParseJson, N as shortenHomeInString, P as shortenHomePath, R as truncateUtf16Safe, S as formatTerminalLink, W as setVerbose, X as theme, Y as isRich, Z as getChildLogger, a as normalizeChannelId, b as ensureDir$3, c as requireActivePluginRegistry, ct as triggerInternalHook, d as clearPluginCommands, f as executePluginCommand, g as CONFIG_DIR, h as matchPluginCommand, i as normalizeAnyChannelId, it as normalizeLogLevel, j as resolveUserPath, l as setActivePluginRegistry, lt as normalizePluginHttpPath, m as listPluginCommands, n as CHAT_CHANNEL_ORDER, ot as resolvePreferredOpenClawTmpDir, p as getPluginCommandSpecs, q as warn, st as createInternalHookEvent, u as createPluginRegistry, v as clampInt, w as isRecord$1, x as escapeRegExp, z as danger } from "./registry-DFcSCP5o.js";
+ import { a as resolveOAuthDir, i as resolveGatewayPort, n as resolveConfigPath, s as resolveStateDir, t as STATE_DIR, u as resolveRequiredHomeDir } from "./paths-DJmOcr7Q.js";
+-import { A as isProfileInCooldown, B as normalizeSecretInput, C as requireApiKey, E as resolveModelAuthMode, F as listProfilesForProvider, G as getShellPathFromLoginShell, H as DEFAULT_CONTEXT_TOKENS, I as markAuthProfileGood, L as ensureAuthProfileStore, M as markAuthProfileUsed, N as resolveApiKeyForProfile, O as resolveAuthProfileOrder, P as dedupeProfileIds, R as resolveAuthStorePathForDisplay, S as getCustomProviderApiKey, T as resolveEnvApiKey, U as DEFAULT_MODEL, V as resolveAuthProfileDisplayLabel, W as DEFAULT_PROVIDER, Z as withFileLock$1, a as isCliProvider, b as createOllamaStreamFn, c as normalizeProviderId, d as resolveDefaultModelForAgent, f as resolveModelRefFromString, i as findNormalizedProviderValue, j as markAuthProfileFailure, k as getSoonestCooldownExpiry, n as buildConfiguredAllowlistKeys, o as modelKey, p as resolveThinkingDefault, q as resolveShellEnvFallbackTimeoutMs, r as buildModelAliasIndex, s as normalizeModelRef, t as buildAllowedModelSet, u as resolveConfiguredModelRef, w as resolveApiKeyForProvider, x as getApiKeyForModel, y as OLLAMA_NATIVE_BASE_URL, z as resolveOpenClawAgentDir } from "./model-selection-CB9IIVWU.js";
+-import { B as isSafeExecutableValue, H as TELEGRAM_COMMAND_NAME_PATTERN, U as normalizeTelegramCommandName, V as parseDurationMs, W as resolveTelegramCustomCommands, _ as resolveAgentMaxConcurrent, a as writeConfigFile, c as validateJsonSchemaValue, d as setConfigOverride, f as unsetConfigOverride, g as unsetConfigValueAtPath, h as setConfigValueAtPath, i as resolveConfigSnapshotHash, l as getConfigOverrides, m as parseConfigPath, n as loadConfig, o as validateConfigObjectWithPlugins, p as getConfigValueAtPath, r as readConfigFileSnapshot, u as resetConfigOverrides, v as VERSION } from "./config-YVBCrP94.js";
+-import { C as mediaKindFromMime, S as maxBytesForKind, _ as isAudioFileName, a as isPrivateIpAddress, b as normalizeMimeType$1, f as resizeToJpeg, g as imageMimeFromFormat, h as getFileExtension, i as isBlockedHostname, l as getImageMetadata, m as extensionForMime, p as detectMime, s as normalizeHostname, t as SsrFBlockedError, v as isGifMedia, x as MAX_IMAGE_BYTES } from "./ssrf--zCZt1NJ.js";
+-import { a as clearActiveProgressLine, i as defaultRuntime, o as registerActiveProgressLine, r as createNonExitingRuntime, s as unregisterActiveProgressLine, t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { a as logError, i as logDebug, n as runExec, o as logInfo, r as spawnWithFallback, s as logWarn, t as runCommandWithTimeout } from "./exec-CBwIXprv.js";
+-import { i as resolveImageSanitizationLimits, n as sanitizeImageBlocks, r as sanitizeToolResultImages } from "./tool-images-B8CfQtJH.js";
+-import { a as readNumberParam, c as readStringOrNumberParam, i as jsonResult, l as readStringParam, n as imageResult, o as readReactionParams, r as imageResultFromFile, s as readStringArrayParam, t as createActionGate } from "./common-CH6orOBi.js";
+-import { a as createReplyReferencePlanner, c as createSlackWebClient, d as validateSlackBlocksArray, i as resolveSlackThreadTs, l as resolveSlackWebClientOptions, n as deliverReplies$3, o as sendMessageSlack, s as buildSlackBlocksFallbackText, t as createSlackReplyDeliveryPlan, u as parseSlackBlocksInput } from "./replies-BiiH6JwC.js";
+-import { S as resolveOpenClawPackageRoot, b as filterBootstrapFilesForSession, c as resolveDefaultAgentId, f as DEFAULT_AGENT_WORKSPACE_DIR, i as resolveAgentModelFallbacksOverride, l as resolveSessionAgentId, n as resolveAgentConfig, o as resolveAgentSkillsFilter, p as DEFAULT_BOOTSTRAP_FILENAME, r as resolveAgentDir, s as resolveAgentWorkspaceDir, u as resolveSessionAgentIds, x as loadWorkspaceBootstrapFiles, y as ensureAgentWorkspace } from "./agent-scope-BmRbl8vE.js";
+-import { a as resolveAckReaction, i as resolveResponsePrefixTemplate, n as createReplyPrefixOptions, o as resolveEffectiveMessagesConfig, s as resolveHumanDelayConfig } from "./reply-prefix-D07Ikdod.js";
+-import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText, t as HEARTBEAT_TOKEN } from "./tokens-D9QrMV6b.js";
+-import { c as getSkillsSnapshotVersion, i as resolveSkillCommandInvocation, n as listSkillCommandsForAgents, o as getRemoteSkillEligibility, r as listSkillCommandsForWorkspace, s as ensureSkillsWatcher, t as listReservedChatSlashCommandNames } from "./skill-commands-wPQ0Iu38.js";
+-import { c as assertSandboxPath, d as resolveSandboxedMediaSource, f as applySkillEnvOverrides, i as resolveSkillsPromptForRun, l as resolveSandboxInputPath, n as buildWorkspaceSkillSnapshot, p as applySkillEnvOverridesFromSnapshot, r as loadWorkspaceSkillEntries, s as assertMediaNotDataUrl } from "./skills-CreY3Zqs.js";
++import { A as isProfileInCooldown, B as normalizeSecretInput, C as requireApiKey, E as resolveModelAuthMode, F as listProfilesForProvider, G as getShellPathFromLoginShell, H as DEFAULT_CONTEXT_TOKENS, I as markAuthProfileGood, L as ensureAuthProfileStore, M as markAuthProfileUsed, N as resolveApiKeyForProfile, O as resolveAuthProfileOrder, P as dedupeProfileIds, R as resolveAuthStorePathForDisplay, S as getCustomProviderApiKey, T as resolveEnvApiKey, U as DEFAULT_MODEL, V as resolveAuthProfileDisplayLabel, W as DEFAULT_PROVIDER, Z as withFileLock$1, a as isCliProvider, b as createOllamaStreamFn, c as normalizeProviderId, d as resolveDefaultModelForAgent, f as resolveModelRefFromString, i as findNormalizedProviderValue, j as markAuthProfileFailure, k as getSoonestCooldownExpiry, n as buildConfiguredAllowlistKeys, o as modelKey, p as resolveThinkingDefault, q as resolveShellEnvFallbackTimeoutMs, r as buildModelAliasIndex, s as normalizeModelRef, t as buildAllowedModelSet, u as resolveConfiguredModelRef, w as resolveApiKeyForProvider, x as getApiKeyForModel, y as OLLAMA_NATIVE_BASE_URL, z as resolveOpenClawAgentDir } from "./model-selection-CcII_ph5.js";
++import { B as isSafeExecutableValue, H as TELEGRAM_COMMAND_NAME_PATTERN, U as normalizeTelegramCommandName, V as parseDurationMs, W as resolveTelegramCustomCommands, _ as resolveAgentMaxConcurrent, a as writeConfigFile, c as validateJsonSchemaValue, d as setConfigOverride, f as unsetConfigOverride, g as unsetConfigValueAtPath, h as setConfigValueAtPath, i as resolveConfigSnapshotHash, l as getConfigOverrides, m as parseConfigPath, n as loadConfig, o as validateConfigObjectWithPlugins, p as getConfigValueAtPath, r as readConfigFileSnapshot, u as resetConfigOverrides, v as VERSION } from "./config-BUR5GFvw.js";
++import { C as mediaKindFromMime, S as maxBytesForKind, _ as isAudioFileName, a as isPrivateIpAddress, b as normalizeMimeType$1, f as resizeToJpeg, g as imageMimeFromFormat, h as getFileExtension, i as isBlockedHostname, l as getImageMetadata, m as extensionForMime, p as detectMime, s as normalizeHostname, t as SsrFBlockedError, v as isGifMedia, x as MAX_IMAGE_BYTES } from "./ssrf-CIYAMVQH.js";
++import { a as clearActiveProgressLine, i as defaultRuntime, o as registerActiveProgressLine, r as createNonExitingRuntime, s as unregisterActiveProgressLine, t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { a as logError, i as logDebug, n as runExec, o as logInfo, r as spawnWithFallback, s as logWarn, t as runCommandWithTimeout } from "./exec-CikK1sTs.js";
++import { i as resolveImageSanitizationLimits, n as sanitizeImageBlocks, r as sanitizeToolResultImages } from "./tool-images-DZscW5Qf.js";
++import { a as readNumberParam, c as readStringOrNumberParam, i as jsonResult, l as readStringParam, n as imageResult, o as readReactionParams, r as imageResultFromFile, s as readStringArrayParam, t as createActionGate } from "./common-CXH6PFr2.js";
++import { a as createReplyReferencePlanner, c as createSlackWebClient, d as validateSlackBlocksArray, i as resolveSlackThreadTs, l as resolveSlackWebClientOptions, n as deliverReplies$3, o as sendMessageSlack, s as buildSlackBlocksFallbackText, t as createSlackReplyDeliveryPlan, u as parseSlackBlocksInput } from "./replies-CuZ5TRTI.js";
++import { S as resolveOpenClawPackageRoot, b as filterBootstrapFilesForSession, c as resolveDefaultAgentId, f as DEFAULT_AGENT_WORKSPACE_DIR, i as resolveAgentModelFallbacksOverride, l as resolveSessionAgentId, n as resolveAgentConfig, o as resolveAgentSkillsFilter, p as DEFAULT_BOOTSTRAP_FILENAME, r as resolveAgentDir, s as resolveAgentWorkspaceDir, u as resolveSessionAgentIds, x as loadWorkspaceBootstrapFiles, y as ensureAgentWorkspace } from "./agent-scope-DGo2Lh53.js";
++import { a as resolveAckReaction, i as resolveResponsePrefixTemplate, n as createReplyPrefixOptions, o as resolveEffectiveMessagesConfig, s as resolveHumanDelayConfig } from "./reply-prefix-CRXqek3R.js";
++import { n as SILENT_REPLY_TOKEN, r as isSilentReplyText, t as HEARTBEAT_TOKEN } from "./tokens-w1xZM7qi.js";
++import { c as getSkillsSnapshotVersion, i as resolveSkillCommandInvocation, n as listSkillCommandsForAgents, o as getRemoteSkillEligibility, r as listSkillCommandsForWorkspace, s as ensureSkillsWatcher, t as listReservedChatSlashCommandNames } from "./skill-commands-CO-avSo-.js";
++import { c as assertSandboxPath, d as resolveSandboxedMediaSource, f as applySkillEnvOverrides, i as resolveSkillsPromptForRun, l as resolveSandboxInputPath, n as buildWorkspaceSkillSnapshot, p as applySkillEnvOverridesFromSnapshot, r as loadWorkspaceSkillEntries, s as assertMediaNotDataUrl } from "./skills-DNzuu_Hz.js";
+ import { t as redactSensitiveText } from "./redact-BUgsXMP1.js";
+ import { n as formatErrorMessage, r as formatUncaughtError, t as extractErrorCode } from "./errors-7SO55DQM.js";
+ import { n as fetchWithTimeout, t as bindAbortRelay } from "./fetch-timeout-IIHFohfs.js";
+-import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, r as readResponseWithLimit } from "./fetch-CO6Olj9O.js";
+-import { A as pickPrimaryTailnetIPv4, S as DEFAULT_AI_SNAPSHOT_MAX_CHARS, j as rawDataToString, k as pickPrimaryLanIPv4, v as ensureChromeExtensionRelayServer } from "./chrome-CNaxD22L.js";
+-import { n as parseBooleanValue$1, t as isTruthyEnvValue } from "./env-DNXtq8Zy.js";
+-import { A as listEnabledSignalAccounts, I as resolveIMessageAccount, L as resolveChannelGroupPolicy, N as resolveSignalAccount, R as resolveChannelGroupRequireMention, a as normalizeReasoningLevel, c as normalizeVerboseLevel, d as getChannelDock, f as listChannelDocks, i as normalizeElevatedLevel, l as resolveResponseUsageMode, m as normalizeSignalMessagingTarget, n as formatXHighModelHint, o as normalizeThinkLevel, s as normalizeUsageDisplay, t as formatThinkingLevels, u as supportsXHighThinking, z as resolveChannelGroupToolsPolicy } from "./thinking-CtxhcKkY.js";
+-import { a as listTelegramAccountIds, b as resolveDiscordAccount, c as resolveTelegramToken, f as resolveSlackAccount, g as createDiscordActionGate, h as resolveSlackBotToken, i as listEnabledTelegramAccounts, m as resolveSlackAppToken, n as normalizeWhatsAppTarget, r as createTelegramActionGate, s as resolveTelegramAccount, t as isWhatsAppGroupJid, v as listEnabledDiscordAccounts, x as normalizeDiscordToken } from "./normalize-mEjrgr3H.js";
++import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, r as readResponseWithLimit } from "./fetch-CRvmXstS.js";
++import { A as pickPrimaryTailnetIPv4, S as DEFAULT_AI_SNAPSHOT_MAX_CHARS, j as rawDataToString, k as pickPrimaryLanIPv4, v as ensureChromeExtensionRelayServer } from "./chrome-WS-Z8NHV.js";
++import { n as parseBooleanValue$1, t as isTruthyEnvValue } from "./env-CjjrqHd2.js";
++import { A as listEnabledSignalAccounts, I as resolveIMessageAccount, L as resolveChannelGroupPolicy, N as resolveSignalAccount, R as resolveChannelGroupRequireMention, a as normalizeReasoningLevel, c as normalizeVerboseLevel, d as getChannelDock, f as listChannelDocks, i as normalizeElevatedLevel, l as resolveResponseUsageMode, m as normalizeSignalMessagingTarget, n as formatXHighModelHint, o as normalizeThinkLevel, s as normalizeUsageDisplay, t as formatThinkingLevels, u as supportsXHighThinking, z as resolveChannelGroupToolsPolicy } from "./thinking-CL3Zx3n9.js";
++import { a as listTelegramAccountIds, b as resolveDiscordAccount, c as resolveTelegramToken, f as resolveSlackAccount, g as createDiscordActionGate, h as resolveSlackBotToken, i as listEnabledTelegramAccounts, m as resolveSlackAppToken, n as normalizeWhatsAppTarget, r as createTelegramActionGate, s as resolveTelegramAccount, t as isWhatsAppGroupJid, v as listEnabledDiscordAccounts, x as normalizeDiscordToken } from "./normalize-nbycZ809.js";
+ import { t as normalizeChatType } from "./chat-type-CE6cJOyt.js";
+ import { n as resolveCliName, t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+-import { _ as ensureTargetId, b as requireTargetKind, g as buildMessagingTarget, h as resolveSlackChannelId, m as parseSlackTarget, n as listChannelPlugins, r as normalizeChannelId$1, t as getChannelPlugin, v as parseTargetMention, y as parseTargetPrefixes } from "./plugins-BBPPyP5O.js";
+-import { A as resolveFetch, C as resolveOutboundAttachmentFromUrl, D as streamSignalEvents, E as signalRpcRequest, O as getGlobalHookRunner, S as sendTypingSignal, T as signalCheck, _ as MEDIA_TOKEN_RE, a as applyReplyThreading, b as sendMessageSignal, c as isRenderablePayload, d as resolveReplyToMode, f as buildTargetResolverSignature, g as parseReplyDirectives, h as throwIfAborted, i as applyReplyTagsToPayload, j as wrapFetchWithAbortSignal, k as initializeGlobalHookRunner, l as shouldSuppressMessagingToolReplies, m as normalizeTargetForProvider, o as filterMessagingToolDuplicates, p as normalizeChannelTargetInput, r as normalizeReplyPayloadsForDelivery, s as filterMessagingToolMediaDuplicates, t as deliverOutboundPayloads, u as createReplyToModeFilterForChannel, v as splitMediaFromOutput, w as resolveSignalRpcContext, x as sendReadReceiptSignal, y as parseInlineDirectives$1 } from "./deliver-DJcNV-mo.js";
+-import { a as listDeliverableMessageChannels, c as resolveMessageChannel, d as GATEWAY_CLIENT_NAMES, i as isMarkdownCapableMessageChannel, l as GATEWAY_CLIENT_IDS, n as isDeliverableMessageChannel, o as normalizeMessageChannel, r as isInternalMessageChannel, s as resolveGatewayMessageChannel, t as INTERNAL_MESSAGE_CHANNEL, u as GATEWAY_CLIENT_MODES } from "./message-channel-CzbBSsGC.js";
+-import { $ as normalizeToolName, A as isTransientHttpError, At as countToolResults, B as resolveProfile, Bt as resolveChannelResetConfig, C as isContextOverflowError, Ct as deliveryContextFromSession, D as isRateLimitAssistantError, Dt as normalizeSessionDeliveryFields, E as isLikelyContextOverflowError, Et as normalizeDeliveryContext, F as resolveSandboxContext, Ft as normalizeInputProvenance, G as resolveBrowserControlAuth, Gt as resolveFreshSessionTotalTokens, H as resolvePathsWithinRoot, Ht as resolveSessionResetType, I as resolveSandboxRuntimeStatus, It as acquireSessionWriteLock, J as buildPluginToolGroups, Jt as deriveSessionMetaPatch, K as resolveSandboxConfigForAgent, Kt as canonicalizeMainSessionAlias, L as createBrowserRouteContext, Lt as resolveSessionLockMaxHoldFromTimeout, M as parseImageSizeError, Mt as INPUT_PROVENANCE_KIND_VALUES, N as sanitizeUserFacingText, Nt as applyInputProvenanceToUserMessage, O as isRawApiErrorPayload, Ot as archiveSessionTranscripts, P as ensureSandboxWorkspaceForSession, Pt as hasInterSessionUserProvenance, Q as mergeAlsoAllowPolicy, R as registerBrowserRoutes, Rt as resolveSessionKey, S as isCompactionFailureError, St as resolveCacheTtlMs$1, T as isFailoverErrorMessage, Tt as mergeDeliveryContext, U as getBridgeAuthForPort, Ut as resolveThreadFlag, V as DEFAULT_UPLOAD_DIR, Vt as resolveSessionResetPolicy, W as ensureBrowserControlAuth, Wt as DEFAULT_RESET_TRIGGERS, X as expandPolicyWithPluginGroups, Y as collectExplicitAllowlist, Yt as resolveGroupSessionKey, Z as expandToolGroups, _ as formatRawAssistantErrorForUi, _t as recordSessionMetaFromInbound, a as isMessagingToolDuplicateNormalized, at as ensureSessionHeader, b as isBillingAssistantError, bt as updateSessionStoreEntry, c as extractToolCallsFromAssistant, ct as sanitizeGoogleTurnOrdering, d as isAntigravityClaude, dt as saveMediaBuffer, et as resolveToolProfilePolicy, f as isGoogleModelApi, ft as extractDeliveryInfo, g as formatBillingErrorMessage, gt as readSessionUpdatedAt, h as formatAssistantErrorText, ht as loadSessionStore, it as buildBootstrapContextFiles, j as parseImageDimensionError, jt as extractToolCallNames, k as isTimeoutErrorMessage, kt as capArrayByJsonBytes, l as extractToolResultId, m as classifyFailoverReason, n as validateGeminiTurns, nt as compileGlobPatterns, o as normalizeTextForComparison, ot as resolveBootstrapMaxChars, p as BILLING_ERROR_USER_MESSAGE, pt as appendAssistantMessageToSessionTranscript, q as applyOwnerOnlyToolPolicy, qt as resolveMainSessionKey, r as pickFallbackThinkingLevel, rt as matchesAnyGlobPattern, s as sanitizeSessionMessagesImages, st as resolveBootstrapTotalMaxChars, t as validateAnthropicTurns, tt as stripPluginOnlyAllowlist, u as downgradeOpenAIReasoningBlocks, ut as getMediaDir, v as getApiErrorPayloadFingerprint, vt as updateLastRoute, w as isFailoverAssistantError, wt as deliveryContextKey, x as isCloudCodeAssistFormatError, xt as isCacheEnabled, y as isAuthAssistantError, yt as updateSessionStore, z as resolveBrowserConfig, zt as evaluateSessionFreshness } from "./pi-embedded-helpers-BmFSmAMs.js";
++import { _ as ensureTargetId, b as requireTargetKind, g as buildMessagingTarget, h as resolveSlackChannelId, m as parseSlackTarget, n as listChannelPlugins, r as normalizeChannelId$1, t as getChannelPlugin, v as parseTargetMention, y as parseTargetPrefixes } from "./plugins-BNWuvEuT.js";
++import { A as resolveFetch, C as resolveOutboundAttachmentFromUrl, D as streamSignalEvents, E as signalRpcRequest, O as getGlobalHookRunner, S as sendTypingSignal, T as signalCheck, _ as MEDIA_TOKEN_RE, a as applyReplyThreading, b as sendMessageSignal, c as isRenderablePayload, d as resolveReplyToMode, f as buildTargetResolverSignature, g as parseReplyDirectives, h as throwIfAborted, i as applyReplyTagsToPayload, j as wrapFetchWithAbortSignal, k as initializeGlobalHookRunner, l as shouldSuppressMessagingToolReplies, m as normalizeTargetForProvider, o as filterMessagingToolDuplicates, p as normalizeChannelTargetInput, r as normalizeReplyPayloadsForDelivery, s as filterMessagingToolMediaDuplicates, t as deliverOutboundPayloads, u as createReplyToModeFilterForChannel, v as splitMediaFromOutput, w as resolveSignalRpcContext, x as sendReadReceiptSignal, y as parseInlineDirectives$1 } from "./deliver-BPHUbnv3.js";
++import { a as listDeliverableMessageChannels, c as resolveMessageChannel, d as GATEWAY_CLIENT_NAMES, i as isMarkdownCapableMessageChannel, l as GATEWAY_CLIENT_IDS, n as isDeliverableMessageChannel, o as normalizeMessageChannel, r as isInternalMessageChannel, s as resolveGatewayMessageChannel, t as INTERNAL_MESSAGE_CHANNEL, u as GATEWAY_CLIENT_MODES } from "./message-channel-CaoRC6Bw.js";
++import { $ as normalizeToolName, A as isTransientHttpError, At as countToolResults, B as resolveProfile, Bt as resolveChannelResetConfig, C as isContextOverflowError, Ct as deliveryContextFromSession, D as isRateLimitAssistantError, Dt as normalizeSessionDeliveryFields, E as isLikelyContextOverflowError, Et as normalizeDeliveryContext, F as resolveSandboxContext, Ft as normalizeInputProvenance, G as resolveBrowserControlAuth, Gt as resolveFreshSessionTotalTokens, H as resolvePathsWithinRoot, Ht as resolveSessionResetType, I as resolveSandboxRuntimeStatus, It as acquireSessionWriteLock, J as buildPluginToolGroups, Jt as deriveSessionMetaPatch, K as resolveSandboxConfigForAgent, Kt as canonicalizeMainSessionAlias, L as createBrowserRouteContext, Lt as resolveSessionLockMaxHoldFromTimeout, M as parseImageSizeError, Mt as INPUT_PROVENANCE_KIND_VALUES, N as sanitizeUserFacingText, Nt as applyInputProvenanceToUserMessage, O as isRawApiErrorPayload, Ot as archiveSessionTranscripts, P as ensureSandboxWorkspaceForSession, Pt as hasInterSessionUserProvenance, Q as mergeAlsoAllowPolicy, R as registerBrowserRoutes, Rt as resolveSessionKey, S as isCompactionFailureError, St as resolveCacheTtlMs$1, T as isFailoverErrorMessage, Tt as mergeDeliveryContext, U as getBridgeAuthForPort, Ut as resolveThreadFlag, V as DEFAULT_UPLOAD_DIR, Vt as resolveSessionResetPolicy, W as ensureBrowserControlAuth, Wt as DEFAULT_RESET_TRIGGERS, X as expandPolicyWithPluginGroups, Y as collectExplicitAllowlist, Yt as resolveGroupSessionKey, Z as expandToolGroups, _ as formatRawAssistantErrorForUi, _t as recordSessionMetaFromInbound, a as isMessagingToolDuplicateNormalized, at as ensureSessionHeader, b as isBillingAssistantError, bt as updateSessionStoreEntry, c as extractToolCallsFromAssistant, ct as sanitizeGoogleTurnOrdering, d as isAntigravityClaude, dt as saveMediaBuffer, et as resolveToolProfilePolicy, f as isGoogleModelApi, ft as extractDeliveryInfo, g as formatBillingErrorMessage, gt as readSessionUpdatedAt, h as formatAssistantErrorText, ht as loadSessionStore, it as buildBootstrapContextFiles, j as parseImageDimensionError, jt as extractToolCallNames, k as isTimeoutErrorMessage, kt as capArrayByJsonBytes, l as extractToolResultId, m as classifyFailoverReason, n as validateGeminiTurns, nt as compileGlobPatterns, o as normalizeTextForComparison, ot as resolveBootstrapMaxChars, p as BILLING_ERROR_USER_MESSAGE, pt as appendAssistantMessageToSessionTranscript, q as applyOwnerOnlyToolPolicy, qt as resolveMainSessionKey, r as pickFallbackThinkingLevel, rt as matchesAnyGlobPattern, s as sanitizeSessionMessagesImages, st as resolveBootstrapTotalMaxChars, t as validateAnthropicTurns, tt as stripPluginOnlyAllowlist, u as downgradeOpenAIReasoningBlocks, ut as getMediaDir, v as getApiErrorPayloadFingerprint, vt as updateLastRoute, w as isFailoverAssistantError, wt as deliveryContextKey, x as isCloudCodeAssistFormatError, xt as isCacheEnabled, y as isAuthAssistantError, yt as updateSessionStore, z as resolveBrowserConfig, zt as evaluateSessionFreshness } from "./pi-embedded-helpers-BBn71qTx.js";
+ import { n as resolveConversationLabel } from "./conversation-label-DQ4L1K37.js";
+ import { a as saveJsonFile, i as loadJsonFile } from "./github-copilot-token-Dtvm_sTU.js";
+-import { a as applyTestPluginDefaults, c as resolveMemorySlotDecision, n as discoverOpenClawPlugins, o as normalizePluginsConfig, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-C0jS6PBU.js";
++import { a as applyTestPluginDefaults, c as resolveMemorySlotDecision, n as discoverOpenClawPlugins, o as normalizePluginsConfig, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-B8hfUlu9.js";
+ import { i as resolveSessionTranscriptPath, n as resolveSessionFilePath, o as resolveSessionTranscriptsDirForAgent, r as resolveSessionFilePathOptions, s as resolveStorePath, t as resolveDefaultSessionStorePath } from "./paths-CyXoO9iV.js";
+ import { t as emitSessionTranscriptUpdate } from "./transcript-events-Rj8UphZE.js";
+-import { a as logMessageProcessed, c as logWebhookError, d as startDiagnosticHeartbeat, f as stopDiagnosticHeartbeat, i as logLaneEnqueue, l as logWebhookProcessed, m as isDiagnosticsEnabled, o as logMessageQueued, p as emitDiagnosticEvent, r as logLaneDequeue, s as logSessionStateChange, t as diag, u as logWebhookReceived } from "./diagnostic-BXaKch4H.js";
+-import { a as normalizePollDurationHours, i as convertMarkdownTables, o as normalizePollInput, t as getActiveWebListener } from "./active-listener-BiMSzcgN.js";
+-import { a as loadWebMedia, i as getDefaultLocalRoots, n as markdownToIR, o as loadWebMediaRaw, s as getAgentScopedMediaLocalRoots, t as chunkMarkdownIR } from "./ir-WzWc9-m7.js";
+-import { a as chunkText, c as resolveChunkMode, d as isSafeFenceBreak, f as parseFenceSpans, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit, o as chunkTextWithMode, r as chunkMarkdownText, t as chunkByNewline, u as findFenceSpanAt } from "./chunk-COfiKqBF.js";
+-import { i as retryAsync, n as resolveMemorySearchConfig, r as resolveRetryConfig } from "./manager-k7kFLYLb.js";
+-import { n as resolveMarkdownTableMode } from "./markdown-tables-MH5WoQHz.js";
++import { a as logMessageProcessed, c as logWebhookError, d as startDiagnosticHeartbeat, f as stopDiagnosticHeartbeat, i as logLaneEnqueue, l as logWebhookProcessed, m as isDiagnosticsEnabled, o as logMessageQueued, p as emitDiagnosticEvent, r as logLaneDequeue, s as logSessionStateChange, t as diag, u as logWebhookReceived } from "./diagnostic-Dji1iUVa.js";
++import { a as normalizePollDurationHours, i as convertMarkdownTables, o as normalizePollInput, t as getActiveWebListener } from "./active-listener-DqgfJFYZ.js";
++import { a as loadWebMedia, i as getDefaultLocalRoots, n as markdownToIR, o as loadWebMediaRaw, s as getAgentScopedMediaLocalRoots, t as chunkMarkdownIR } from "./ir-D6km9t7C.js";
++import { a as chunkText, c as resolveChunkMode, d as isSafeFenceBreak, f as parseFenceSpans, i as chunkMarkdownTextWithMode, l as resolveTextChunkLimit, o as chunkTextWithMode, r as chunkMarkdownText, t as chunkByNewline, u as findFenceSpanAt } from "./chunk-Cfb0gRms.js";
++import { i as retryAsync, n as resolveMemorySearchConfig, r as resolveRetryConfig } from "./manager-D2yAgEL4.js";
++import { n as resolveMarkdownTableMode } from "./markdown-tables-Cyc-LieP.js";
+ import { t as renderMarkdownWithMarkers } from "./render-95l30zcf.js";
+ import { r as normalizeInboundTextNewlines, t as finalizeInboundContext } from "./inbound-context-DSVrDz6Q.js";
+-import { _ as applyTemplate, a as runCapability, c as modelSupportsVision, d as registerUnhandledRejectionHandler, f as resolveConcurrency, g as CLI_OUTPUT_MAX_BUFFER, h as resolveMediaUnderstandingScope, i as resolveAutoImageModel, m as normalizeMediaUnderstandingChatType, n as createMediaAttachmentCache, o as findModelInCatalog, p as resolveTimeoutMs$1, r as normalizeMediaAttachments, s as loadModelCatalog, t as buildProviderRegistry, u as resolveAttachmentKind } from "./runner-DqwnPJ8U.js";
+-import { S as minimaxUnderstandImage, _ as stripThinkingTagsFromText, a as decodeDataUrl, b as extractTextFromChatContent, c as extractAssistantThinking, d as formatReasoningMessage, f as inferToolMetaFromArgs, g as stripMinimaxToolCallXml, h as stripDowngradedToolCallText, i as coerceImageModelConfig, l as extractThinkingFromTaggedStream, m as promoteThinkingTagsToBlocks, o as resolveProviderVisionModelFromConfig, p as isAssistantMessage, r as coerceImageAssistantText, s as extractAssistantText$1, u as extractThinkingFromTaggedText, v as resolveToolDisplay, x as ensureOpenClawModelsJson, y as stripReasoningTagsFromText } from "./image-C9KFN-f3.js";
++import { _ as applyTemplate, a as runCapability, c as modelSupportsVision, d as registerUnhandledRejectionHandler, f as resolveConcurrency, g as CLI_OUTPUT_MAX_BUFFER, h as resolveMediaUnderstandingScope, i as resolveAutoImageModel, m as normalizeMediaUnderstandingChatType, n as createMediaAttachmentCache, o as findModelInCatalog, p as resolveTimeoutMs$1, r as normalizeMediaAttachments, s as loadModelCatalog, t as buildProviderRegistry, u as resolveAttachmentKind } from "./runner-AYensfnh.js";
++import { S as minimaxUnderstandImage, _ as stripThinkingTagsFromText, a as decodeDataUrl, b as extractTextFromChatContent, c as extractAssistantThinking, d as formatReasoningMessage, f as inferToolMetaFromArgs, g as stripMinimaxToolCallXml, h as stripDowngradedToolCallText, i as coerceImageModelConfig, l as extractThinkingFromTaggedStream, m as promoteThinkingTagsToBlocks, o as resolveProviderVisionModelFromConfig, p as isAssistantMessage, r as coerceImageAssistantText, s as extractAssistantText$1, u as extractThinkingFromTaggedText, v as resolveToolDisplay, x as ensureOpenClawModelsJson, y as stripReasoningTagsFromText } from "./image-JmJ4zLpW.js";
+ import { n as discoverModels, t as discoverAuthStorage } from "./pi-model-discovery-BEgrTVvT.js";
+ import { r as getDiagnosticSessionState } from "./diagnostic-session-state-QblLcZFC.js";
+-import { d as listMemoryFiles, f as normalizeExtraMemoryPaths } from "./sqlite-Bp81ACN0.js";
+-import { a as listChatCommandsForConfig, c as normalizeCommandBody, d as resolveCommandArgMenu, f as serializeCommandArgs, i as listChatCommands, l as parseCommandArgs, o as listNativeCommandSpecs, p as shouldHandleTextCommands, r as findCommandByNativeName, s as listNativeCommandSpecsForConfig, t as buildCommandTextFromArgs, u as resolveCommandArgChoices } from "./commands-registry-CMKEe4ot.js";
++import { d as listMemoryFiles, f as normalizeExtraMemoryPaths } from "./sqlite-DlEMMihB.js";
++import { a as listChatCommandsForConfig, c as normalizeCommandBody, d as resolveCommandArgMenu, f as serializeCommandArgs, i as listChatCommands, l as parseCommandArgs, o as listNativeCommandSpecs, p as shouldHandleTextCommands, r as findCommandByNativeName, s as listNativeCommandSpecsForConfig, t as buildCommandTextFromArgs, u as resolveCommandArgChoices } from "./commands-registry-D11KItt-.js";
+ import { t as makeProxyFetch } from "./proxy-Cbu5iJdR.js";
+-import { n as resolveAgentRoute, t as buildAgentSessionKey } from "./resolve-route-6uB6pV_J.js";
++import { n as resolveAgentRoute, t as buildAgentSessionKey } from "./resolve-route-CeeVouVs.js";
+ import { n as recordCommandPoll, r as resetCommandPollCount } from "./command-poll-backoff-Vjh7BREh.js";
+ import { createRequire } from "node:module";
+ import * as path$1 from "node:path";
+@@ -58,7 +58,7 @@ import path from "node:path";
+ import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+ import * as os$1 from "node:os";
+ import os, { homedir, tmpdir } from "node:os";
+-import json5 from "json5";
++import JSON5 from "json5";
+ import * as fs$2 from "node:fs/promises";
+ import fs$1 from "node:fs/promises";
+ import { inspect, promisify } from "node:util";
+@@ -9457,7 +9457,7 @@ async function createModelSelectionState(params) {
+ 		}
+ 	}
+ 	if (sessionEntry && sessionStore && sessionKey && sessionEntry.authProfileOverride) {
+-		const { ensureAuthProfileStore } = await import("./model-selection-CB9IIVWU.js").then((n) => n.D);
++		const { ensureAuthProfileStore } = await import("./model-selection-CcII_ph5.js").then((n) => n.D);
+ 		const profile = ensureAuthProfileStore(void 0, { allowKeychainPrompt: false }).profiles[sessionEntry.authProfileOverride];
+ 		const providerKey = normalizeProviderId(provider);
+ 		if (!profile || normalizeProviderId(profile.provider) !== providerKey) await clearSessionAuthProfileOverride({
+@@ -13247,7 +13247,7 @@ async function getMemorySearchManager(params) {
+ 			if (cached) return { manager: cached };
+ 		}
+ 		try {
+-			const { QmdMemoryManager } = await import("./qmd-manager-Dt1StnNb.js");
++			const { QmdMemoryManager } = await import("./qmd-manager-Dt3Yd_pR.js");
+ 			const primary = await QmdMemoryManager.create({
+ 				cfg: params.cfg,
+ 				agentId: params.agentId,
+@@ -13259,7 +13259,7 @@ async function getMemorySearchManager(params) {
+ 				const wrapper = new FallbackMemoryManager({
+ 					primary,
+ 					fallbackFactory: async () => {
+-						const { MemoryIndexManager } = await import("./manager-k7kFLYLb.js").then((n) => n.t);
++						const { MemoryIndexManager } = await import("./manager-D2yAgEL4.js").then((n) => n.t);
+ 						return await MemoryIndexManager.get(params);
+ 					}
+ 				}, () => QMD_MANAGER_CACHE.delete(cacheKey));
+@@ -13272,7 +13272,7 @@ async function getMemorySearchManager(params) {
+ 		}
+ 	}
+ 	try {
+-		const { MemoryIndexManager } = await import("./manager-k7kFLYLb.js").then((n) => n.t);
++		const { MemoryIndexManager } = await import("./manager-D2yAgEL4.js").then((n) => n.t);
+ 		return { manager: await MemoryIndexManager.get(params) };
+ 	} catch (err) {
+ 		return {
+@@ -14236,7 +14236,7 @@ function normalizeSessionKey(value) {
+ function readSessionStore(storePath) {
+ 	try {
+ 		const raw = fs.readFileSync(storePath, "utf-8");
+-		const parsed = json5.parse(raw);
++		const parsed = JSON5.parse(raw);
+ 		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+ 	} catch {}
+ 	return {};
+@@ -16500,7 +16500,7 @@ async function routeReply(params) {
+ 	const resolvedReplyToId = replyToId ?? (channelId === "slack" && threadId != null && threadId !== "" ? String(threadId) : void 0);
+ 	const resolvedThreadId = channelId === "slack" ? null : threadId ?? null;
+ 	try {
+-		const { deliverOutboundPayloads } = await import("./deliver-DJcNV-mo.js").then((n) => n.n);
++		const { deliverOutboundPayloads } = await import("./deliver-BPHUbnv3.js").then((n) => n.n);
+ 		return {
+ 			ok: true,
+ 			messageId: (await deliverOutboundPayloads({
+@@ -20662,7 +20662,7 @@ async function describeStickerImage(params) {
+ 	logVerbose(`telegram: describing sticker with ${provider}/${model}`);
+ 	try {
+ 		const buffer = await fs$1.readFile(imagePath);
+-		const { describeImageWithModel } = await import("./image-C9KFN-f3.js").then((n) => n.n);
++		const { describeImageWithModel } = await import("./image-JmJ4zLpW.js").then((n) => n.n);
+ 		return (await describeImageWithModel({
+ 			buffer,
+ 			fileName: "sticker.webp",
+@@ -21036,7 +21036,7 @@ function createWhatsAppLoginTool() {
+ 			force: Type.Optional(Type.Boolean())
+ 		}),
+ 		execute: async (_toolCallId, args) => {
+-			const { startWebLoginWithQr, waitForWebLogin } = await import("./login-qr-D10iC2m8.js");
++			const { startWebLoginWithQr, waitForWebLogin } = await import("./login-qr-DXR6T2ND.js");
+ 			if ((args?.action ?? "start") === "wait") {
+ 				const result = await waitForWebLogin({ timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : void 0 });
+ 				return {
+@@ -22768,7 +22768,7 @@ async function preflightDiscordMessage(params) {
+ 	let preflightTranscript;
+ 	const hasAudioAttachment = message.attachments?.some((att) => att.contentType?.startsWith("audio/"));
+ 	if (!isDirectMessage && shouldRequireMention && hasAudioAttachment && !baseText && mentionRegexes.length > 0) try {
+-		const { transcribeFirstAudio } = await import("./audio-preflight-CDb4XAqS.js");
++		const { transcribeFirstAudio } = await import("./audio-preflight-BQxEKCrO.js");
+ 		const audioPaths = message.attachments?.filter((att) => att.contentType?.startsWith("audio/")).map((att) => att.url) ?? [];
+ 		if (audioPaths.length > 0) preflightTranscript = await transcribeFirstAudio({
+ 			ctx: {
+@@ -33498,7 +33498,7 @@ function readSlackExternalArgMenuToken(raw) {
+ }
+ let commandsRegistry;
+ async function getCommandsRegistry() {
+-	if (!commandsRegistry) commandsRegistry = await import("./commands-registry-CMKEe4ot.js").then((n) => n.n);
++	if (!commandsRegistry) commandsRegistry = await import("./commands-registry-D11KItt-.js").then((n) => n.n);
+ 	return commandsRegistry;
+ }
+ function encodeSlackCommandArgValue(parts) {
+@@ -33840,11 +33840,11 @@ async function registerSlackMonitorSlashCommands(params) {
+ 			const channelName = channelInfo?.name;
+ 			const roomLabel = channelName ? `#${channelName}` : `#${command.channel_id}`;
+ 			const [{ resolveAgentRoute }, { finalizeInboundContext }, { dispatchReplyWithDispatcher }] = await Promise.all([
+-				import("./resolve-route-6uB6pV_J.js").then((n) => n.r),
++				import("./resolve-route-CeeVouVs.js").then((n) => n.r),
+ 				import("./inbound-context-DSVrDz6Q.js").then((n) => n.n),
+ 				Promise.resolve().then(() => provider_dispatcher_exports)
+ 			]);
+-			const [{ resolveConversationLabel }, { createReplyPrefixOptions }] = await Promise.all([import("./conversation-label-DQ4L1K37.js").then((n) => n.t), import("./reply-prefix-D07Ikdod.js").then((n) => n.r)]);
++			const [{ resolveConversationLabel }, { createReplyPrefixOptions }] = await Promise.all([import("./conversation-label-DQ4L1K37.js").then((n) => n.t), import("./reply-prefix-CRXqek3R.js").then((n) => n.r)]);
+ 			const route = resolveAgentRoute({
+ 				cfg,
+ 				channel: "slack",
+@@ -33901,9 +33901,9 @@ async function registerSlackMonitorSlashCommands(params) {
+ 			});
+ 			const deliverSlashPayloads = async (replies) => {
+ 				const [{ deliverSlackSlashReplies }, { resolveChunkMode }, { resolveMarkdownTableMode }] = await Promise.all([
+-					import("./replies-BiiH6JwC.js").then((n) => n.r),
+-					import("./chunk-COfiKqBF.js").then((n) => n.s),
+-					import("./markdown-tables-MH5WoQHz.js").then((n) => n.t)
++					import("./replies-CuZ5TRTI.js").then((n) => n.r),
++					import("./chunk-Cfb0gRms.js").then((n) => n.s),
++					import("./markdown-tables-Cyc-LieP.js").then((n) => n.t)
+ 				]);
+ 				await deliverSlackSlashReplies({
+ 					replies,
+@@ -33956,7 +33956,7 @@ async function registerSlackMonitorSlashCommands(params) {
+ 	let nativeCommands = [];
+ 	if (nativeEnabled) {
+ 		reg = await getCommandsRegistry();
+-		const skillCommands = nativeSkillsEnabled ? (await import("./skill-commands-wPQ0Iu38.js").then((n) => n.a)).listSkillCommandsForAgents({ cfg }) : [];
++		const skillCommands = nativeSkillsEnabled ? (await import("./skill-commands-CO-avSo-.js").then((n) => n.a)).listSkillCommandsForAgents({ cfg }) : [];
+ 		nativeCommands = reg.listNativeCommandSpecsForConfig(cfg, {
+ 			skillCommands,
+ 			provider: "slack"
+@@ -38946,7 +38946,7 @@ const buildTelegramMessageContext = async ({ primaryCtx, allMedia, storeAllowFro
+ 	const hasAudio = allMedia.some((media) => media.contentType?.startsWith("audio/"));
+ 	let preflightTranscript;
+ 	if (isGroup && requireMention && hasAudio && !hasUserText && mentionRegexes.length > 0) try {
+-		const { transcribeFirstAudio } = await import("./audio-preflight-CDb4XAqS.js");
++		const { transcribeFirstAudio } = await import("./audio-preflight-BQxEKCrO.js");
+ 		preflightTranscript = await transcribeFirstAudio({
+ 			ctx: {
+ 				MediaPaths: allMedia.length > 0 ? allMedia.map((m) => m.path) : void 0,
+@@ -40956,23 +40956,23 @@ let webLoginQrPromise = null;
+ let webChannelPromise = null;
+ let whatsappActionsPromise = null;
+ function loadWebOutbound() {
+-	webOutboundPromise ??= import("./outbound-ClQW7VvZ.js").then((n) => n.t);
++	webOutboundPromise ??= import("./outbound-B6uL5Vxh.js").then((n) => n.t);
+ 	return webOutboundPromise;
+ }
+ function loadWebLogin() {
+-	webLoginPromise ??= import("./login-BFFvu-On.js").then((n) => n.n);
++	webLoginPromise ??= import("./login-iiIGmoYx.js").then((n) => n.n);
+ 	return webLoginPromise;
+ }
+ function loadWebLoginQr() {
+-	webLoginQrPromise ??= import("./login-qr-D10iC2m8.js");
++	webLoginQrPromise ??= import("./login-qr-DXR6T2ND.js");
+ 	return webLoginQrPromise;
+ }
+ function loadWebChannel() {
+-	webChannelPromise ??= import("./web-D0X2ZNbD.js");
++	webChannelPromise ??= import("./web-DZkp_x7T.js");
+ 	return webChannelPromise;
+ }
+ function loadWhatsAppActions() {
+-	whatsappActionsPromise ??= import("./whatsapp-actions-DgYNzNbe.js");
++	whatsappActionsPromise ??= import("./whatsapp-actions-CnRfy5zm.js");
+ 	return whatsappActionsPromise;
+ }
+ function createPluginRuntime() {
+@@ -56436,7 +56436,7 @@ async function recordLoopOutcome(args) {
+ 	if (!args.ctx?.sessionKey) return;
+ 	try {
+ 		const { getDiagnosticSessionState } = await import("./diagnostic-session-state-QblLcZFC.js").then((n) => n.n);
+-		const { recordToolCallOutcome } = await import("./tool-loop-detection-B5ewQf8v.js");
++		const { recordToolCallOutcome } = await import("./tool-loop-detection-Bnr0a7ZM.js");
+ 		recordToolCallOutcome(getDiagnosticSessionState({
+ 			sessionKey: args.ctx.sessionKey,
+ 			sessionId: args.ctx?.agentId
+@@ -56457,8 +56457,8 @@ async function runBeforeToolCallHook(args) {
+ 	const params = args.params;
+ 	if (args.ctx?.sessionKey) {
+ 		const { getDiagnosticSessionState } = await import("./diagnostic-session-state-QblLcZFC.js").then((n) => n.n);
+-		const { logToolLoopAction } = await import("./diagnostic-BXaKch4H.js").then((n) => n.n);
+-		const { detectToolCallLoop, recordToolCall } = await import("./tool-loop-detection-B5ewQf8v.js");
++		const { logToolLoopAction } = await import("./diagnostic-Dji1iUVa.js").then((n) => n.n);
++		const { detectToolCallLoop, recordToolCall } = await import("./tool-loop-detection-Bnr0a7ZM.js");
+ 		const sessionState = getDiagnosticSessionState({
+ 			sessionKey: args.ctx.sessionKey,
+ 			sessionId: args.ctx?.agentId
+@@ -72974,7 +72974,7 @@ async function deliverSessionMaintenanceWarning(params) {
+ 		return;
+ 	}
+ 	try {
+-		const { deliverOutboundPayloads } = await import("./deliver-DJcNV-mo.js").then((n) => n.n);
++		const { deliverOutboundPayloads } = await import("./deliver-BPHUbnv3.js").then((n) => n.n);
+ 		await deliverOutboundPayloads({
+ 			cfg: params.cfg,
+ 			channel,
+diff --git a/dist/plugin-sdk/reply-prefix-D07Ikdod.js b/dist/plugin-sdk/reply-prefix-CRXqek3R.js
+similarity index 98%
+rename from dist/plugin-sdk/reply-prefix-D07Ikdod.js
+rename to dist/plugin-sdk/reply-prefix-CRXqek3R.js
+index a8709ef6c..5d70180ee 100644
+--- a/dist/plugin-sdk/reply-prefix-D07Ikdod.js
++++ b/dist/plugin-sdk/reply-prefix-CRXqek3R.js
+@@ -1,5 +1,5 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { n as resolveAgentConfig } from "./agent-scope-BmRbl8vE.js";
++import { n as resolveAgentConfig } from "./agent-scope-DGo2Lh53.js";
+ 
+ //#region src/agents/identity.ts
+ const DEFAULT_ACK_REACTION = "👀";
+diff --git a/dist/plugin-sdk/resolve-route-6uB6pV_J.js b/dist/plugin-sdk/resolve-route-CeeVouVs.js
+similarity index 97%
+rename from dist/plugin-sdk/resolve-route-6uB6pV_J.js
+rename to dist/plugin-sdk/resolve-route-CeeVouVs.js
+index 11206d686..66266f9d1 100644
+--- a/dist/plugin-sdk/resolve-route-6uB6pV_J.js
++++ b/dist/plugin-sdk/resolve-route-CeeVouVs.js
+@@ -1,10 +1,10 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+ import { a as buildAgentPeerSessionKey, i as buildAgentMainSessionKey, l as normalizeAgentId, n as DEFAULT_AGENT_ID, p as sanitizeAgentId, r as DEFAULT_MAIN_KEY, t as DEFAULT_ACCOUNT_ID } from "./session-key-9yEYlIQe.js";
+-import { G as shouldLogVerbose } from "./registry-CvUzfgyU.js";
+-import { i as logDebug } from "./exec-CBwIXprv.js";
+-import { c as resolveDefaultAgentId } from "./agent-scope-BmRbl8vE.js";
++import { G as shouldLogVerbose } from "./registry-DFcSCP5o.js";
++import { i as logDebug } from "./exec-CikK1sTs.js";
++import { c as resolveDefaultAgentId } from "./agent-scope-DGo2Lh53.js";
+ import { t as normalizeChatType } from "./chat-type-CE6cJOyt.js";
+-import { t as listBindings } from "./bindings-BGhRgiFJ.js";
++import { t as listBindings } from "./bindings-BkL2h399.js";
+ 
+ //#region src/routing/resolve-route.ts
+ var resolve_route_exports = /* @__PURE__ */ __exportAll({
+diff --git a/dist/plugin-sdk/runner-DqwnPJ8U.js b/dist/plugin-sdk/runner-AYensfnh.js
+similarity index 99%
+rename from dist/plugin-sdk/runner-DqwnPJ8U.js
+rename to dist/plugin-sdk/runner-AYensfnh.js
+index cf4b68a16..d3a4d7213 100644
+--- a/dist/plugin-sdk/runner-DqwnPJ8U.js
++++ b/dist/plugin-sdk/runner-AYensfnh.js
+@@ -1,12 +1,12 @@
+-import { G as shouldLogVerbose, H as logVerbose } from "./registry-CvUzfgyU.js";
+-import { C as requireApiKey, c as normalizeProviderId, m as normalizeGoogleModelId, w as resolveApiKeyForProvider, z as resolveOpenClawAgentDir } from "./model-selection-CB9IIVWU.js";
+-import { n as loadConfig } from "./config-YVBCrP94.js";
+-import { _ as isAudioFileName, h as getFileExtension, p as detectMime, y as kindFromMime } from "./ssrf--zCZt1NJ.js";
+-import { n as runExec } from "./exec-CBwIXprv.js";
++import { G as shouldLogVerbose, H as logVerbose } from "./registry-DFcSCP5o.js";
++import { C as requireApiKey, c as normalizeProviderId, m as normalizeGoogleModelId, w as resolveApiKeyForProvider, z as resolveOpenClawAgentDir } from "./model-selection-CcII_ph5.js";
++import { n as loadConfig } from "./config-BUR5GFvw.js";
++import { _ as isAudioFileName, h as getFileExtension, p as detectMime, y as kindFromMime } from "./ssrf-CIYAMVQH.js";
++import { n as runExec } from "./exec-CikK1sTs.js";
+ import { n as fetchWithTimeout } from "./fetch-timeout-IIHFohfs.js";
+-import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, t as MediaFetchError } from "./fetch-CO6Olj9O.js";
++import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, t as MediaFetchError } from "./fetch-CRvmXstS.js";
+ import { t as normalizeChatType } from "./chat-type-CE6cJOyt.js";
+-import { t as describeImageWithModel, x as ensureOpenClawModelsJson } from "./image-C9KFN-f3.js";
++import { t as describeImageWithModel, x as ensureOpenClawModelsJson } from "./image-JmJ4zLpW.js";
+ import { t as parseGeminiAuth } from "./gemini-auth-C2IlUK3f.js";
+ import path from "node:path";
+ import { constants } from "node:fs";
+@@ -826,7 +826,7 @@ async function loadModelCatalog(params) {
+ 		});
+ 		try {
+ 			await ensureOpenClawModelsJson(params?.config ?? loadConfig());
+-			await (await import("./pi-auth-json-67RepLeb.js")).ensurePiAuthJsonFromAuthProfiles(resolveOpenClawAgentDir());
++			await (await import("./pi-auth-json-CSmfjTDE.js")).ensurePiAuthJsonFromAuthProfiles(resolveOpenClawAgentDir());
+ 			const piSdk = await importPiSdk();
+ 			const agentDir = resolveOpenClawAgentDir();
+ 			const { join } = await import("node:path");
+diff --git a/dist/plugin-sdk/session-BXtNnVIi.js b/dist/plugin-sdk/session-DFhRfCQL.js
+similarity index 97%
+rename from dist/plugin-sdk/session-BXtNnVIi.js
+rename to dist/plugin-sdk/session-DFhRfCQL.js
+index 8acdfcff3..6f35a1fa9 100644
+--- a/dist/plugin-sdk/session-BXtNnVIi.js
++++ b/dist/plugin-sdk/session-DFhRfCQL.js
+@@ -1,6 +1,6 @@
+-import { d as readCredsJsonRaw, h as resolveWebCredsPath, l as maybeRestoreCredsFromBackup, m as resolveWebCredsBackupPath, p as resolveDefaultWebAuthDir } from "./accounts-BSywe9Bq.js";
+-import { K as success, Z as getChildLogger, b as ensureDir, j as resolveUserPath, tt as toPinoLikeLogger, z as danger } from "./registry-CvUzfgyU.js";
+-import { v as VERSION } from "./config-YVBCrP94.js";
++import { d as readCredsJsonRaw, h as resolveWebCredsPath, l as maybeRestoreCredsFromBackup, m as resolveWebCredsBackupPath, p as resolveDefaultWebAuthDir } from "./accounts-WG-Hmhh4.js";
++import { K as success, Z as getChildLogger, b as ensureDir, j as resolveUserPath, tt as toPinoLikeLogger, z as danger } from "./registry-DFcSCP5o.js";
++import { v as VERSION } from "./config-BUR5GFvw.js";
+ import { t as formatCliCommand } from "./command-format-Bc6VPcNk.js";
+ import fs from "node:fs";
+ import { randomUUID } from "node:crypto";
+diff --git a/dist/plugin-sdk/skill-commands-wPQ0Iu38.js b/dist/plugin-sdk/skill-commands-CO-avSo-.js
+similarity index 97%
+rename from dist/plugin-sdk/skill-commands-wPQ0Iu38.js
+rename to dist/plugin-sdk/skill-commands-CO-avSo-.js
+index 129740c0d..d0a9428dd 100644
+--- a/dist/plugin-sdk/skill-commands-wPQ0Iu38.js
++++ b/dist/plugin-sdk/skill-commands-CO-avSo-.js
+@@ -1,10 +1,10 @@
+ import { t as __exportAll } from "./rolldown-runtime-Cbj13DAv.js";
+-import { g as CONFIG_DIR, j as resolveUserPath } from "./registry-CvUzfgyU.js";
++import { g as CONFIG_DIR, j as resolveUserPath } from "./registry-DFcSCP5o.js";
+ import { s as resolveStateDir } from "./paths-DJmOcr7Q.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { s as resolveAgentWorkspaceDir, t as listAgentIds } from "./agent-scope-BmRbl8vE.js";
+-import { o as resolvePluginSkillDirs, t as buildWorkspaceSkillCommandSpecs } from "./skills-CreY3Zqs.js";
+-import { i as listChatCommands } from "./commands-registry-CMKEe4ot.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { s as resolveAgentWorkspaceDir, t as listAgentIds } from "./agent-scope-DGo2Lh53.js";
++import { o as resolvePluginSkillDirs, t as buildWorkspaceSkillCommandSpecs } from "./skills-DNzuu_Hz.js";
++import { i as listChatCommands } from "./commands-registry-D11KItt-.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+diff --git a/dist/plugin-sdk/skills-CreY3Zqs.js b/dist/plugin-sdk/skills-DNzuu_Hz.js
+similarity index 99%
+rename from dist/plugin-sdk/skills-CreY3Zqs.js
+rename to dist/plugin-sdk/skills-DNzuu_Hz.js
+index e62fbd435..e99b0d221 100644
+--- a/dist/plugin-sdk/skills-CreY3Zqs.js
++++ b/dist/plugin-sdk/skills-DNzuu_Hz.js
+@@ -1,12 +1,12 @@
+-import { g as CONFIG_DIR, j as resolveUserPath } from "./registry-CvUzfgyU.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
+-import { C as resolveOpenClawPackageRootSync, w as normalizeSkillFilter } from "./agent-scope-BmRbl8vE.js";
+-import { n as parseBooleanValue } from "./env-DNXtq8Zy.js";
+-import { c as resolveMemorySlotDecision, i as MANIFEST_KEY, o as normalizePluginsConfig, r as LEGACY_MANIFEST_KEYS, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-C0jS6PBU.js";
++import { g as CONFIG_DIR, j as resolveUserPath } from "./registry-DFcSCP5o.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
++import { C as resolveOpenClawPackageRootSync, w as normalizeSkillFilter } from "./agent-scope-DGo2Lh53.js";
++import { n as parseBooleanValue } from "./env-CjjrqHd2.js";
++import { c as resolveMemorySlotDecision, i as MANIFEST_KEY, o as normalizePluginsConfig, r as LEGACY_MANIFEST_KEYS, s as resolveEnableState, t as loadPluginManifestRegistry } from "./manifest-registry-B8hfUlu9.js";
+ import path from "node:path";
+ import fs from "node:fs";
+ import os from "node:os";
+-import json5 from "json5";
++import JSON5 from "json5";
+ import fs$1 from "node:fs/promises";
+ import { timingSafeEqual } from "node:crypto";
+ import { fileURLToPath } from "node:url";
+@@ -228,7 +228,7 @@ function resolveOpenClawManifestBlock(params) {
+ 	const raw = getFrontmatterString(params.frontmatter, params.key ?? "metadata");
+ 	if (!raw) return;
+ 	try {
+-		const parsed = json5.parse(raw);
++		const parsed = JSON5.parse(raw);
+ 		if (!parsed || typeof parsed !== "object") return;
+ 		const manifestKeys = [MANIFEST_KEY, ...LEGACY_MANIFEST_KEYS];
+ 		for (const key of manifestKeys) {
+diff --git a/dist/plugin-sdk/sqlite-Bp81ACN0.js b/dist/plugin-sdk/sqlite-DlEMMihB.js
+similarity index 99%
+rename from dist/plugin-sdk/sqlite-Bp81ACN0.js
+rename to dist/plugin-sdk/sqlite-DlEMMihB.js
+index 6415e90d1..a7554f922 100644
+--- a/dist/plugin-sdk/sqlite-Bp81ACN0.js
++++ b/dist/plugin-sdk/sqlite-DlEMMihB.js
+@@ -1,4 +1,4 @@
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ import { t as redactSensitiveText } from "./redact-BUgsXMP1.js";
+ import { o as resolveSessionTranscriptsDirForAgent } from "./paths-CyXoO9iV.js";
+ import { createRequire } from "node:module";
+diff --git a/dist/plugin-sdk/ssrf--zCZt1NJ.js b/dist/plugin-sdk/ssrf-CIYAMVQH.js
+similarity index 99%
+rename from dist/plugin-sdk/ssrf--zCZt1NJ.js
+rename to dist/plugin-sdk/ssrf-CIYAMVQH.js
+index bb2ff9657..758bbd2e5 100644
+--- a/dist/plugin-sdk/ssrf--zCZt1NJ.js
++++ b/dist/plugin-sdk/ssrf-CIYAMVQH.js
+@@ -1,4 +1,4 @@
+-import { n as runExec } from "./exec-CBwIXprv.js";
++import { n as runExec } from "./exec-CikK1sTs.js";
+ import path from "node:path";
+ import os from "node:os";
+ import fs from "node:fs/promises";
+diff --git a/dist/plugin-sdk/subsystem-CPwOCKbN.js b/dist/plugin-sdk/subsystem-CNxEMAhB.js
+similarity index 99%
+rename from dist/plugin-sdk/subsystem-CPwOCKbN.js
+rename to dist/plugin-sdk/subsystem-CNxEMAhB.js
+index 9c5f79880..e41b8d4b4 100644
+--- a/dist/plugin-sdk/subsystem-CPwOCKbN.js
++++ b/dist/plugin-sdk/subsystem-CNxEMAhB.js
+@@ -1,4 +1,4 @@
+-import { $ as isFileLogLevelEnabled, V as isVerbose, Z as getChildLogger, at as readLoggingConfig, it as normalizeLogLevel, n as CHAT_CHANNEL_ORDER, nt as loggingState, rt as levelToMinLevel } from "./registry-CvUzfgyU.js";
++import { $ as isFileLogLevelEnabled, V as isVerbose, Z as getChildLogger, at as readLoggingConfig, it as normalizeLogLevel, n as CHAT_CHANNEL_ORDER, nt as loggingState, rt as levelToMinLevel } from "./registry-DFcSCP5o.js";
+ import { createRequire } from "node:module";
+ import { Chalk } from "chalk";
+ import { inspect } from "node:util";
+diff --git a/dist/plugin-sdk/thinking-CtxhcKkY.js b/dist/plugin-sdk/thinking-CL3Zx3n9.js
+similarity index 99%
+rename from dist/plugin-sdk/thinking-CtxhcKkY.js
+rename to dist/plugin-sdk/thinking-CL3Zx3n9.js
+index 66fb6ea8b..0ebf95e2e 100644
+--- a/dist/plugin-sdk/thinking-CtxhcKkY.js
++++ b/dist/plugin-sdk/thinking-CL3Zx3n9.js
+@@ -1,7 +1,7 @@
+ import { c as normalizeAccountId } from "./session-key-9yEYlIQe.js";
+-import { _ as createAccountListHelpers, r as resolveWhatsAppAccount } from "./accounts-BSywe9Bq.js";
+-import { D as normalizeE164, c as requireActivePluginRegistry, n as CHAT_CHANNEL_ORDER, r as getChatChannelMeta, x as escapeRegExp } from "./registry-CvUzfgyU.js";
+-import { b as resolveDiscordAccount, f as resolveSlackAccount, n as normalizeWhatsAppTarget, p as resolveSlackReplyToMode, s as resolveTelegramAccount } from "./normalize-mEjrgr3H.js";
++import { _ as createAccountListHelpers, r as resolveWhatsAppAccount } from "./accounts-WG-Hmhh4.js";
++import { D as normalizeE164, c as requireActivePluginRegistry, n as CHAT_CHANNEL_ORDER, r as getChatChannelMeta, x as escapeRegExp } from "./registry-DFcSCP5o.js";
++import { b as resolveDiscordAccount, f as resolveSlackAccount, n as normalizeWhatsAppTarget, p as resolveSlackReplyToMode, s as resolveTelegramAccount } from "./normalize-nbycZ809.js";
+ 
+ //#region src/config/group-policy.ts
+ function resolveChannelGroupConfig(groups, groupId, caseInsensitive = false) {
+diff --git a/dist/plugin-sdk/tokens-D9QrMV6b.js b/dist/plugin-sdk/tokens-w1xZM7qi.js
+similarity index 85%
+rename from dist/plugin-sdk/tokens-D9QrMV6b.js
+rename to dist/plugin-sdk/tokens-w1xZM7qi.js
+index f5a02e5a7..c8e28b123 100644
+--- a/dist/plugin-sdk/tokens-D9QrMV6b.js
++++ b/dist/plugin-sdk/tokens-w1xZM7qi.js
+@@ -1,4 +1,4 @@
+-import { x as escapeRegExp } from "./registry-CvUzfgyU.js";
++import { x as escapeRegExp } from "./registry-DFcSCP5o.js";
+ 
+ //#region src/auto-reply/tokens.ts
+ const HEARTBEAT_TOKEN = "HEARTBEAT_OK";
+diff --git a/dist/plugin-sdk/tool-images-B8CfQtJH.js b/dist/plugin-sdk/tool-images-DZscW5Qf.js
+similarity index 98%
+rename from dist/plugin-sdk/tool-images-B8CfQtJH.js
+rename to dist/plugin-sdk/tool-images-DZscW5Qf.js
+index 66f202260..9ec8bca1a 100644
+--- a/dist/plugin-sdk/tool-images-B8CfQtJH.js
++++ b/dist/plugin-sdk/tool-images-DZscW5Qf.js
+@@ -1,5 +1,5 @@
+-import { f as resizeToJpeg, l as getImageMetadata } from "./ssrf--zCZt1NJ.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { f as resizeToJpeg, l as getImageMetadata } from "./ssrf-CIYAMVQH.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ 
+ //#region src/agents/image-sanitization.ts
+ const DEFAULT_IMAGE_MAX_DIMENSION_PX = 1200;
+diff --git a/dist/plugin-sdk/tool-loop-detection-B5ewQf8v.js b/dist/plugin-sdk/tool-loop-detection-Bnr0a7ZM.js
+similarity index 99%
+rename from dist/plugin-sdk/tool-loop-detection-B5ewQf8v.js
+rename to dist/plugin-sdk/tool-loop-detection-Bnr0a7ZM.js
+index c2ffb3980..d3f5bead0 100644
+--- a/dist/plugin-sdk/tool-loop-detection-B5ewQf8v.js
++++ b/dist/plugin-sdk/tool-loop-detection-Bnr0a7ZM.js
+@@ -1,6 +1,6 @@
+-import { C as isPlainObject } from "./registry-CvUzfgyU.js";
++import { C as isPlainObject } from "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import { t as createSubsystemLogger } from "./subsystem-CPwOCKbN.js";
++import { t as createSubsystemLogger } from "./subsystem-CNxEMAhB.js";
+ import { createHash } from "node:crypto";
+ 
+ //#region src/agents/tool-loop-detection.ts
+diff --git a/dist/plugin-sdk/web-D0X2ZNbD.js b/dist/plugin-sdk/web-D0X2ZNbD.js
+deleted file mode 100644
+index 4fb2110f2..000000000
+--- a/dist/plugin-sdk/web-D0X2ZNbD.js
++++ /dev/null
+@@ -1,53 +0,0 @@
+-import { a as WA_WEB_AUTH_DIR, g as webAuthExists, s as logWebSelfId, u as pickWebChannel } from "./accounts-BSywe9Bq.js";
+-import "./reply-CgfssYjy.js";
+-import "./registry-CvUzfgyU.js";
+-import "./paths-DJmOcr7Q.js";
+-import "./model-selection-CB9IIVWU.js";
+-import "./config-YVBCrP94.js";
+-import "./ssrf--zCZt1NJ.js";
+-import "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
+-import "./tool-images-B8CfQtJH.js";
+-import "./common-CH6orOBi.js";
+-import "./replies-BiiH6JwC.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import "./reply-prefix-D07Ikdod.js";
+-import "./tokens-D9QrMV6b.js";
+-import "./skill-commands-wPQ0Iu38.js";
+-import "./skills-CreY3Zqs.js";
+-import "./redact-BUgsXMP1.js";
+-import "./errors-7SO55DQM.js";
+-import "./fetch-CO6Olj9O.js";
+-import "./chrome-CNaxD22L.js";
+-import "./env-DNXtq8Zy.js";
+-import "./thinking-CtxhcKkY.js";
+-import "./normalize-mEjrgr3H.js";
+-import "./bindings-BGhRgiFJ.js";
+-import "./plugins-BBPPyP5O.js";
+-import "./deliver-DJcNV-mo.js";
+-import "./message-channel-CzbBSsGC.js";
+-import "./pi-embedded-helpers-BmFSmAMs.js";
+-import "./github-copilot-token-Dtvm_sTU.js";
+-import "./manifest-registry-C0jS6PBU.js";
+-import "./paths-CyXoO9iV.js";
+-import "./diagnostic-BXaKch4H.js";
+-import "./active-listener-BiMSzcgN.js";
+-import "./ir-WzWc9-m7.js";
+-import "./chunk-COfiKqBF.js";
+-import "./manager-k7kFLYLb.js";
+-import "./markdown-tables-MH5WoQHz.js";
+-import "./render-95l30zcf.js";
+-import { n as monitorWebInbox, t as monitorWebChannel } from "./channel-web-TwaDyEL1.js";
+-import "./runner-DqwnPJ8U.js";
+-import "./image-C9KFN-f3.js";
+-import "./pi-model-discovery-BEgrTVvT.js";
+-import "./diagnostic-session-state-QblLcZFC.js";
+-import "./sqlite-Bp81ACN0.js";
+-import "./commands-registry-CMKEe4ot.js";
+-import "./proxy-Cbu5iJdR.js";
+-import "./resolve-route-6uB6pV_J.js";
+-import { n as sendMessageWhatsApp } from "./outbound-ClQW7VvZ.js";
+-import { i as waitForWaConnection, t as createWaSocket } from "./session-BXtNnVIi.js";
+-import { t as loginWeb } from "./login-BFFvu-On.js";
+-
+-export { WA_WEB_AUTH_DIR, createWaSocket, logWebSelfId, loginWeb, monitorWebChannel, monitorWebInbox, pickWebChannel, sendMessageWhatsApp, waitForWaConnection, webAuthExists };
+\ No newline at end of file
+diff --git a/dist/plugin-sdk/web-DZkp_x7T.js b/dist/plugin-sdk/web-DZkp_x7T.js
+new file mode 100644
+index 000000000..ec1ff584e
+--- /dev/null
++++ b/dist/plugin-sdk/web-DZkp_x7T.js
+@@ -0,0 +1,53 @@
++import { a as WA_WEB_AUTH_DIR, g as webAuthExists, s as logWebSelfId, u as pickWebChannel } from "./accounts-WG-Hmhh4.js";
++import "./reply-BquBuqcS.js";
++import "./registry-DFcSCP5o.js";
++import "./paths-DJmOcr7Q.js";
++import "./model-selection-CcII_ph5.js";
++import "./config-BUR5GFvw.js";
++import "./ssrf-CIYAMVQH.js";
++import "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
++import "./tool-images-DZscW5Qf.js";
++import "./common-CXH6PFr2.js";
++import "./replies-CuZ5TRTI.js";
++import "./agent-scope-DGo2Lh53.js";
++import "./reply-prefix-CRXqek3R.js";
++import "./tokens-w1xZM7qi.js";
++import "./skill-commands-CO-avSo-.js";
++import "./skills-DNzuu_Hz.js";
++import "./redact-BUgsXMP1.js";
++import "./errors-7SO55DQM.js";
++import "./fetch-CRvmXstS.js";
++import "./chrome-WS-Z8NHV.js";
++import "./env-CjjrqHd2.js";
++import "./thinking-CL3Zx3n9.js";
++import "./normalize-nbycZ809.js";
++import "./bindings-BkL2h399.js";
++import "./plugins-BNWuvEuT.js";
++import "./deliver-BPHUbnv3.js";
++import "./message-channel-CaoRC6Bw.js";
++import "./pi-embedded-helpers-BBn71qTx.js";
++import "./github-copilot-token-Dtvm_sTU.js";
++import "./manifest-registry-B8hfUlu9.js";
++import "./paths-CyXoO9iV.js";
++import "./diagnostic-Dji1iUVa.js";
++import "./active-listener-DqgfJFYZ.js";
++import "./ir-D6km9t7C.js";
++import "./chunk-Cfb0gRms.js";
++import "./manager-D2yAgEL4.js";
++import "./markdown-tables-Cyc-LieP.js";
++import "./render-95l30zcf.js";
++import { n as monitorWebInbox, t as monitorWebChannel } from "./channel-web-DS6K0kPN.js";
++import "./runner-AYensfnh.js";
++import "./image-JmJ4zLpW.js";
++import "./pi-model-discovery-BEgrTVvT.js";
++import "./diagnostic-session-state-QblLcZFC.js";
++import "./sqlite-DlEMMihB.js";
++import "./commands-registry-D11KItt-.js";
++import "./proxy-Cbu5iJdR.js";
++import "./resolve-route-CeeVouVs.js";
++import { n as sendMessageWhatsApp } from "./outbound-B6uL5Vxh.js";
++import { i as waitForWaConnection, t as createWaSocket } from "./session-DFhRfCQL.js";
++import { t as loginWeb } from "./login-iiIGmoYx.js";
++
++export { WA_WEB_AUTH_DIR, createWaSocket, logWebSelfId, loginWeb, monitorWebChannel, monitorWebInbox, pickWebChannel, sendMessageWhatsApp, waitForWaConnection, webAuthExists };
+\ No newline at end of file
+diff --git a/dist/plugin-sdk/whatsapp-actions-DgYNzNbe.js b/dist/plugin-sdk/whatsapp-actions-CnRfy5zm.js
+similarity index 63%
+rename from dist/plugin-sdk/whatsapp-actions-DgYNzNbe.js
+rename to dist/plugin-sdk/whatsapp-actions-CnRfy5zm.js
+index a6abe6e42..2a32cf999 100644
+--- a/dist/plugin-sdk/whatsapp-actions-DgYNzNbe.js
++++ b/dist/plugin-sdk/whatsapp-actions-CnRfy5zm.js
+@@ -1,28 +1,28 @@
+-import "./accounts-BSywe9Bq.js";
+-import "./registry-CvUzfgyU.js";
++import "./accounts-WG-Hmhh4.js";
++import "./registry-DFcSCP5o.js";
+ import "./paths-DJmOcr7Q.js";
+-import "./model-selection-CB9IIVWU.js";
+-import "./config-YVBCrP94.js";
+-import "./ssrf--zCZt1NJ.js";
+-import "./subsystem-CPwOCKbN.js";
+-import "./exec-CBwIXprv.js";
+-import "./tool-images-B8CfQtJH.js";
+-import { i as jsonResult, l as readStringParam, o as readReactionParams, t as createActionGate } from "./common-CH6orOBi.js";
+-import "./agent-scope-BmRbl8vE.js";
+-import "./fetch-CO6Olj9O.js";
+-import "./env-DNXtq8Zy.js";
+-import "./normalize-mEjrgr3H.js";
+-import "./bindings-BGhRgiFJ.js";
+-import "./plugins-BBPPyP5O.js";
+-import "./message-channel-CzbBSsGC.js";
++import "./model-selection-CcII_ph5.js";
++import "./config-BUR5GFvw.js";
++import "./ssrf-CIYAMVQH.js";
++import "./subsystem-CNxEMAhB.js";
++import "./exec-CikK1sTs.js";
++import "./tool-images-DZscW5Qf.js";
++import { i as jsonResult, l as readStringParam, o as readReactionParams, t as createActionGate } from "./common-CXH6PFr2.js";
++import "./agent-scope-DGo2Lh53.js";
++import "./fetch-CRvmXstS.js";
++import "./env-CjjrqHd2.js";
++import "./normalize-nbycZ809.js";
++import "./bindings-BkL2h399.js";
++import "./plugins-BNWuvEuT.js";
++import "./message-channel-CaoRC6Bw.js";
+ import "./github-copilot-token-Dtvm_sTU.js";
+-import "./manifest-registry-C0jS6PBU.js";
+-import "./active-listener-BiMSzcgN.js";
+-import "./ir-WzWc9-m7.js";
+-import "./chunk-COfiKqBF.js";
+-import "./markdown-tables-MH5WoQHz.js";
++import "./manifest-registry-B8hfUlu9.js";
++import "./active-listener-DqgfJFYZ.js";
++import "./ir-D6km9t7C.js";
++import "./chunk-Cfb0gRms.js";
++import "./markdown-tables-Cyc-LieP.js";
+ import "./render-95l30zcf.js";
+-import { r as sendReactionWhatsApp } from "./outbound-ClQW7VvZ.js";
++import { r as sendReactionWhatsApp } from "./outbound-B6uL5Vxh.js";
+ 
+ //#region src/agents/tools/whatsapp-actions.ts
+ async function handleWhatsAppAction(params, cfg) {
+diff --git a/dist/pw-ai-CT2SpDpw.js b/dist/pw-ai-BQ14pMEk.js
+similarity index 99%
+rename from dist/pw-ai-CT2SpDpw.js
+rename to dist/pw-ai-BQ14pMEk.js
+index da19726ed..6bab251a1 100644
+--- a/dist/pw-ai-CT2SpDpw.js
++++ b/dist/pw-ai-BQ14pMEk.js
+@@ -3,7 +3,7 @@ import { ut as resolvePreferredOpenClawTmpDir } from "./registry-B3v_dMjW.js";
+ import "./subsystem-12Cr1qkN.js";
+ import "./exec-BcuB7agq.js";
+ import { t as formatCliCommand } from "./command-format-DUn-q_CN.js";
+-import { _ as withCdpSocket, d as normalizeCdpWsUrl, g as getHeadersWithAuth, m as fetchJson, p as appendCdpPath, t as getChromeWebSocketUrl, u as formatAriaSnapshot } from "./chrome-BhzZmGA3.js";
++import { _ as withCdpSocket, d as normalizeCdpWsUrl, g as getHeadersWithAuth, m as fetchJson, p as appendCdpPath, t as getChromeWebSocketUrl, u as formatAriaSnapshot } from "./chrome-BkJNYiGr.js";
+ import "./redact-9hYpOXID.js";
+ import { n as formatErrorMessage } from "./errors-pj0CRkCB.js";
+ import fs from "node:fs/promises";
+diff --git a/dist/runner-BrFhLhf5.js b/dist/runner-Cruand-O.js
+similarity index 99%
+rename from dist/runner-BrFhLhf5.js
+rename to dist/runner-Cruand-O.js
+index b213571c2..363bd84ef 100644
+--- a/dist/runner-BrFhLhf5.js
++++ b/dist/runner-Cruand-O.js
+@@ -4,7 +4,7 @@ import { t as normalizeChatType } from "./chat-type-kuHrgZ1E.js";
+ import { _ as isAudioFileName, h as getFileExtension, p as detectMime, y as kindFromMime } from "./image-ops-CqQZXJ9D.js";
+ import { A as normalizeProviderId, I as normalizeGoogleModelId, i as resolveApiKeyForProvider, r as requireApiKey, y as resolveOpenClawAgentDir } from "./model-auth-CxlTW8uU.js";
+ import { n as loadConfig } from "./config-CZmBKuLv.js";
+-import { S as ensureOpenClawModelsJson, t as describeImageWithModel } from "./image-Dxec4m3g.js";
++import { S as ensureOpenClawModelsJson, t as describeImageWithModel } from "./image-gq_6ZuCX.js";
+ import { t as parseGeminiAuth } from "./gemini-auth-9302OnY9.js";
+ import { n as fetchWithTimeout } from "./fetch-timeout-Cj6kcyGt.js";
+ import { i as fetchWithSsrFGuard, n as fetchRemoteMedia, t as MediaFetchError } from "./fetch-CL56T8xy.js";
+diff --git a/dist/web-BxpQp_rh.js b/dist/web-CD-gITPz.js
+similarity index 99%
+rename from dist/web-BxpQp_rh.js
+rename to dist/web-CD-gITPz.js
+index ab7a1336c..8135e351f 100644
+--- a/dist/web-BxpQp_rh.js
++++ b/dist/web-CD-gITPz.js
+@@ -6,7 +6,7 @@ import { r as defaultRuntime, t as createSubsystemLogger } from "./subsystem-12C
+ import "./exec-BcuB7agq.js";
+ import "./workspace-BBSUSFTB.js";
+ import "./tokens-BIWsvHaB.js";
+-import { A as enqueueSystemEvent, F as hasControlCommand, I as shouldComputeCommandAuthorized, L as buildMentionRegexes, M as resolveInboundDebounceMs, N as formatInboundEnvelope, P as resolveEnvelopeFormatOptions, R as normalizeMentionText, a as resolveMentionGating, b as normalizeGroupActivation, c as recordPendingHistoryEntryIfEnabled, f as createDedupeCache, i as buildPairingReply, j as createInboundDebouncer, l as shouldAckReactionForWhatsApp, n as computeBackoff, o as DEFAULT_GROUP_HISTORY_LIMIT, p as getReplyFromConfig, r as sleepWithAbort, s as buildHistoryContextFromEntries, u as dispatchReplyWithBufferedBlockDispatcher, w as formatDurationPrecise, x as parseActivationCommand } from "./pi-embedded-D4lfL_eV.js";
++import { A as enqueueSystemEvent, F as hasControlCommand, I as shouldComputeCommandAuthorized, L as buildMentionRegexes, M as resolveInboundDebounceMs, N as formatInboundEnvelope, P as resolveEnvelopeFormatOptions, R as normalizeMentionText, a as resolveMentionGating, b as normalizeGroupActivation, c as recordPendingHistoryEntryIfEnabled, f as createDedupeCache, i as buildPairingReply, j as createInboundDebouncer, l as shouldAckReactionForWhatsApp, n as computeBackoff, o as DEFAULT_GROUP_HISTORY_LIMIT, p as getReplyFromConfig, r as sleepWithAbort, s as buildHistoryContextFromEntries, u as dispatchReplyWithBufferedBlockDispatcher, w as formatDurationPrecise, x as parseActivationCommand } from "./pi-embedded-DM6nqYys.js";
+ import { i as logWebSelfId, l as readWebSelfId, n as WA_WEB_AUTH_DIR, p as webAuthExists, r as getWebAuthAgeMs, s as pickWebChannel, t as resolveWhatsAppAccount } from "./accounts-DmbLHz3-.js";
+ import "./normalize-Cve15Q9q.js";
+ import "./boolean-CE7i9tBR.js";
+@@ -16,7 +16,7 @@ import { t as formatCliCommand } from "./command-format-DUn-q_CN.js";
+ import "./send-BRSQ9eYh.js";
+ import "./plugins-Dy_YZOpV.js";
+ import "./send-BJ5Eq8nL.js";
+-import "./deliver-CheLNh5z.js";
++import "./deliver-C5yVKlxW.js";
+ import "./diagnostic-CJC2Qdcb.js";
+ import "./diagnostic-session-state-C1vRJs5w.js";
+ import "./accounts-BFVCDHLN.js";
+@@ -26,10 +26,10 @@ import "./model-auth-CxlTW8uU.js";
+ import "./github-copilot-token-D5ISrFy7.js";
+ import "./pi-model-discovery-CKatqe2T.js";
+ import "./message-channel-BSPy_J6t.js";
+-import { B as loadSessionStore, H as recordSessionMetaFromInbound, St as resolveGroupSessionKey, U as updateLastRoute, V as readSessionUpdatedAt } from "./pi-embedded-helpers-DkPUQuW2.js";
++import { B as loadSessionStore, H as recordSessionMetaFromInbound, St as resolveGroupSessionKey, U as updateLastRoute, V as readSessionUpdatedAt } from "./pi-embedded-helpers-DJVxuVBT.js";
+ import { n as loadConfig } from "./config-CZmBKuLv.js";
+ import "./manifest-registry-BGtqiFuf.js";
+-import "./chrome-BhzZmGA3.js";
++import "./chrome-BkJNYiGr.js";
+ import "./frontmatter-BPvsEU3m.js";
+ import "./skills-CSRzV6uM.js";
+ import "./redact-9hYpOXID.js";
+@@ -39,7 +39,7 @@ import { h as resolveChannelGroupRequireMention, m as resolveChannelGroupPolicy
+ import "./accounts-CrNX3S4t.js";
+ import { s as resolveStorePath } from "./paths-gnW-md4M.js";
+ import "./tool-images-ClEFO-t-.js";
+-import "./image-Dxec4m3g.js";
++import "./image-gq_6ZuCX.js";
+ import { c as resolveMessagePrefix, s as resolveIdentityNamePrefix, t as createReplyPrefixOptions } from "./reply-prefix-CBsUYPbZ.js";
+ import "./manager-D93sxzRU.js";
+ import "./sqlite-wwudzAAI.js";
+@@ -52,7 +52,7 @@ import { a as loadWebMedia, s as getAgentScopedMediaLocalRoots } from "./ir-CZf3
+ import "./render-DwEu-aCr.js";
+ import "./commands-registry-DZPpkBY3.js";
+ import { t as finalizeInboundContext } from "./inbound-context-zFBy5ZXA.js";
+-import { d as registerUnhandledRejectionHandler } from "./runner-BrFhLhf5.js";
++import { d as registerUnhandledRejectionHandler } from "./runner-Cruand-O.js";
+ import "./skill-commands-dSfDO9Xr.js";
+ import "./fetch-BBkSX75a.js";
+ import "./send-BX84vHMI.js";
+-- 
+2.40.0.windows.1
+

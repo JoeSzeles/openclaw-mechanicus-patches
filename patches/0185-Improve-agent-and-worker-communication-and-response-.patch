@@ -1,0 +1,70 @@
+From 5f365ca80e449212f6fa1352858b787a59ba7a8c Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 08:40:57 +0000
+Subject: [PATCH 185/244] Improve agent and worker communication and response
+ handling
+
+Update JavaScript file versions for UI components, enhancing agent-to-agent and agent-to-worker communication by refining @mention functionality and preventing duplicate responses.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 906b397c-0d51-4c51-938d-028fd77f33b5
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 55057db1-19e8-4cab-b77c-f978bcee5ff0
+Replit-Helium-Checkpoint-Created: true
+---
+ dist/control-ui/model-config.html | 6 +++---
+ dist/control-ui/processes.html    | 6 +++---
+ dist/control-ui/workers.html      | 6 +++---
+ 3 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 2c772f09b..5b33d8bf8 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772352059"></script>
+-<script src="/model-config.js?v=1772352059"></script>
+-<script src="/nav-inject.js?v=1772352059"></script>
++<script src="/token-init.js?v=1772354454"></script>
++<script src="/model-config.js?v=1772354454"></script>
++<script src="/nav-inject.js?v=1772354454"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index b52ee2a06..863fd62e2 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772352059"></script>
+-<script src="/processes.js?v=1772352059"></script>
+-<script src="/nav-inject.js?v=1772352059"></script>
++<script src="/token-init.js?v=1772354454"></script>
++<script src="/processes.js?v=1772354454"></script>
++<script src="/nav-inject.js?v=1772354454"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index e57e96bfd..619119532 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772352059"></script>
+-<script src="/workers.js?v=1772352059"></script>
+-<script src="/nav-inject.js?v=1772352059"></script>
++<script src="/token-init.js?v=1772354454"></script>
++<script src="/workers.js?v=1772354454"></script>
++<script src="/nav-inject.js?v=1772354454"></script>
+ </body>
+ </html>
+-- 
+2.40.0.windows.1
+

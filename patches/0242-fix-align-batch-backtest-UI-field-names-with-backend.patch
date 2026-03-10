@@ -1,0 +1,27 @@
+From f9573eeb9c235a6a858fdb00ed0d18baa30efe1e Mon Sep 17 00:00:00 2001
+From: Joe Szeles <124790364+JoeSzeles@users.noreply.github.com>
+Date: Mon, 9 Mar 2026 03:26:23 -0700
+Subject: [PATCH 242/244] fix: align batch backtest UI field names with backend
+ API response shape
+
+---
+ ceo-proxy.cjs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index d0098ee0e..dd7218377 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -3220,7 +3220,8 @@ async function handleIgApi(req, res, p) {
+         });
+         return json(res, 200, { ok: true, ...result });
+       } catch (e) {
+-        return json(res, 500, { error: e.message });
++        var code = /required|invalid|missing/i.test(e.message) ? 400 : 500;
++        return json(res, code, { error: e.message });
+       }
+     }
+     if (req.method === "GET" && p === "/api/ig/scalper/batch-backtest") {
+-- 
+2.40.0.windows.1
+

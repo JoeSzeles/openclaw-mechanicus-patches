@@ -1,0 +1,85 @@
+From 35d1820c2454a499d9d81b6d65eec2b4bc61d92c Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 02:41:40 +0000
+Subject: [PATCH 166/244] Allow access to session refresh endpoint and update
+ script versions
+
+Modify the login exemption logic to include session refresh endpoints and update script cache-busting versions in HTML files.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 9f2b79dc-6389-4187-b329-f10e2c2f20f3
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/cGjnef9
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 2 +-
+ dist/control-ui/model-config.html | 6 +++---
+ dist/control-ui/processes.html    | 6 +++---
+ dist/control-ui/workers.html      | 6 +++---
+ 4 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 71f47a587..46a33b6d8 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -75,7 +75,7 @@ function isLoginExempt(req) {
+       p.startsWith("/api/ig/confirms") || p.startsWith("/api/ig/history") || p.startsWith("/api/ig/stream") ||
+       p.startsWith("/api/ig/workingorders") || p.startsWith("/api/ig/markets") || p.startsWith("/api/ig/marketnavigation") ||
+       p.startsWith("/api/ig/pricehistory") || p.startsWith("/api/ig/watchlists") || p.startsWith("/api/ig/activity") ||
+-      p === "/api/ig/session" || p === "/api/ig/refresh-snapshots" ||
++      p.startsWith("/api/ig/session") || p === "/api/ig/refresh-snapshots" ||
+       p.startsWith("/api/ig/config")) {
+     if (hasValidBearerToken(req)) return true;
+   }
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index d6115a82a..9395a006e 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772331828"></script>
+-<script src="/model-config.js?v=1772331828"></script>
+-<script src="/nav-inject.js?v=1772331828"></script>
++<script src="/token-init.js?v=1772332850"></script>
++<script src="/model-config.js?v=1772332850"></script>
++<script src="/nav-inject.js?v=1772332850"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index 75dee875c..a1737e625 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772331828"></script>
+-<script src="/processes.js?v=1772331828"></script>
+-<script src="/nav-inject.js?v=1772331828"></script>
++<script src="/token-init.js?v=1772332850"></script>
++<script src="/processes.js?v=1772332850"></script>
++<script src="/nav-inject.js?v=1772332850"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 629e8f06d..cd0b42705 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772331828"></script>
+-<script src="/workers.js?v=1772331828"></script>
+-<script src="/nav-inject.js?v=1772331828"></script>
++<script src="/token-init.js?v=1772332850"></script>
++<script src="/workers.js?v=1772332850"></script>
++<script src="/nav-inject.js?v=1772332850"></script>
+ </body>
+ </html>
+-- 
+2.40.0.windows.1
+

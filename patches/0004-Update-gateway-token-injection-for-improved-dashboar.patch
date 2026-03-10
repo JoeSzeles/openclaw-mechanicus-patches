@@ -1,0 +1,34 @@
+From c898c5095b0ebc7b3160de7561dc989d7bed0d87 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 03:11:06 +0000
+Subject: [PATCH 004/244] Update gateway token injection for improved dashboard
+ access
+
+Modify the script in start.sh to ensure the gateway token is correctly set in localStorage, resolving dashboard access issues by overwriting existing tokens if they differ.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 7533cb54-f9f9-41e7-9194-866ccedf2d26
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/CtLdR4X
+Replit-Helium-Checkpoint-Created: true
+---
+ start.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/start.sh b/start.sh
+index 706d0bb59..560fdbbf6 100755
+--- a/start.sh
++++ b/start.sh
+@@ -3,7 +3,7 @@ TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+ TOKEN_JS="/home/runner/workspace/dist/control-ui/token-init.js"
+ 
+ cat > "$TOKEN_JS" << JSEOF
+-(function(){var K="openclaw.control.settings.v1";try{var r=localStorage.getItem(K);var s=r?JSON.parse(r):{};if(!s.token){s.token="${TOKEN}";localStorage.setItem(K,JSON.stringify(s))}}catch(e){}})();
++(function(){var K="openclaw.control.settings.v1";var T="${TOKEN}";try{var r=localStorage.getItem(K);var s=r?JSON.parse(r):{};if(s.token!==T){s.token=T;localStorage.setItem(K,JSON.stringify(s))}}catch(e){}})();
+ JSEOF
+ 
+ export OPENAI_API_KEY="${AI_INTEGRATIONS_OPENAI_API_KEY}"
+-- 
+2.40.0.windows.1
+

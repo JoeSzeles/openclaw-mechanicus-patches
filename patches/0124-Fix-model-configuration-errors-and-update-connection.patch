@@ -1,0 +1,984 @@
+From 662a6d72e5b04fd2298cc72ca9c01531599beb9a Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 07:11:21 +0000
+Subject: [PATCH 124/244] Fix model configuration errors and update connection
+ script display
+
+Extract inline script to an external file for the model configuration page to resolve CSP errors and ensure correct domain display in connection scripts.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 0a4a80b1-fbbd-4891-84b7-19de03a1b244
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/64E3Vxo
+Replit-Helium-Checkpoint-Created: true
+---
+ ui/public/model-config.html |  77 +++++++++
+ ui/public/model-config.js   |  92 +++++++++++
+ ui/public/nav-inject.js     |  23 +++
+ ui/public/processes.html    |  73 +++++++++
+ ui/public/processes.js      | 177 +++++++++++++++++++++
+ ui/public/workers.html      | 158 ++++++++++++++++++
+ ui/public/workers.js        | 308 ++++++++++++++++++++++++++++++++++++
+ 7 files changed, 908 insertions(+)
+ create mode 100644 ui/public/model-config.html
+ create mode 100644 ui/public/model-config.js
+ create mode 100644 ui/public/nav-inject.js
+ create mode 100644 ui/public/processes.html
+ create mode 100644 ui/public/processes.js
+ create mode 100644 ui/public/workers.html
+ create mode 100644 ui/public/workers.js
+
+diff --git a/ui/public/model-config.html b/ui/public/model-config.html
+new file mode 100644
+index 000000000..bae3bb1e3
+--- /dev/null
++++ b/ui/public/model-config.html
+@@ -0,0 +1,77 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>AI Model Config — OpenClaw Cloud</title>
++<style>
++*{box-sizing:border-box;margin:0;padding:0}
++body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:20px;padding-top:56px}
++h1{font-size:24px;font-weight:600;color:#e6edf3;margin-bottom:8px}
++.subtitle{color:#8b949e;font-size:14px;margin-bottom:24px}
++.section{margin-bottom:32px}
++.section-title{font-size:18px;font-weight:600;color:#e6edf3;margin-bottom:12px;display:flex;align-items:center;gap:8px}
++.section-icon{font-size:20px}
++.card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:16px;margin-bottom:12px}
++.card-title{font-weight:600;color:#e6edf3;font-size:14px;margin-bottom:8px}
++.card-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
++.card-label{font-size:12px;color:#8b949e;min-width:100px}
++.card-value{font-size:14px;color:#e6edf3;font-family:monospace}
++.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase}
++.badge-primary{background:rgba(35,134,54,.3);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
++.badge-active{background:rgba(56,139,253,.2);color:#58a6ff;border:1px solid rgba(88,166,255,.3)}
++table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
++th{background:#21262d;color:#8b949e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #30363d}
++td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:13px;color:#c9d1d9}
++tr:last-child td{border-bottom:none}
++tr:hover{background:#1c2128}
++.empty{color:#8b949e;font-size:14px;text-align:center;padding:32px}
++.form-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end}
++.form-group{display:flex;flex-direction:column;gap:4px}
++.form-group label{font-size:12px;color:#8b949e;font-weight:500}
++.form-group input,.form-group select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;min-width:180px}
++.btn-add{background:#238636;color:#fff;border:1px solid rgba(240,246,252,.1);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
++.btn-add:hover{background:#2ea043}
++.btn-delete{background:#da3633;color:#fff;border:1px solid rgba(240,246,252,.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px}
++.btn-delete:hover{background:#f85149}
++.btn-secondary{background:#30363d;color:#c9d1d9;border:1px solid rgba(240,246,252,.1);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
++.btn-secondary:hover{background:#484f58}
++.toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;display:none;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.4)}
++.toast.show{display:block}
++.toast.success{background:#238636;color:#fff}
++.toast.error{background:#da3633;color:#fff}
++.info-text{font-size:13px;color:#8b949e;margin-bottom:16px}
++</style>
++</head>
++<body>
++<h1>AI Model Configuration</h1>
++<p class="subtitle">View and manage AI model providers and models</p>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🧠</span> Current Agent Model</div>
++<div id="currentModel"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🔌</span> Model Providers</div>
++<p class="info-text">Providers are configured in openclaw.json. Add providers with their API base URL and key.</p>
++<div id="providerList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">📋</span> Available Models</div>
++<div id="modelList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">⚙️</span> Raw Configuration</div>
++<p class="info-text">Direct view of the agents section from openclaw.json</p>
++<div id="rawConfig"><p class="empty">Loading...</p></div>
++</div>
++
++<div id="toast" class="toast"></div>
++<script src="/token-init.js"></script>
++<script src="/model-config.js"></script>
++<script src="/nav-inject.js"></script>
++</body>
++</html>
+diff --git a/ui/public/model-config.js b/ui/public/model-config.js
+new file mode 100644
+index 000000000..99da14420
+--- /dev/null
++++ b/ui/public/model-config.js
+@@ -0,0 +1,92 @@
++var TOKEN = '';
++try {
++  var s = localStorage.getItem('openclaw.control.settings.v1');
++  if (s) { var obj = JSON.parse(s); TOKEN = obj.token || ''; }
++} catch(e) {}
++if (!TOKEN) {
++  try { var m = document.cookie.match(/openclaw_token=([^;]+)/); if (m) TOKEN = m[1]; } catch(e) {}
++}
++
++function showToast(msg, type) {
++  var t = document.getElementById('toast');
++  t.textContent = msg;
++  t.className = 'toast show ' + (type || '');
++  setTimeout(function(){ t.className = 'toast'; }, 3000);
++}
++
++function apiFetch(url, opts) {
++  opts = opts || {};
++  opts.headers = opts.headers || {};
++  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
++  return fetch(url, opts);
++}
++
++function escHtml(s) {
++  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
++}
++
++function loadConfig() {
++  apiFetch('/__openclaw/control-ui-config.json').then(function(r) {
++    if (!r.ok) throw new Error('Config not available (status ' + r.status + ')');
++    return r.json();
++  }).then(function(config) {
++    renderConfig(config);
++  }).catch(function(e) {
++    document.getElementById('currentModel').innerHTML = '<div class="card"><p style="color:#8b949e">Could not load config: ' + escHtml(e.message) + '</p><p style="color:#8b949e;font-size:12px;margin-top:8px">The model configuration is managed via openclaw.json in the .openclaw directory.</p></div>';
++    document.getElementById('providerList').innerHTML = '';
++    document.getElementById('modelList').innerHTML = '';
++    document.getElementById('rawConfig').innerHTML = '<div class="card"><pre style="font-size:12px;color:#8b949e;white-space:pre-wrap">Config endpoint not available. Edit .openclaw/openclaw.json directly to change model settings.</pre></div>';
++  });
++}
++
++function renderConfig(config) {
++  var agentModel = config.agentModel || config.model || 'Not set';
++  var agentId = config.agentId || config.defaultAgentId || 'main';
++
++  var currentHtml = '<div class="card">';
++  currentHtml += '<div class="card-row"><span class="card-label">Agent ID:</span><span class="card-value">' + escHtml(agentId) + '</span></div>';
++  currentHtml += '<div class="card-row"><span class="card-label">Model:</span><span class="card-value">' + escHtml(agentModel) + '</span> <span class="badge badge-primary">PRIMARY</span></div>';
++  if (config.assistantName) currentHtml += '<div class="card-row"><span class="card-label">Assistant:</span><span class="card-value">' + escHtml(config.assistantName) + '</span></div>';
++  currentHtml += '</div>';
++  document.getElementById('currentModel').innerHTML = currentHtml;
++
++  var providers = config.providers || [];
++  if (providers.length) {
++    var pHtml = '';
++    for (var i = 0; i < providers.length; i++) {
++      var p = providers[i];
++      pHtml += '<div class="card">';
++      pHtml += '<div class="card-title">' + escHtml(p.name || p.id || 'Provider ' + (i+1)) + '</div>';
++      pHtml += '<div class="card-row"><span class="card-label">Base URL:</span><span class="card-value">' + escHtml(p.baseUrl || p.baseURL || 'default') + '</span></div>';
++      pHtml += '<div class="card-row"><span class="card-label">API Type:</span><span class="card-value">' + escHtml(p.apiType || p.type || 'openai') + '</span></div>';
++      pHtml += '<div class="card-row"><span class="card-label">API Key:</span><span class="card-value">' + (p.apiKey ? escHtml(p.apiKey.slice(0,8)) + '...' : 'env var') + '</span></div>';
++      pHtml += '</div>';
++    }
++    document.getElementById('providerList').innerHTML = pHtml;
++  } else {
++    document.getElementById('providerList').innerHTML = '<p class="empty">No providers in bootstrap config. Providers are configured in openclaw.json agent settings.</p>';
++  }
++
++  var models = config.models || [];
++  if (models.length) {
++    var mHtml = '<table><tr><th>Model</th><th>Provider</th><th>Type</th></tr>';
++    for (var j = 0; j < models.length; j++) {
++      var md = models[j];
++      var name = typeof md === 'string' ? md : (md.name || md.id || md.model || '?');
++      var prov = typeof md === 'object' ? (md.provider || '-') : '-';
++      var mtype = typeof md === 'object' ? (md.type || '-') : '-';
++      mHtml += '<tr><td style="font-weight:500;color:#e6edf3">' + escHtml(name) + '</td>';
++      mHtml += '<td>' + escHtml(prov) + '</td>';
++      mHtml += '<td>' + escHtml(mtype) + '</td></tr>';
++    }
++    mHtml += '</table>';
++    document.getElementById('modelList').innerHTML = mHtml;
++  } else {
++    document.getElementById('modelList').innerHTML = '<p class="empty">No model list in bootstrap config.</p>';
++  }
++
++  var raw = JSON.stringify(config, null, 2);
++  document.getElementById('rawConfig').innerHTML = '<div class="card"><pre style="font-size:12px;color:#c9d1d9;white-space:pre-wrap;max-height:400px;overflow:auto">' + escHtml(raw) + '</pre></div>';
++}
++
++loadConfig();
+diff --git a/ui/public/nav-inject.js b/ui/public/nav-inject.js
+new file mode 100644
+index 000000000..d523af63f
+--- /dev/null
++++ b/ui/public/nav-inject.js
+@@ -0,0 +1,23 @@
++(function() {
++  if (document.getElementById('openclaw-nav')) return;
++  var nav = document.createElement('div');
++  nav.id = 'openclaw-nav';
++  nav.innerHTML = '<div class="ocn-links"><a href="/">Dashboard</a><a href="/__openclaw__/canvas/">Canvas</a><a href="/model-config.html">AI Model Config</a><a href="/workers.html">Workers</a><a href="/processes.html">Processes</a></div>';
++  var style = document.createElement('style');
++  style.textContent = '#openclaw-nav{position:fixed;top:0;left:0;right:0;z-index:9999;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;height:36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}#openclaw-nav .ocn-links{display:flex;align-items:center;gap:2px}#openclaw-nav a{color:#8b949e;text-decoration:none;font-size:13px;font-weight:500;padding:5px 12px;border-radius:6px;transition:color .15s,background .15s;white-space:nowrap}#openclaw-nav a:hover{color:#e6edf3;background:rgba(255,255,255,.06)}#openclaw-nav a.active{color:#58a6ff;background:rgba(88,166,255,.1)}';
++  document.head.appendChild(style);
++  var app = document.querySelector('openclaw-app');
++  if (app) {
++    app.parentNode.insertBefore(nav, app);
++  } else {
++    document.body.insertBefore(nav, document.body.firstChild);
++  }
++  var loc = window.location.pathname;
++  var links = nav.querySelectorAll('a');
++  for (var i = 0; i < links.length; i++) {
++    var href = links[i].getAttribute('href');
++    if (href === loc || (href === '/' && (loc === '/index.html' || loc === '/')) || (loc.indexOf('/__openclaw__/canvas') === 0 && href === '/__openclaw__/canvas/') || (loc === '/model-config.html' && href === '/model-config.html')) {
++      links[i].classList.add('active');
++    }
++  }
++})();
+diff --git a/ui/public/processes.html b/ui/public/processes.html
+new file mode 100644
+index 000000000..9465b14b1
+--- /dev/null
++++ b/ui/public/processes.html
+@@ -0,0 +1,73 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>Processes — OpenClaw Cloud</title>
++<style>
++*{box-sizing:border-box;margin:0;padding:0}
++body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:20px;padding-top:56px}
++h1{font-size:24px;font-weight:600;color:#e6edf3;margin-bottom:8px}
++.subtitle{color:#8b949e;font-size:14px;margin-bottom:24px}
++.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
++.toolbar button{background:#238636;border:1px solid rgba(240,246,252,.1);color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
++.toolbar button:hover{background:#2ea043}
++.count-badge{background:#30363d;border:1px solid #484f58;color:#e6edf3;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500}
++.refresh-info{color:#8b949e;font-size:12px;margin-left:auto}
++.section{margin-bottom:32px}
++.section-title{font-size:18px;font-weight:600;color:#e6edf3;margin-bottom:12px;display:flex;align-items:center;gap:8px}
++.section-icon{font-size:20px}
++table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
++th{background:#21262d;color:#8b949e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #30363d}
++td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:13px;color:#c9d1d9;vertical-align:middle}
++tr:last-child td{border-bottom:none}
++tr:hover{background:#1c2128}
++.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
++.badge-running{background:rgba(35,134,54,.3);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
++.badge-stopped{background:rgba(187,128,9,.2);color:#d29922;border:1px solid rgba(210,153,34,.3)}
++.badge-disabled{background:rgba(139,148,158,.2);color:#8b949e;border:1px solid rgba(139,148,158,.3)}
++.badge-monitor{background:rgba(56,139,253,.2);color:#58a6ff;border:1px solid rgba(88,166,255,.3)}
++.badge-bot{background:rgba(188,63,188,.2);color:#d2a8ff;border:1px solid rgba(210,168,255,.3)}
++.badge-script{background:rgba(139,148,158,.2);color:#8b949e;border:1px solid rgba(139,148,158,.3)}
++.cmd{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;color:#8b949e;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
++.btn-kill{background:#da3633;border:1px solid rgba(240,246,252,.1);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500}
++.btn-kill:hover{background:#f85149}
++.btn-start{background:#238636;border:1px solid rgba(240,246,252,.1);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500}
++.btn-start:hover{background:#2ea043}
++.btn-stop{background:#d29922;border:1px solid rgba(240,246,252,.1);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500}
++.btn-stop:hover{background:#e3b341}
++.btn-remove{background:#6e7681;border:1px solid rgba(240,246,252,.1);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500}
++.btn-remove:hover{background:#da3633}
++.btn-actions{display:flex;gap:6px}
++.empty{color:#8b949e;font-size:14px;text-align:center;padding:32px}
++.toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;display:none;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.4)}
++.toast.show{display:block}
++.toast.success{background:#238636;color:#fff}
++.toast.error{background:#da3633;color:#fff}
++</style>
++</head>
++<body>
++<h1>Processes & Bots</h1>
++<p class="subtitle">Manage registered bots and running skill processes</p>
++<div class="toolbar">
++<button id="refreshBtn">Refresh</button>
++<span class="count-badge"><span id="count">0</span> ad-hoc processes</span>
++<span class="refresh-info" id="lastRefresh">Auto-refresh: 10s</span>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🤖</span> Registered Bots</div>
++<div id="botList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">⚙️</span> Ad-hoc Processes</div>
++<div id="processList"><p class="empty">Loading...</p></div>
++</div>
++
++<div id="toast" class="toast"></div>
++<script src="/token-init.js"></script>
++<script src="/processes.js"></script>
++<script src="/nav-inject.js"></script>
++</body>
++</html>
+diff --git a/ui/public/processes.js b/ui/public/processes.js
+new file mode 100644
+index 000000000..7134ec5a8
+--- /dev/null
++++ b/ui/public/processes.js
+@@ -0,0 +1,177 @@
++var TOKEN = '';
++try {
++  var s = localStorage.getItem('openclaw.control.settings.v1');
++  if (s) { var obj = JSON.parse(s); TOKEN = obj.token || ''; }
++} catch(e) {}
++if (!TOKEN) {
++  try {
++    var m = document.cookie.match(/openclaw_token=([^;]+)/);
++    if (m) TOKEN = m[1];
++  } catch(e) {}
++}
++
++function showToast(msg, type) {
++  var t = document.getElementById('toast');
++  t.textContent = msg;
++  t.className = 'toast show ' + (type || '');
++  setTimeout(function() { t.className = 'toast'; }, 3000);
++}
++
++function apiFetch(url, opts) {
++  opts = opts || {};
++  opts.headers = opts.headers || {};
++  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
++  return fetch(url, opts);
++}
++
++function badgeClass(type) {
++  if (type === 'monitor') return 'badge-monitor';
++  if (type === 'bot') return 'badge-bot';
++  return 'badge-script';
++}
++
++function killProcess(pid, name) {
++  if (!confirm('Kill process "' + name + '" (PID ' + pid + ')?')) return;
++  apiFetch('/api/processes/kill', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ pid: pid })
++  }).then(function(res) {
++    return res.json().then(function(data) {
++      if (res.ok) {
++        showToast('Killed: ' + name + ' (PID ' + pid + ')', 'success');
++        setTimeout(refresh, 1000);
++      } else {
++        showToast('Error: ' + (data.error || 'Failed'), 'error');
++      }
++    });
++  }).catch(function(e) {
++    showToast('Error: ' + e.message, 'error');
++  });
++}
++
++function botAction(id, action) {
++  var url, method;
++  if (action === 'start') {
++    url = '/api/bots/' + encodeURIComponent(id) + '/start';
++    method = 'POST';
++  } else if (action === 'stop') {
++    url = '/api/bots/' + encodeURIComponent(id) + '/stop';
++    method = 'POST';
++  } else if (action === 'remove') {
++    if (!confirm('Remove bot "' + id + '" from registry? This will stop it and remove it permanently.')) return;
++    url = '/api/bots/' + encodeURIComponent(id);
++    method = 'DELETE';
++  }
++  apiFetch(url, { method: method }).then(function(res) {
++    return res.json().then(function(data) {
++      if (res.ok) {
++        showToast(action.charAt(0).toUpperCase() + action.slice(1) + ': ' + id, 'success');
++        setTimeout(refresh, 1000);
++      } else {
++        showToast('Error: ' + (data.error || 'Failed'), 'error');
++      }
++    });
++  }).catch(function(e) {
++    showToast('Error: ' + e.message, 'error');
++  });
++}
++
++function loadBots() {
++  var el = document.getElementById('botList');
++  apiFetch('/api/bots').then(function(res) {
++    return res.json();
++  }).then(function(data) {
++    var bots = data.bots || [];
++    if (bots.length === 0) {
++      el.innerHTML = '<p class="empty">No bots registered \u2014 agents can register bots via POST /api/bots/register</p>';
++      return;
++    }
++    var html = '<table><tr><th>ID</th><th>Status</th><th>PID</th><th>Restarts</th><th>Command</th><th>Added By</th><th>Actions</th></tr>';
++    for (var i = 0; i < bots.length; i++) {
++      var b = bots[i];
++      var statusBadge = b.running ? '<span class="badge badge-running">RUNNING</span>'
++        : (b.enabled ? '<span class="badge badge-stopped">STOPPED</span>' : '<span class="badge badge-disabled">DISABLED</span>');
++      html += '<tr>';
++      html += '<td style="font-weight:600;color:#e6edf3">' + b.id + '</td>';
++      html += '<td>' + statusBadge + '</td>';
++      html += '<td style="font-family:monospace">' + (b.pid || '-') + '</td>';
++      html += '<td>' + (b.restarts || 0) + '</td>';
++      html += '<td><span class="cmd" title="' + (b.cmd || '').replace(/"/g, '&quot;') + '">' + (b.cmd || '') + '</span></td>';
++      html += '<td style="font-size:12px;color:#8b949e">' + (b.addedBy || '-') + '</td>';
++      html += '<td><div class="btn-actions">';
++      if (b.running) {
++        html += '<button class="btn-stop" data-bot-id="' + b.id + '" data-action="stop">Stop</button>';
++      } else {
++        html += '<button class="btn-start" data-bot-id="' + b.id + '" data-action="start">Start</button>';
++      }
++      html += '<button class="btn-remove" data-bot-id="' + b.id + '" data-action="remove">Remove</button>';
++      html += '</div></td>';
++      html += '</tr>';
++    }
++    html += '</table>';
++    el.innerHTML = html;
++  }).catch(function(e) {
++    el.innerHTML = '<p class="empty" style="color:#f85149">Error loading bots: ' + e.message + '</p>';
++  });
++}
++
++function loadProcesses() {
++  var el = document.getElementById('processList');
++  var countEl = document.getElementById('count');
++  apiFetch('/api/processes').then(function(res) {
++    return res.json();
++  }).then(function(data) {
++    var procs = data.processes || [];
++    countEl.textContent = procs.length;
++    document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
++    if (procs.length === 0) {
++      el.innerHTML = '<p class="empty">No ad-hoc scripts running</p>';
++      return;
++    }
++    var html = '<table><tr><th>Name</th><th>Type</th><th>PID</th><th>CPU</th><th>MEM</th><th>Started</th><th>Command</th><th></th></tr>';
++    for (var i = 0; i < procs.length; i++) {
++      var p = procs[i];
++      html += '<tr>';
++      html += '<td style="font-weight:600;color:#e6edf3">' + p.name + '</td>';
++      html += '<td><span class="badge ' + badgeClass(p.type) + '">' + p.type + '</span></td>';
++      html += '<td style="font-family:monospace">' + p.pid + '</td>';
++      html += '<td>' + p.cpu + '%</td>';
++      html += '<td>' + p.mem + '%</td>';
++      html += '<td>' + p.startTime + '</td>';
++      html += '<td><span class="cmd" title="' + p.cmd.replace(/"/g, '&quot;') + '">' + p.cmd + '</span></td>';
++      html += '<td><button class="btn-kill" data-pid="' + p.pid + '" data-name="' + p.name.replace(/"/g, '&quot;') + '">Kill</button></td>';
++      html += '</tr>';
++    }
++    html += '</table>';
++    el.innerHTML = html;
++  }).catch(function(e) {
++    el.innerHTML = '<p class="empty" style="color:#f85149">Error loading processes: ' + e.message + '</p>';
++  });
++}
++
++function refresh() {
++  loadBots();
++  loadProcesses();
++}
++
++document.getElementById('refreshBtn').addEventListener('click', refresh);
++
++document.getElementById('processList').addEventListener('click', function(e) {
++  var btn = e.target.closest('.btn-kill');
++  if (!btn) return;
++  var pid = parseInt(btn.getAttribute('data-pid'));
++  var name = btn.getAttribute('data-name');
++  killProcess(pid, name);
++});
++
++document.getElementById('botList').addEventListener('click', function(e) {
++  var btn = e.target.closest('[data-bot-id]');
++  if (!btn) return;
++  var id = btn.getAttribute('data-bot-id');
++  var action = btn.getAttribute('data-action');
++  if (id && action) botAction(id, action);
++});
++
++refresh();
++setInterval(refresh, 10000);
+diff --git a/ui/public/workers.html b/ui/public/workers.html
+new file mode 100644
+index 000000000..1057218b3
+--- /dev/null
++++ b/ui/public/workers.html
+@@ -0,0 +1,158 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>Worker Bees — OpenClaw Cloud</title>
++<style>
++*{box-sizing:border-box;margin:0;padding:0}
++body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:20px;padding-top:56px}
++h1{font-size:24px;font-weight:600;color:#e6edf3;margin-bottom:8px}
++.subtitle{color:#8b949e;font-size:14px;margin-bottom:24px}
++.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
++.toolbar button{background:#238636;border:1px solid rgba(240,246,252,.1);color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
++.toolbar button:hover{background:#2ea043}
++.count-badge{background:#30363d;border:1px solid #484f58;color:#e6edf3;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500}
++.refresh-info{color:#8b949e;font-size:12px;margin-left:auto}
++.section{margin-bottom:32px}
++.section-title{font-size:18px;font-weight:600;color:#e6edf3;margin-bottom:12px;display:flex;align-items:center;gap:8px}
++.section-icon{font-size:20px}
++table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
++th{background:#21262d;color:#8b949e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #30363d}
++td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:13px;color:#c9d1d9;vertical-align:middle}
++tr:last-child td{border-bottom:none}
++tr:hover{background:#1c2128}
++.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase}
++.badge-online{background:rgba(35,134,54,.3);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
++.badge-stale{background:rgba(187,128,9,.2);color:#d29922;border:1px solid rgba(210,153,34,.3)}
++.empty{color:#8b949e;font-size:14px;text-align:center;padding:32px}
++.toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;display:none;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.4)}
++.toast.show{display:block}
++.toast.success{background:#238636;color:#fff}
++.toast.error{background:#da3633;color:#fff}
++.key-section{margin-bottom:24px}
++.key-card{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
++.key-name{font-weight:600;color:#e6edf3;font-size:14px}
++.key-preview{font-family:monospace;font-size:12px;color:#8b949e;margin-left:12px}
++.key-actions{display:flex;gap:6px}
++.key-actions button{padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid rgba(240,246,252,.1);font-weight:500}
++.btn-reveal{background:#30363d;color:#c9d1d9}
++.btn-reveal:hover{background:#484f58}
++.btn-toggle{background:#d29922;color:#fff}
++.btn-toggle:hover{background:#e3b341}
++.btn-delete{background:#da3633;color:#fff}
++.btn-delete:hover{background:#f85149}
++.btn-add{background:#238636;color:#fff}
++.btn-add:hover{background:#2ea043}
++.btn-secondary{background:#30363d;color:#c9d1d9;border:1px solid rgba(240,246,252,.1);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500}
++.btn-secondary:hover{background:#484f58}
++.key-input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;margin-right:8px;width:200px}
++.avatar{width:32px;height:32px;border-radius:50%;border:2px solid #fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;margin-right:8px;flex-shrink:0}
++.script-box{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px 16px;margin-bottom:8px}
++.script-label{font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
++.script-code{background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:10px 12px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;color:#e6edf3;word-break:break-all;position:relative;white-space:pre-wrap;line-height:1.5}
++.btn-copy{position:absolute;top:6px;right:6px;background:#30363d;color:#c9d1d9;border:1px solid #484f58;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer}
++.btn-copy:hover{background:#484f58}
++.dispatch-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
++.dispatch-row input,.dispatch-row textarea{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;font-family:inherit}
++.dispatch-row input{width:200px}
++.dispatch-row textarea{flex:1;min-width:200px;height:40px;resize:vertical}
++.chat-box{background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
++.chat-messages{height:300px;overflow-y:auto;padding:12px}
++.chat-msg{margin-bottom:10px;display:flex;gap:8px}
++.chat-msg-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
++.chat-msg-body{flex:1;min-width:0}
++.chat-msg-from{font-weight:600;font-size:12px;color:#e6edf3;margin-bottom:2px}
++.chat-msg-text{font-size:13px;color:#c9d1d9;word-break:break-word;white-space:pre-wrap}
++.chat-msg-time{font-size:11px;color:#484f58;margin-top:2px}
++.chat-input-row{display:flex;border-top:1px solid #30363d}
++.chat-input-row input{flex:1;background:#0d1117;border:none;color:#c9d1d9;padding:10px 14px;font-size:14px;outline:none}
++.chat-input-row button{background:#238636;color:#fff;border:none;padding:10px 20px;font-size:14px;font-weight:500;cursor:pointer}
++.chat-input-row button:hover{background:#2ea043}
++.ss-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
++.ss-row input{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px;font-size:13px;flex:1;min-width:150px}
++.ss-file{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#161b22;border:1px solid #21262d;border-radius:4px;margin-bottom:4px}
++.ss-file-name{font-size:13px;color:#e6edf3;word-break:break-all}
++.ss-file-size{font-size:12px;color:#8b949e;margin-left:12px;white-space:nowrap}
++.ss-file-actions{display:flex;gap:6px;margin-left:12px}
++.ss-file-actions a,.ss-file-actions button{font-size:11px;padding:2px 8px;border-radius:3px;cursor:pointer;text-decoration:none}
++.ss-file-actions a{color:#58a6ff}
++.ss-file-actions button{background:#da3633;color:#fff;border:1px solid transparent;font-size:11px}
++</style>
++</head>
++<body>
++<h1>Worker Bees</h1>
++<p class="subtitle">Manage API keys, connected workers, shared space, and dispatch tasks</p>
++<div class="toolbar">
++<button id="refreshBtn">Refresh</button>
++<span class="count-badge"><span id="workerCount">0</span> workers</span>
++<span class="refresh-info" id="lastRefresh">Auto-refresh: 10s</span>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🔑</span> API Keys</div>
++<div style="margin-bottom:12px">
++<input type="text" id="newKeyName" class="key-input" placeholder="Key name (e.g. Desktop)">
++<button class="btn-add" id="addKeyBtn">Generate Key</button>
++</div>
++<div id="keyList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section" id="connectSection" style="display:none">
++<div class="section-title"><span class="section-icon">🔗</span> Connection Scripts</div>
++<p style="color:#8b949e;font-size:13px;margin-bottom:12px">Copy-paste these scripts on your worker machine to connect a Worker Bee to this CEO instance.</p>
++<div id="scriptList"></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🐝</span> Connected Workers</div>
++<div id="workerList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">📨</span> Dispatch Task</div>
++<div class="dispatch-row">
++<input type="text" id="dispatchWorker" placeholder="Worker name">
++<textarea id="dispatchMessage" placeholder="Message to send..."></textarea>
++<button class="btn-add" id="dispatchBtn">Dispatch</button>
++</div>
++<div id="dispatchResult"></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">💬</span> Worker Chat</div>
++<div class="chat-box">
++<div class="chat-messages" id="chatMessages"><p class="empty">Loading...</p></div>
++<div class="chat-input-row">
++<input type="text" id="chatInput" placeholder="Type a message... (use @WorkerName to dispatch)">
++<button id="chatSendBtn">Send</button>
++</div>
++</div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">📂</span> File Exchange</div>
++<div id="exchangeList"><p class="empty">Loading...</p></div>
++</div>
++
++<div class="section">
++<div class="section-title"><span class="section-icon">🗂️</span> Shared Space</div>
++<div class="ss-row">
++<input type="text" id="ssNewFile" placeholder="Filename (e.g. notes.txt)">
++<button class="btn-secondary" id="ssWriteBtn">Write File</button>
++<button class="btn-secondary" id="ssMkdirBtn">Create Folder</button>
++</div>
++<div id="ssWriteArea" style="display:none;margin-bottom:12px">
++<textarea id="ssContent" style="width:100%;height:100px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px;border-radius:6px;font-family:monospace;font-size:13px;resize:vertical" placeholder="File content..."></textarea>
++<button class="btn-add" id="ssSaveBtn" style="margin-top:6px">Save</button>
++<button class="btn-secondary" id="ssCancelBtn" style="margin-top:6px;margin-left:6px">Cancel</button>
++</div>
++<div id="sharedspaceList"><p class="empty">Loading...</p></div>
++</div>
++
++<div id="toast" class="toast"></div>
++<script src="/token-init.js"></script>
++<script src="/workers.js"></script>
++<script src="/nav-inject.js"></script>
++</body>
++</html>
+diff --git a/ui/public/workers.js b/ui/public/workers.js
+new file mode 100644
+index 000000000..d67e716bc
+--- /dev/null
++++ b/ui/public/workers.js
+@@ -0,0 +1,308 @@
++var TOKEN = '';
++try {
++  var s = localStorage.getItem('openclaw.control.settings.v1');
++  if (s) { var obj = JSON.parse(s); TOKEN = obj.token || ''; }
++} catch(e) {}
++if (!TOKEN) {
++  try { var m = document.cookie.match(/openclaw_token=([^;]+)/); if (m) TOKEN = m[1]; } catch(e) {}
++}
++
++var COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#2980b9'];
++function avatarColor(name) { var h = 0; for (var i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return COLORS[Math.abs(h) % COLORS.length]; }
++function initials(name) { var p = name.split(/[\s-]+/); return p.length > 1 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase(); }
++function showToast(msg, type) { var t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show ' + (type||''); setTimeout(function(){ t.className = 'toast'; }, 3000); }
++function apiFetch(url, opts) { opts = opts || {}; opts.headers = opts.headers || {}; if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN; return fetch(url, opts); }
++function formatSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
++function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
++
++var BASE_URL = window.location.origin;
++var lastKeys = [];
++
++function loadKeys() {
++  var el = document.getElementById('keyList');
++  apiFetch('/api/keys').then(function(r){ return r.json(); }).then(function(data) {
++    var keys = data.keys || [];
++    lastKeys = keys;
++    if (!keys.length) { el.innerHTML = '<p class="empty">No API keys \u2014 generate one to connect workers</p>'; document.getElementById('connectSection').style.display = 'none'; return; }
++    var html = '';
++    for (var i = 0; i < keys.length; i++) {
++      var k = keys[i];
++      html += '<div class="key-card"><div><span class="key-name">' + escHtml(k.name) + '</span><span class="key-preview">' + escHtml(k.keyPreview) + '</span>';
++      html += '<span style="margin-left:12px;font-size:11px;color:#8b949e">' + (k.active ? 'active' : 'disabled') + '</span></div>';
++      html += '<div class="key-actions">';
++      html += '<button class="btn-reveal" data-key-id="' + k.id + '" data-action="reveal">Reveal</button>';
++      html += '<button class="btn-toggle" data-key-id="' + k.id + '" data-action="toggle">' + (k.active ? 'Disable' : 'Enable') + '</button>';
++      html += '<button class="btn-delete" data-key-id="' + k.id + '" data-action="delete">Delete</button>';
++      html += '</div></div>';
++    }
++    el.innerHTML = html;
++    buildConnectionScripts();
++  }).catch(function(e) { el.innerHTML = '<p class="empty" style="color:#f85149">Error: ' + e.message + '</p>'; });
++}
++
++function buildConnectionScripts() {
++  var sec = document.getElementById('connectSection');
++  var el = document.getElementById('scriptList');
++  var activeKeys = lastKeys.filter(function(k) { return k.active; });
++  if (!activeKeys.length) { sec.style.display = 'none'; return; }
++  sec.style.display = '';
++
++  var html = '';
++  for (var i = 0; i < activeKeys.length; i++) {
++    var k = activeKeys[i];
++    html += '<div class="script-box">';
++    html += '<div class="script-label">Bash (Linux/macOS) \u2014 Key: ' + escHtml(k.name) + '</div>';
++    html += '<div class="script-code" id="script-bash-' + k.id + '">';
++    html += 'curl -sL ' + BASE_URL + '/api/workers/register \\\n  -H "X-API-Key: ' + escHtml(k.keyPreview) + '..." \\\n  -H "Content-Type: application/json" \\\n  -d \'{"name":"' + escHtml(k.name) + '","platform":"linux"}\'';
++    html += '<button class="btn-copy" data-target="script-bash-' + k.id + '">Copy</button></div>';
++    html += '<div style="margin-top:8px"><div class="script-label">PowerShell (Windows) \u2014 Key: ' + escHtml(k.name) + '</div>';
++    html += '<div class="script-code" id="script-ps-' + k.id + '">';
++    html += 'Invoke-RestMethod -Uri "' + BASE_URL + '/api/workers/register" `\n  -Method POST `\n  -Headers @{"X-API-Key"="' + escHtml(k.keyPreview) + '...";"Content-Type"="application/json"} `\n  -Body \'{"name":"' + escHtml(k.name) + '","platform":"windows"}\'';
++    html += '<button class="btn-copy" data-target="script-ps-' + k.id + '">Copy</button></div>';
++    html += '</div>';
++    html += '<p style="font-size:12px;color:#8b949e;margin-top:8px">Click "Reveal" on the API key above to get the full key, then replace the "..." in the script.</p>';
++    html += '</div>';
++  }
++  el.innerHTML = html;
++}
++
++function loadWorkers() {
++  var el = document.getElementById('workerList');
++  var countEl = document.getElementById('workerCount');
++  apiFetch('/api/workers').then(function(r){ return r.json(); }).then(function(data) {
++    var w = data.workers || [];
++    countEl.textContent = w.length;
++    document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
++    if (!w.length) { el.innerHTML = '<p class="empty">No workers connected</p>'; return; }
++    var html = '<table><tr><th></th><th>Name</th><th>Status</th><th>Platform</th><th>Connected</th><th>Last Seen</th><th>ID</th><th></th></tr>';
++    for (var i = 0; i < w.length; i++) {
++      var wr = w[i];
++      var col = avatarColor(wr.name);
++      var ini = initials(wr.name);
++      var badge = wr.status === 'online' ? '<span class="badge badge-online">ONLINE</span>' : '<span class="badge badge-stale">STALE</span>';
++      html += '<tr>';
++      html += '<td><div class="avatar" style="background:' + col + '">' + ini + '</div></td>';
++      html += '<td style="font-weight:600;color:#e6edf3">' + escHtml(wr.name) + '</td>';
++      html += '<td>' + badge + '</td>';
++      html += '<td>' + escHtml(wr.platform || '-') + '</td>';
++      html += '<td style="font-size:12px">' + new Date(wr.connectedAt).toLocaleString() + '</td>';
++      html += '<td style="font-size:12px">' + new Date(wr.lastSeen).toLocaleString() + '</td>';
++      html += '<td style="font-family:monospace;font-size:11px;color:#8b949e">' + escHtml(wr.id) + '</td>';
++      html += '<td><button class="btn-delete" data-worker-id="' + escHtml(wr.id) + '" style="font-size:11px;padding:2px 8px">Remove</button></td>';
++      html += '</tr>';
++    }
++    html += '</table>';
++    el.innerHTML = html;
++  }).catch(function(e) { el.innerHTML = '<p class="empty" style="color:#f85149">Error: ' + e.message + '</p>'; });
++}
++
++function loadExchange() {
++  var el = document.getElementById('exchangeList');
++  apiFetch('/api/exchange').then(function(r){ return r.json(); }).then(function(data) {
++    var files = data.files || [];
++    if (!files.length) { el.innerHTML = '<p class="empty">No files in exchange</p>'; return; }
++    var html = '<table><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr>';
++    for (var i = 0; i < files.length; i++) {
++      var f = files[i];
++      html += '<tr><td style="font-weight:500">' + escHtml(f.name) + '</td>';
++      html += '<td>' + formatSize(f.size) + '</td>';
++      html += '<td style="font-size:12px">' + new Date(f.modified).toLocaleString() + '</td>';
++      html += '<td><a href="/api/exchange/download/' + encodeURIComponent(f.name) + '" style="color:#58a6ff;font-size:12px">Download</a></td></tr>';
++    }
++    html += '</table>';
++    el.innerHTML = html;
++  }).catch(function(e) { el.innerHTML = '<p class="empty" style="color:#f85149">Error: ' + e.message + '</p>'; });
++}
++
++function loadSharedspace() {
++  var el = document.getElementById('sharedspaceList');
++  apiFetch('/api/sharedspace').then(function(r){ return r.json(); }).then(function(data) {
++    var files = data.files || [];
++    if (!files.length) { el.innerHTML = '<p class="empty">Shared space is empty</p>'; return; }
++    files.sort(function(a,b) { return a.name.localeCompare(b.name); });
++    var html = '';
++    for (var i = 0; i < files.length; i++) {
++      var f = files[i];
++      html += '<div class="ss-file">';
++      html += '<span class="ss-file-name">' + escHtml(f.name) + '</span>';
++      html += '<span class="ss-file-size">' + formatSize(f.size) + '</span>';
++      html += '<div class="ss-file-actions">';
++      html += '<a href="/api/sharedspace/download/' + encodeURIComponent(f.name) + '">Download</a>';
++      html += '<button data-ss-delete="' + escHtml(f.name) + '">Delete</button>';
++      html += '</div>';
++      html += '</div>';
++    }
++    el.innerHTML = html;
++  }).catch(function(e) { el.innerHTML = '<p class="empty" style="color:#f85149">Error: ' + e.message + '</p>'; });
++}
++
++var lastChatTs = null;
++function loadChat() {
++  var el = document.getElementById('chatMessages');
++  var url = '/api/chat?limit=50';
++  apiFetch(url).then(function(r){ return r.json(); }).then(function(data) {
++    var msgs = data.messages || [];
++    if (!msgs.length) { el.innerHTML = '<p class="empty">No messages yet</p>'; return; }
++    var html = '';
++    for (var i = 0; i < msgs.length; i++) {
++      var m = msgs[i];
++      var col = avatarColor(m.from);
++      var ini = initials(m.from);
++      html += '<div class="chat-msg">';
++      html += '<div class="chat-msg-avatar" style="background:' + col + '">' + ini + '</div>';
++      html += '<div class="chat-msg-body">';
++      html += '<div class="chat-msg-from">' + escHtml(m.from) + ' <span style="font-weight:400;color:#484f58">' + (m.role || '') + '</span></div>';
++      html += '<div class="chat-msg-text">' + escHtml(m.text) + '</div>';
++      html += '<div class="chat-msg-time">' + new Date(m.ts).toLocaleString() + '</div>';
++      html += '</div></div>';
++    }
++    el.innerHTML = html;
++    el.scrollTop = el.scrollHeight;
++  }).catch(function(e) { el.innerHTML = '<p class="empty" style="color:#f85149">Error: ' + e.message + '</p>'; });
++}
++
++document.getElementById('addKeyBtn').addEventListener('click', function() {
++  var name = document.getElementById('newKeyName').value.trim();
++  if (!name) { showToast('Enter a key name', 'error'); return; }
++  apiFetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
++    .then(function(r){ return r.json(); }).then(function(data) {
++      if (data.key) { showToast('Key created: ' + data.key, 'success'); document.getElementById('newKeyName').value = ''; loadKeys(); }
++      else showToast('Error creating key', 'error');
++    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++});
++
++document.getElementById('keyList').addEventListener('click', function(e) {
++  var btn = e.target.closest('[data-key-id]');
++  if (!btn) return;
++  var id = btn.getAttribute('data-key-id');
++  var action = btn.getAttribute('data-action');
++  if (action === 'reveal') {
++    apiFetch('/api/keys/' + id + '/reveal', { method: 'POST' }).then(function(r){ return r.json(); }).then(function(d) {
++      if (d.key) { prompt('API Key (copy it):', d.key); }
++    });
++  } else if (action === 'toggle') {
++    apiFetch('/api/keys/' + id + '/toggle', { method: 'PUT' }).then(function(r){ return r.json(); }).then(function(d) {
++      showToast('Key ' + (d.active ? 'enabled' : 'disabled'), 'success'); loadKeys();
++    });
++  } else if (action === 'delete') {
++    if (!confirm('Delete this API key?')) return;
++    apiFetch('/api/keys/' + id, { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function() {
++      showToast('Key deleted', 'success'); loadKeys();
++    });
++  }
++});
++
++document.getElementById('workerList').addEventListener('click', function(e) {
++  var btn = e.target.closest('[data-worker-id]');
++  if (!btn) return;
++  var wid = btn.getAttribute('data-worker-id');
++  if (!confirm('Remove worker ' + wid + '?')) return;
++  apiFetch('/api/workers/' + encodeURIComponent(wid), { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function() {
++    showToast('Worker removed', 'success'); loadWorkers();
++  }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++});
++
++document.getElementById('dispatchBtn').addEventListener('click', function() {
++  var worker = document.getElementById('dispatchWorker').value.trim();
++  var message = document.getElementById('dispatchMessage').value.trim();
++  if (!worker) { showToast('Enter worker name', 'error'); return; }
++  if (!message) { showToast('Enter a message', 'error'); return; }
++  apiFetch('/api/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workerName: worker, message: message }) })
++    .then(function(r){ return r.json(); }).then(function(data) {
++      if (data.ok) {
++        showToast('Dispatched to ' + data.workerName, 'success');
++        document.getElementById('dispatchMessage').value = '';
++        document.getElementById('dispatchResult').innerHTML = '<p style="color:#3fb950;font-size:13px;margin-top:8px">Task ' + data.taskId + ' dispatched to ' + escHtml(data.workerName) + '</p>';
++        setTimeout(loadChat, 1000);
++      } else {
++        showToast('Error: ' + (data.error || 'Failed'), 'error');
++        document.getElementById('dispatchResult').innerHTML = '<p style="color:#f85149;font-size:13px;margin-top:8px">' + escHtml(data.error || 'Failed') + '</p>';
++      }
++    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++});
++
++document.getElementById('chatSendBtn').addEventListener('click', sendChat);
++document.getElementById('chatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
++
++function sendChat() {
++  var input = document.getElementById('chatInput');
++  var text = input.value.trim();
++  if (!text) return;
++  apiFetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, from: 'CEO' }) })
++    .then(function(r){ return r.json(); }).then(function() {
++      input.value = '';
++      loadChat();
++    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++}
++
++document.addEventListener('click', function(e) {
++  var copyBtn = e.target.closest('.btn-copy');
++  if (copyBtn) {
++    var targetId = copyBtn.getAttribute('data-target');
++    var el = document.getElementById(targetId);
++    if (el) {
++      var text = el.textContent.replace('Copy', '').trim();
++      navigator.clipboard.writeText(text).then(function() {
++        copyBtn.textContent = 'Copied!';
++        setTimeout(function() { copyBtn.textContent = 'Copy'; }, 2000);
++      });
++    }
++    return;
++  }
++
++  var ssDel = e.target.closest('[data-ss-delete]');
++  if (ssDel) {
++    var fname = ssDel.getAttribute('data-ss-delete');
++    if (!confirm('Delete shared space file: ' + fname + '?')) return;
++    apiFetch('/api/sharedspace/' + encodeURIComponent(fname), { method: 'DELETE' })
++      .then(function(r){ return r.json(); }).then(function() {
++        showToast('Deleted: ' + fname, 'success'); loadSharedspace();
++      }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++    return;
++  }
++});
++
++var ssWriteVisible = false;
++document.getElementById('ssWriteBtn').addEventListener('click', function() {
++  var fname = document.getElementById('ssNewFile').value.trim();
++  if (!fname) { showToast('Enter a filename', 'error'); return; }
++  ssWriteVisible = !ssWriteVisible;
++  document.getElementById('ssWriteArea').style.display = ssWriteVisible ? '' : 'none';
++});
++
++document.getElementById('ssMkdirBtn').addEventListener('click', function() {
++  var fname = document.getElementById('ssNewFile').value.trim();
++  if (!fname) { showToast('Enter a folder name', 'error'); return; }
++  apiFetch('/api/sharedspace/mkdir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fname }) })
++    .then(function(r){ return r.json(); }).then(function(d) {
++      if (d.ok) { showToast('Folder created: ' + fname, 'success'); document.getElementById('ssNewFile').value = ''; loadSharedspace(); }
++      else showToast('Error: ' + (d.error || 'Failed'), 'error');
++    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++});
++
++document.getElementById('ssSaveBtn').addEventListener('click', function() {
++  var fname = document.getElementById('ssNewFile').value.trim();
++  var content = document.getElementById('ssContent').value;
++  if (!fname) { showToast('Enter a filename', 'error'); return; }
++  apiFetch('/api/sharedspace/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: fname, content: content }) })
++    .then(function(r){ return r.json(); }).then(function(d) {
++      if (d.ok) {
++        showToast('Saved: ' + fname, 'success');
++        document.getElementById('ssNewFile').value = '';
++        document.getElementById('ssContent').value = '';
++        document.getElementById('ssWriteArea').style.display = 'none';
++        ssWriteVisible = false;
++        loadSharedspace();
++      } else showToast('Error: ' + (d.error || 'Failed'), 'error');
++    }).catch(function(e) { showToast('Error: ' + e.message, 'error'); });
++});
++
++document.getElementById('ssCancelBtn').addEventListener('click', function() {
++  document.getElementById('ssWriteArea').style.display = 'none';
++  ssWriteVisible = false;
++});
++
++function refresh() { loadKeys(); loadWorkers(); loadExchange(); loadSharedspace(); loadChat(); }
++document.getElementById('refreshBtn').addEventListener('click', refresh);
++refresh();
++setInterval(refresh, 10000);
+-- 
+2.40.0.windows.1
+

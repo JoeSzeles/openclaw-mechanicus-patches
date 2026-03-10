@@ -1,0 +1,34 @@
+From 32654b66ce525b5514f6c7dbe51165a8ef4c1deb Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Tue, 24 Feb 2026 23:35:58 +0000
+Subject: [PATCH 079/244] Allow local connections to the control UI by trusting
+ the proxy
+
+Add 127.0.0.0/8 to the trustedProxies in openclaw.json to allow local connections from the proxy to the gateway.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: f577f274-449e-4f35-b65a-eedb58430d8a
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/VmZ8U2Y
+Replit-Helium-Checkpoint-Created: true
+---
+ openclaw.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/openclaw.json b/openclaw.json
+index 11f8834d6..4335a42b3 100644
+--- a/openclaw.json
++++ b/openclaw.json
+@@ -2,7 +2,7 @@
+   "gateway": {
+     "bind": "loopback",
+     "port": 5001,
+-    "trustedProxies": ["172.16.0.0/12", "10.0.0.0/8"],
++    "trustedProxies": ["127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"],
+     "controlUi": {
+       "allowInsecureAuth": true,
+       "allowedOrigins": ["https://be1a940b-924a-449d-ae02-954c66974b04-00-39aqxi9w7wyw6.picard.replit.dev", "http://127.0.0.1:5000", "http://localhost:5000"]
+-- 
+2.40.0.windows.1
+

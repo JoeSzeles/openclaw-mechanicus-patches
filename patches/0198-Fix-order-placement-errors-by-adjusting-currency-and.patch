@@ -1,0 +1,104 @@
+From 5f2c6414699d42a462d2af1fefc0424595625a5e Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 2 Mar 2026 00:46:26 +0000
+Subject: [PATCH 198/244] Fix order placement errors by adjusting currency and
+ order logic
+
+Corrected currency defaults to AUD and removed stop/limit fields when forceOpen is false in the CEO proxy. Updated frontend scripts in model-config.html, processes.html, and workers.html.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 906b397c-0d51-4c51-938d-028fd77f33b5
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 084873f5-5c86-41d0-b96c-43e07b496a04
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/906b397c-0d51-4c51-938d-028fd77f33b5/tsh3mnX
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 7 ++++---
+ dist/control-ui/model-config.html | 6 +++---
+ dist/control-ui/processes.html    | 6 +++---
+ dist/control-ui/workers.html      | 6 +++---
+ 4 files changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 858fd3f12..4d2c17e48 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -888,7 +888,7 @@ async function handleIgApi(req, res, p) {
+         direction: body.direction.toUpperCase(),
+         size: String(body.size),
+         orderType: body.orderType || "MARKET",
+-        currencyCode: body.currencyCode || "USD",
++        currencyCode: body.currencyCode || "AUD",
+         expiry: body.expiry || "-",
+         forceOpen: body.forceOpen !== undefined ? body.forceOpen : true,
+         guaranteedStop: body.guaranteedStop || false,
+@@ -897,7 +897,8 @@ async function handleIgApi(req, res, p) {
+       if (body.limitDistance) orderBody.limitDistance = body.limitDistance;
+       if (body.stopLevel) orderBody.stopLevel = body.stopLevel;
+       if (body.limitLevel) orderBody.limitLevel = body.limitLevel;
+-      console.log(`[ig-trade] Opening ${orderBody.direction} ${orderBody.size} ${orderBody.epic}`);
++      if (!orderBody.forceOpen) { delete orderBody.stopDistance; delete orderBody.limitDistance; delete orderBody.stopLevel; delete orderBody.limitLevel; }
++      console.log(`[ig-trade] Opening ${orderBody.direction} ${orderBody.size} ${orderBody.epic} forceOpen=${orderBody.forceOpen}`);
+       const r = await igRequest("POST", "/positions/otc", { ...igHeaders(session), Version: "2" }, JSON.stringify(orderBody));
+       igCacheInvalidate();
+       if (r.status !== 200) {
+@@ -1051,7 +1052,7 @@ async function handleIgApi(req, res, p) {
+         size: body.size,
+         level: body.level,
+         type: body.type.toUpperCase(),
+-        currencyCode: body.currencyCode || "USD",
++        currencyCode: body.currencyCode || "AUD",
+         expiry: body.expiry || "-",
+         forceOpen: body.forceOpen !== undefined ? body.forceOpen : true,
+         guaranteedStop: body.guaranteedStop || false,
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 17099f4c1..bf5989c29 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772412064"></script>
+-<script src="/model-config.js?v=1772412064"></script>
+-<script src="/nav-inject.js?v=1772412064"></script>
++<script src="/token-init.js?v=1772412371"></script>
++<script src="/model-config.js?v=1772412371"></script>
++<script src="/nav-inject.js?v=1772412371"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index c95a69a16..34f8ac132 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772412064"></script>
+-<script src="/processes.js?v=1772412064"></script>
+-<script src="/nav-inject.js?v=1772412064"></script>
++<script src="/token-init.js?v=1772412371"></script>
++<script src="/processes.js?v=1772412371"></script>
++<script src="/nav-inject.js?v=1772412371"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 9eec654eb..37c02ea01 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772412064"></script>
+-<script src="/workers.js?v=1772412064"></script>
+-<script src="/nav-inject.js?v=1772412064"></script>
++<script src="/token-init.js?v=1772412371"></script>
++<script src="/workers.js?v=1772412371"></script>
++<script src="/nav-inject.js?v=1772412371"></script>
+ </body>
+ </html>
+-- 
+2.40.0.windows.1
+

@@ -1,0 +1,93 @@
+From bfe2c31775f8c924418d02419e713a84f974f137 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 00:12:03 +0000
+Subject: [PATCH 153/244] Improve error handling for connection test failures
+
+Refactor the IG connection test to differentiate between server unavailability (503/502), authentication failures (401/403), and rate limiting, providing more specific user feedback and styling in the UI.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: ec5b5c2c-7b32-4aed-babe-ff0be9d3b4d7
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/TnnYK4c
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs             | 19 +++++++++++++++++--
+ ui/public/model-config.js | 31 ++++++++++++++++++++++++++-----
+ 2 files changed, 43 insertions(+), 7 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index d0f59a162..0c2447745 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -498,8 +498,23 @@ async function handleIgApi(req, res, p) {
+           }, JSON.stringify({ identifier: prof.username, password: prof.password }), prof.baseUrl);
+           if (testRes.status !== 200) {
+             let errDetail = testRes.body || "";
+-            try { const ej = JSON.parse(errDetail); errDetail = ej.errorCode || ej.error || errDetail; } catch(_) {}
+-            return json(res, 200, { ok: false, error: "IG auth failed (" + testRes.status + "): " + errDetail });
++            let errorType = "unknown";
++            try { const ej = JSON.parse(errDetail); errDetail = ej.errorCode || ej.error || errDetail; } catch(_) {
++              errDetail = errDetail.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
++            }
++            if (testRes.status === 503 || testRes.status === 502) {
++              errorType = "server_unavailable";
++              errDetail = "IG servers returned " + testRes.status + " — this usually means IG is blocking connections from this server's IP range (cloud/datacenter IPs). Your credentials may be correct. Try testing from a residential IP or VPN.";
++            } else if (testRes.status === 401 || testRes.status === 403) {
++              errorType = "auth_rejected";
++              if (errDetail.includes("exceeded-api-key-allowance")) {
++                errDetail = "API rate limit exceeded — wait a few minutes and try again";
++                errorType = "rate_limited";
++              }
++            } else if (testRes.status === 400) {
++              errorType = "bad_credentials";
++            }
++            return json(res, 200, { ok: false, error: errDetail, errorType, statusCode: testRes.status });
+           }
+           let lsEndpoint = null;
+           let sessionBody = {};
+diff --git a/ui/public/model-config.js b/ui/public/model-config.js
+index e27adec3e..7b85f3067 100644
+--- a/ui/public/model-config.js
++++ b/ui/public/model-config.js
+@@ -365,11 +365,32 @@ function testConnection(profileName) {
+       resultDiv.innerHTML = html;
+       showToast(profileName.toUpperCase() + ' connected — balance loaded', 'success');
+     } else {
+-      resultDiv.style.background = 'rgba(248,81,73,.1)';
+-      resultDiv.style.border = '1px solid rgba(248,81,73,.3)';
+-      resultDiv.style.color = '#f85149';
+-      resultDiv.innerHTML = '<strong>Connection failed:</strong> ' + escHtml(data.error || 'Unknown error');
+-      showToast(profileName.toUpperCase() + ' connection failed', 'error');
++      var et = data.errorType || 'unknown';
++      if (et === 'server_unavailable') {
++        resultDiv.style.background = 'rgba(210,153,34,.1)';
++        resultDiv.style.border = '1px solid rgba(210,153,34,.3)';
++        resultDiv.style.color = '#d29922';
++        resultDiv.innerHTML = '<strong>Server unavailable (HTTP ' + (data.statusCode || '?') + ')</strong><div style="margin-top:6px;color:#c9d1d9;font-size:13px">' + escHtml(data.error) + '</div><div style="margin-top:6px;color:#8b949e;font-size:12px">This is NOT a credentials error. IG is likely blocking this server\'s cloud IP. Your credentials may be fine — try from a local machine to confirm.</div>';
++        showToast(profileName.toUpperCase() + ': server blocked (not a creds issue)', 'error');
++      } else if (et === 'bad_credentials' || et === 'auth_rejected') {
++        resultDiv.style.background = 'rgba(248,81,73,.1)';
++        resultDiv.style.border = '1px solid rgba(248,81,73,.3)';
++        resultDiv.style.color = '#f85149';
++        resultDiv.innerHTML = '<strong>Authentication failed (HTTP ' + (data.statusCode || '?') + ')</strong><div style="margin-top:6px;color:#c9d1d9;font-size:13px">' + escHtml(data.error) + '</div><div style="margin-top:6px;color:#8b949e;font-size:12px">Check your API key, username, and password for the ' + profileName + ' profile.</div>';
++        showToast(profileName.toUpperCase() + ': bad credentials', 'error');
++      } else if (et === 'rate_limited') {
++        resultDiv.style.background = 'rgba(210,153,34,.1)';
++        resultDiv.style.border = '1px solid rgba(210,153,34,.3)';
++        resultDiv.style.color = '#d29922';
++        resultDiv.innerHTML = '<strong>Rate limited</strong><div style="margin-top:6px;color:#c9d1d9;font-size:13px">' + escHtml(data.error) + '</div>';
++        showToast(profileName.toUpperCase() + ': rate limited, wait and retry', 'error');
++      } else {
++        resultDiv.style.background = 'rgba(248,81,73,.1)';
++        resultDiv.style.border = '1px solid rgba(248,81,73,.3)';
++        resultDiv.style.color = '#f85149';
++        resultDiv.innerHTML = '<strong>Connection failed' + (data.statusCode ? ' (HTTP ' + data.statusCode + ')' : '') + ':</strong> ' + escHtml(data.error || 'Unknown error');
++        showToast(profileName.toUpperCase() + ' connection failed', 'error');
++      }
+     }
+     if (card) card.appendChild(resultDiv);
+   }).catch(function(e) {
+-- 
+2.40.0.windows.1
+

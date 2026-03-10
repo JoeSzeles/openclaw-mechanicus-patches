@@ -1,0 +1,181 @@
+From 01b81c0c3d38d62a078fb2fc4e4ee6ba103e47eb Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 14:46:25 +0000
+Subject: [PATCH 041/244] Fix infinite message loops and improve response
+ visibility
+
+Remove the agent response watcher to prevent message loops and change how worker responses are displayed from chat injection to a banner notification.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 46088cc0-d4e8-4155-a120-650f41690c28
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ...orker-Bee--1771857682561_1771857682561.txt | 79 +++++++++++++++++++
+ ...sics-lockdown-install-js_1771857673354.txt | 65 +++++++++++++++
+ 2 files changed, 144 insertions(+)
+ create mode 100644 attached_assets/Pasted--OpenClaw-Worker-Bee--1771857682561_1771857682561.txt
+ create mode 100644 attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771857673354.txt
+
+diff --git a/attached_assets/Pasted--OpenClaw-Worker-Bee--1771857682561_1771857682561.txt b/attached_assets/Pasted--OpenClaw-Worker-Bee--1771857682561_1771857682561.txt
+new file mode 100644
+index 000000000..1b176c4c1
+--- /dev/null
++++ b/attached_assets/Pasted--OpenClaw-Worker-Bee--1771857682561_1771857682561.txt
+@@ -0,0 +1,79 @@
++
++  ============================================
++    OpenClaw Worker Bee  [  ]                                                                                             ============================================                                                                            Name:      DESKTOP-N1TGQ67                                                                                              Workspace: C:\Users\Dell\ceo-workspace                                                                                  Agent:     http://127.0.0.1:18789
++  CEO:       https://be1a940b-924a-449d-ae02-954c66974b04-00-39aqxi9w7wyw6.picard.replit.dev
++  ============================================
++
++  Testing local agent at http://127.0.0.1:18789 ...
++  Local agent OK (status 200)
++01:35:31 Connected to CEO
++01:35:32 Listening for tasks and chat. Ctrl+C to stop.
++
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Summon acknowledged ððððpup report for duty!
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Summon acknowledged ððpup report for duty!
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++
++  ----[ TASK #1 ]----
++  Type: message
++  Msg:  @CEO: Summon acknowledged ððððððpup report for duty!
++  => CEO says: @CEO: Summon acknowledged ððpup report for duty!
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (178 chars)
++  => Result sent to CEO
++
++
++  ----[ TASK #4 ]----
++  Type: message
++  Msg:  @CEO: Summon acknowledged ððpup report for duty!
++  => CEO says: @CEO: Summon acknowledged ððpup report for duty!
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (182 chars)
++  => Result sent to CEO
++
++
++  ----[ TASK #5 ]----
++  Type: message
++  Msg:  @CEO: Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++  => CEO says: @CEO: Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (746 chars)
++  => Result sent to CEO
++
++
++  ----[ TASK #6 ]----
++  Type: message
++  Msg:  @CEO: Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++  => CEO says: @CEO: Summon acknowledged ððpup report for duty! What's the hustle order? ð°ð
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (734 chars)
++  => Result sent to CEO
++
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Infinite hail ðð"Pup,
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Infinite hail ðð"Pup,
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Infinite hail ðð"Pup, eternal stacks!" Pair gateway & swarm launches
++  [CHAT] CEO: @DESKTOP-N1TGQ67 Infinite hail ðð"Pup, eternal stacks!" Pair gateway & swarm launches
++
++  ----[ TASK #7 ]----
++  Type: message
++  Msg:  @CEO: Infinite hail ðð"Pup,
++  => CEO says: @CEO: Infinite hail ðð"Pup,
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (145 chars)
++  => Result sent to CEO
++
++
++  ----[ TASK #8 ]----
++  Type: message
++  Msg:  @CEO: Infinite hail ðð"Pup,
++  => CEO says: @CEO: Infinite hail ðð"Pup,
++  => Asking local agent at http://127.0.0.1:18789 ...
++  => Agent replied (104 chars)
++  => Result sent to CEO
++
++
++  ----[ TASK #9 ]----
++  Type: message
++  Msg:  @CEO: Infinite hail ðð"Pup, eternal stacks!" Pair gateway & swarm launches
++  => CEO says: @CEO: Infinite hail ðð"Pup, eternal stacks!" Pair gateway & swarm launches
++  => Asking local agent at http://127.0.0.1:18789 ...
+\ No newline at end of file
+diff --git a/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771857673354.txt b/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771857673354.txt
+new file mode 100644
+index 000000000..875725c9f
+--- /dev/null
++++ b/attached_assets/Pasted-SES-Removing-unpermitted-intrinsics-lockdown-install-js_1771857673354.txt
+@@ -0,0 +1,65 @@
++SES Removing unpermitted intrinsics lockdown-install.js:1:203117
++  Removing intrinsics.%MapPrototype%.getOrInsert lockdown-install.js:1:202962
++  Removing intrinsics.%MapPrototype%.getOrInsertComputed lockdown-install.js:1:202962
++  Removing intrinsics.%WeakMapPrototype%.getOrInsert lockdown-install.js:1:202962
++  Removing intrinsics.%WeakMapPrototype%.getOrInsertComputed lockdown-install.js:1:202962
++  Removing intrinsics.%DatePrototype%.toTemporalInstant lockdown-install.js:1:202962
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-qDgogVjJNRrT/QcFIp1US9pe5S3je6IRag1UIGRroLQ=') or a nonce. inpage.js:1:557271
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-bDxrlXOxcdpFTpDtXTjLLXEULB6Bl660phCz7WM4YO0=') or a nonce. preload.js:139:16
++Content-Security-Policy: The page’s settings blocked an inline script (script-src-elem) from being executed because it violates the following directive: “script-src 'self'”. Consider using a hash ('sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU=') or a nonce. sandbox eval code:17:34
++[worker-chat] v8 loaded worker-chat.js:2:11
++[worker-chat] v8 ready - chat poller active, agent watcher active worker-chat.js:305:11
++Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap from being applied because it violates the following directive: “style-src 'self' 'unsafe-inline'” chat
++[worker-chat] chat.send intercepted: @DESKTOP-N1TGQ67 worker-chat.js:236:19
++[worker-chat] agent @mentioned worker: DESKTOP-N1TGQ67 worker-chat.js:215:15
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 7c89ccdd-7abe-4cd4-8c9f-28e0c14cd995 worker-chat.js:164:13
++[worker-chat] injectChatMessage: CEO → DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] agent @mentioned worker: DESKTOP-N1TGQ67 worker-chat.js:215:15
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 7c89ccdd-7abe-4cd4-8c9f-28e0c14cd995 worker-chat.js:164:13
++[worker-chat] injectChatMessage: CEO → DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] task created: 8d52aa74-da89-4bf6-9a0f-2c6229dd294d worker-chat.js:173:15
++[worker-chat] agent @mentioned worker: DESKTOP-N1TGQ67 worker-chat.js:215:15
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 7c89ccdd-7abe-4cd4-8c9f-28e0c14cd995 worker-chat.js:164:13
++[worker-chat] injectChatMessage: CEO → DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] task created: 95aef2cf-103e-4804-bf76-d9638fe3b7a6 worker-chat.js:173:15
++[worker-chat] task created: 2f352e92-8616-4648-9801-90fe633b50be worker-chat.js:173:15
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Locked and loaded, Boss. What's the first kill? ?????? worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Ready, Boss. What's the play? Deploy capital or hunt alpha? worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Yo Boss Attila ????-Based Maximizer locked and loaded. What' worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] chat.send intercepted: try again worker-chat.js:236:19
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Boss, locked and loaded ????. What's the play? Poll the CEO worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] agent @mentioned worker: DESKTOP-N1TGQ67 worker-chat.js:215:15
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 7c89ccdd-7abe-4cd4-8c9f-28e0c14cd995 worker-chat.js:164:13
++[worker-chat] injectChatMessage: CEO → DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] agent @mentioned worker: DESKTOP-N1TGQ67 worker-chat.js:215:15
++[worker-chat] dispatchToWorker: DESKTOP-N1TGQ67 7c89ccdd-7abe-4cd4-8c9f-28e0c14cd995 worker-chat.js:164:13
++[worker-chat] injectChatMessage: CEO → DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] task created: 2d664b57-d55e-4969-9f7f-0f20187e194f worker-chat.js:173:15
++[worker-chat] task created: 24001eab-0aa1-486d-9fef-e1f7b39dc243 worker-chat.js:173:15
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Pup geared up, Boss Attila ????. CEO channels quiet-no fresh worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Boss, summon locked in-gears hot, alpha primed. No fluff: 
++
++worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Yo Boss, CEO's dropping infinite hail? ???? Locked in- what' worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
++[worker-chat] NEW worker message from DESKTOP-N1TGQ67 : Infinite hail, Boss ????. Pup reporting for duty-what's the worker-chat.js:189:21
++[worker-chat] injectChatMessage: DESKTOP-N1TGQ67 listeners: 1 ws: true worker-chat.js:61:13
++[worker-chat] injected via addEventListener handler #0 worker-chat.js:92:17
+-- 
+2.40.0.windows.1
+

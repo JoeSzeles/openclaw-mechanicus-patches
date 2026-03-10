@@ -1,0 +1,410 @@
+From ade164154d43539f607d391cea30cad6821831cc Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Fri, 27 Feb 2026 14:58:24 +0000
+Subject: [PATCH 099/244] Add trading and market data capabilities for IG Group
+
+Creates two new skills, `ig-trading` and `ig-market-data`, and updates `replit.md` to document them. The `ig-trading` skill enables authentication, position management, and order placement via the IG Group REST API, utilizing environment variables for credentials. The `ig-market-data` skill allows for market searching, retrieval of historical prices, watchlist management, and client sentiment analysis.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 989fbbf8-dbf8-4254-8794-28168af8bceb
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/dBA8sSh
+Replit-Helium-Checkpoint-Created: true
+---
+ .replit                        |   5 +
+ replit.md                      |   6 +-
+ skills/ig-market-data/SKILL.md | 161 +++++++++++++++++++++++++++++
+ skills/ig-trading/SKILL.md     | 179 +++++++++++++++++++++++++++++++++
+ 4 files changed, 350 insertions(+), 1 deletion(-)
+ create mode 100644 skills/ig-market-data/SKILL.md
+ create mode 100644 skills/ig-trading/SKILL.md
+
+diff --git a/.replit b/.replit
+index 19083a473..9bba122b7 100644
+--- a/.replit
++++ b/.replit
+@@ -11,6 +11,11 @@ channel = "stable-25_05"
+ OPENCLAW_GATEWAY_PORT = "5000"
+ OPENCLAW_GATEWAY_TOKEN = "4e38d19916ace326b63cfd867b58d2287ce9fa445c7ea4a07b6403d89e366a53"
+ OPENCLAW_SKIP_CHANNELS = "1"
++IG_API_KEY = "20849c0791ed15479752204f9632c949f742ddc5"
++IG_USERNAME = "Hoerbinator2"
++IG_PASSWORD = "Riacrepe88!"
++IG_ACCOUNT_ID = "Z3MJKY"
++IG_BASE_URL = "https://demo-api.ig.com/gateway/deal"
+ 
+ [workflows]
+ runButton = "Project"
+diff --git a/replit.md b/replit.md
+index ba097f0fb..66b3391a1 100644
+--- a/replit.md
++++ b/replit.md
+@@ -62,6 +62,10 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+     -   Used for `web_search` tool.
+ -   **OpenAI API**: Secondary AI model provider via Replit AI Integrations.
+     -   Models: `gpt-4o`, `gpt-4o-mini`.
+--   **Replit Secrets Management**: Securely stores API keys like `XAI_API_KEY` and `OPENCLAW_GATEWAY_TOKEN`.
++-   **IG Group Trading API**: CFD trading via REST API (demo: `demo-api.ig.com`, live: `api.ig.com`).
++    -   Skills: `ig-trading` (auth, positions, orders), `ig-market-data` (search, prices, watchlists, sentiment).
++    -   Credentials stored in env vars: `IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`, `IG_ACCOUNT_ID`, `IG_BASE_URL`.
++    -   Reference doc: `.openclaw/workspace/IG_TRADING.md`.
++-   **Replit Secrets Management**: Securely stores API keys like `XAI_API_KEY`, `OPENCLAW_GATEWAY_TOKEN`, and IG credentials.
+ -   **Replit AI Integrations**: Provides access to OpenAI API key and base URL.
+ -   **`web_fetch` tool**: For fetching web page content.
+\ No newline at end of file
+diff --git a/skills/ig-market-data/SKILL.md b/skills/ig-market-data/SKILL.md
+new file mode 100644
+index 000000000..e96e1db46
+--- /dev/null
++++ b/skills/ig-market-data/SKILL.md
+@@ -0,0 +1,161 @@
++---
++name: ig-market-data
++description: IG Group market data — search markets, get prices, watchlists, sentiment. Use for "IG markets", "search EURUSD", "IG prices", "market sentiment", "IG watchlist".
++---
++# IG Market Data Skill
++
++Search markets, get prices, manage watchlists, and view client sentiment on the IG Group platform.
++
++**Prerequisite:** You must be authenticated first — see the `ig-trading` skill for login instructions.
++
++## Connection Details
++
++- **Demo API**: `https://demo-api.ig.com/gateway/deal`
++- Credentials in env vars: `IG_API_KEY`, `IG_BASE_URL`
++- All requests need headers: `X-IG-API-KEY`, `CST`, `X-SECURITY-TOKEN`
++
++## 1. Search Markets
++
++Find instruments by keyword. Returns EPICs you need for trading and price queries.
++
++```bash
++curl -s "$IG_BASE_URL/markets?searchTerm=EURUSD" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++Returns a list of markets with `epic`, `instrumentName`, `instrumentType`, `expiry`.
++
++## 2. Get Market Details
++
++Get full details for a specific instrument by its EPIC.
++
++```bash
++curl -s "$IG_BASE_URL/markets/CS.D.EURUSD.CFD.IP" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++Returns: instrument info, dealing rules, snapshot (bid/offer/high/low), market status (TRADEABLE/CLOSED).
++
++## 3. Historical Prices
++
++**By number of data points:**
++```bash
++curl -s "$IG_BASE_URL/prices/CS.D.EURUSD.CFD.IP/DAY/30" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Version: 3"
++```
++
++**By date range:**
++```bash
++curl -s "$IG_BASE_URL/prices/CS.D.EURUSD.CFD.IP/HOUR/2026-02-01T00:00:00/2026-02-27T00:00:00" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Version: 2"
++```
++
++**Resolution options:** `SECOND`, `MINUTE`, `MINUTE_2`, `MINUTE_3`, `MINUTE_5`, `MINUTE_10`, `MINUTE_15`, `MINUTE_30`, `HOUR`, `HOUR_2`, `HOUR_3`, `HOUR_4`, `DAY`, `WEEK`, `MONTH`
++
++## 4. Watchlists
++
++**List all watchlists:**
++```bash
++curl -s "$IG_BASE_URL/watchlists" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++**Get a specific watchlist:**
++```bash
++curl -s "$IG_BASE_URL/watchlists/$WATCHLIST_ID" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++**Create a watchlist:**
++```bash
++curl -s -X POST "$IG_BASE_URL/watchlists" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -d '{"name":"My Forex","epics":["CS.D.EURUSD.CFD.IP","CS.D.GBPUSD.CFD.IP"]}'
++```
++
++**Add a market to a watchlist:**
++```bash
++curl -s -X PUT "$IG_BASE_URL/watchlists/$WATCHLIST_ID" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -d '{"epic":"CS.D.AUDUSD.CFD.IP"}'
++```
++
++**Remove a market from a watchlist:**
++```bash
++curl -s -X DELETE "$IG_BASE_URL/watchlists/$WATCHLIST_ID/CS.D.AUDUSD.CFD.IP" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++## 5. Client Sentiment
++
++```bash
++curl -s "$IG_BASE_URL/client-sentiment/EURUSD" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++Returns: `longPositionPercentage`, `shortPositionPercentage`, `marketId`
++
++**Related markets sentiment:**
++```bash
++curl -s "$IG_BASE_URL/client-sentiment/related/EURUSD" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++## Common EPICs Reference
++
++| Market | EPIC | Type |
++|---|---|---|
++| EUR/USD | `CS.D.EURUSD.CFD.IP` | Forex CFD |
++| GBP/USD | `CS.D.GBPUSD.CFD.IP` | Forex CFD |
++| AUD/USD | `CS.D.AUDUSD.CFD.IP` | Forex CFD |
++| USD/JPY | `CS.D.USDJPY.CFD.IP` | Forex CFD |
++| EUR/GBP | `CS.D.EURGBP.CFD.IP` | Forex CFD |
++| FTSE 100 | `IX.D.FTSE.CFD.IP` | Index CFD |
++| S&P 500 | `IX.D.SPTRD.IFE.IP` | Index CFD |
++| Germany 40 | `IX.D.DAX.IFD.IP` | Index CFD |
++| Australia 200 | `IX.D.ASX.IFM.IP` | Index CFD |
++| Spot Gold | `CS.D.USCGC.TODAY.IP` | Commodity CFD |
++| US Crude Oil | `CC.D.CL.UME.IP` | Commodity CFD |
++| Bitcoin | `CS.D.BITCOIN.CFD.IP` | Crypto CFD |
++| Ethereum | `CS.D.ETHUSD.CFD.IP` | Crypto CFD |
++
++**Note:** EPICs can change. Use the search API (`/markets?searchTerm=`) to find the current EPIC for any instrument.
++
++## Streaming API (Advanced)
++
++For real-time prices, IG uses **Lightstreamer**. The streaming endpoint is returned in the login response (`lightstreamerEndpoint`). Up to 40 concurrent subscriptions allowed by default.
++
++Streaming requires a Lightstreamer client library — not practical from simple curl/exec. For real-time needs, poll `/markets/{epic}` sparingly (watch rate limits) or use the historical prices API with short intervals.
++
++## Rate Limits
++
++- Standard API quota per key (varies by account type)
++- Polling `/markets/{epic}` repeatedly will exhaust quota quickly — use sparingly
++- Historical prices are more efficient for bulk data
++- Error `error.public-api.exceeded-api-key-allowance` means you hit the limit — wait before retrying
+diff --git a/skills/ig-trading/SKILL.md b/skills/ig-trading/SKILL.md
+new file mode 100644
+index 000000000..894e9b066
+--- /dev/null
++++ b/skills/ig-trading/SKILL.md
+@@ -0,0 +1,179 @@
++---
++name: ig-trading
++description: IG Group REST Trading API — authenticate, trade CFDs, manage positions, view account. Use for "IG trade", "open position", "close position", "IG account", "IG balance".
++---
++# IG Trading API Skill
++
++Trade CFDs on the IG Group platform via REST API. Supports forex, indices, commodities, crypto.
++
++## Connection Details
++
++- **Demo API**: `https://demo-api.ig.com/gateway/deal`
++- **Live API**: `https://api.ig.com/gateway/deal` (requires separate live API key)
++- Credentials are stored in environment variables: `IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`, `IG_ACCOUNT_ID`, `IG_BASE_URL`
++
++**CRITICAL**: Demo API keys ONLY work on `demo-api.ig.com`. Live keys ONLY work on `api.ig.com`. They are NOT interchangeable.
++
++## 1. Authentication (Login)
++
++POST `/session` (Version 2) to get session tokens. You need **two response headers** for all subsequent requests.
++
++```bash
++curl -s -D - -X POST "$IG_BASE_URL/session" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -H "Accept: application/json; charset=UTF-8" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "Version: 2" \
++  -d "{\"identifier\":\"$IG_USERNAME\",\"password\":\"$IG_PASSWORD\"}"
++```
++
++**From the response headers, capture:**
++- `CST: <token>` — client session token
++- `X-SECURITY-TOKEN: <token>` — account security token
++
++Both tokens are valid for 6 hours and extend up to 72 hours while active.
++
++**All subsequent requests must include these 4 headers:**
++```
++X-IG-API-KEY: <your key>
++CST: <from login>
++X-SECURITY-TOKEN: <from login>
++Content-Type: application/json; charset=UTF-8
++```
++
++## 2. Account Info
++
++**Get accounts:**
++```bash
++curl -s "$IG_BASE_URL/accounts" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++**Get account preferences:**
++```bash
++curl -s "$IG_BASE_URL/accounts/preferences" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++## 3. List Open Positions
++
++```bash
++curl -s "$IG_BASE_URL/positions" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Version: 2"
++```
++
++## 4. Open a Position (Market Order)
++
++```bash
++curl -s -X POST "$IG_BASE_URL/positions/otc" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -H "Version: 2" \
++  -d '{
++    "epic": "CS.D.EURUSD.CFD.IP",
++    "direction": "BUY",
++    "size": 0.5,
++    "orderType": "MARKET",
++    "currencyCode": "USD",
++    "expiry": "-",
++    "forceOpen": true,
++    "guaranteedStop": false
++  }'
++```
++
++**Response** returns a `dealReference`. Use it to confirm:
++```bash
++curl -s "$IG_BASE_URL/confirms/$DEAL_REF" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST"
++```
++
++## 5. Close a Position
++
++```bash
++curl -s -X POST "$IG_BASE_URL/positions/otc" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -H "_method: DELETE" \
++  -d '{
++    "dealId": "<DEAL_ID>",
++    "direction": "SELL",
++    "size": 0.5,
++    "orderType": "MARKET"
++  }'
++```
++
++Note: IG uses `_method: DELETE` header trick for closing via POST.
++
++## 6. Working Orders
++
++**List working orders:**
++```bash
++curl -s "$IG_BASE_URL/working-orders" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Version: 2"
++```
++
++**Create a limit order:**
++```bash
++curl -s -X POST "$IG_BASE_URL/working-orders/otc" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Content-Type: application/json; charset=UTF-8" \
++  -H "Version: 2" \
++  -d '{
++    "epic": "CS.D.EURUSD.CFD.IP",
++    "direction": "BUY",
++    "size": 0.5,
++    "level": 1.0800,
++    "type": "LIMIT",
++    "currencyCode": "USD",
++    "expiry": "-",
++    "forceOpen": true,
++    "guaranteedStop": false,
++    "timeInForce": "GOOD_TILL_CANCELLED"
++  }'
++```
++
++## 7. Transaction History
++
++```bash
++curl -s "$IG_BASE_URL/history/transactions?type=ALL&from=2026-02-01T00:00:00&to=2026-02-28T00:00:00" \
++  -H "X-IG-API-KEY: $IG_API_KEY" \
++  -H "CST: $CST" \
++  -H "X-SECURITY-TOKEN: $X_ST" \
++  -H "Version: 2"
++```
++
++## 8. Risk Management Rules
++
++- Max 1% of balance per trade
++- Position size formula: `(balance * 0.01) / (stop_distance * value_per_point)`
++- Start with 0.1–0.5 contracts
++- Always calculate breakeven: `spread_points` = minimum move needed
++- Calculate overnight funding before holding positions overnight
++
++## Common Errors
++
++| Error Code | Meaning |
++|---|---|
++| `error.security.api-key-disabled` | API key disabled — regenerate on IG platform |
++| `error.security.api-key-invalid` | Wrong server (demo key on live, or vice versa) |
++| `error.security.invalid-details` | Wrong username or password |
++| `error.public-api.exceeded-api-key-allowance` | Rate limited — wait and retry |
++| `error.position.trading-not-enabled` | Account not enabled for trading |
+-- 
+2.40.0.windows.1
+

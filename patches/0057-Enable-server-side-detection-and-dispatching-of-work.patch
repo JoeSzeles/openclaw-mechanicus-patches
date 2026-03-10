@@ -1,0 +1,95 @@
+From 311fb57a2822ffaba7f76b99f120c0d1cdd3d6bf Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 17:41:19 +0000
+Subject: [PATCH 057/244] Enable server-side detection and dispatching of
+ worker messages
+
+Moves agent message processing from the client-side to the server, directly handling mentions via the WebSocket gateway to ensure reliable task dispatching to workers.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 96d1d77e-161e-4fa9-8457-e231e7a87166
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 2845be37-55ca-441d-aeac-02f5c57c44c8
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 57 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 57 insertions(+)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 36e7829ce..71d083900 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -42,6 +42,8 @@ function connectGateway() {
+       ws.send(JSON.stringify(connectFrame));
+       console.log("[ceo-proxy] Gateway WebSocket connected");
+     });
++    const processedRunIds = {};
++    const lastAutoDispatch = {};
+     ws.on("message", (data) => {
+       try {
+         const msg = JSON.parse(data.toString());
+@@ -52,6 +54,61 @@ function connectGateway() {
+             console.log("[ceo-proxy] Gateway session:", gwSessionKey);
+           }
+         }
++        if (msg.type === "event" && msg.event === "chat" && msg.payload) {
++          const pm = msg.payload.message;
++          const runId = msg.payload.runId || "";
++          if (!runId || processedRunIds[runId]) return;
++          if (runId.startsWith("inject-")) return;
++          if (!pm || pm.role !== "assistant") return;
++          if (msg.payload.state !== "final") return;
++          processedRunIds[runId] = true;
++          if (!pm.content || !pm.content.length) return;
++          for (const part of pm.content) {
++            if (part.type !== "text" || !part.text) continue;
++            const text = part.text;
++            const mentions = text.match(/@(\S+)/g);
++            if (!mentions) continue;
++            for (const mention of mentions) {
++              const wName = mention.slice(1);
++              if (wName.toLowerCase() === "ceo") continue;
++              let foundWorker = null;
++              let foundWid = null;
++              for (const [id, wr] of workers) {
++                if (wr.name.toLowerCase() === wName.toLowerCase()) {
++                  foundWorker = wr;
++                  foundWid = id;
++                  break;
++                }
++              }
++              if (!foundWorker) continue;
++              const now = Date.now();
++              if (lastAutoDispatch[foundWorker.name] && now - lastAutoDispatch[foundWorker.name] < 30000) {
++                console.log("[ceo-proxy] Skipping auto-dispatch to", foundWorker.name, "(cooldown)");
++                continue;
++              }
++              lastAutoDispatch[foundWorker.name] = now;
++              const bodyMatch = text.match(new RegExp("@" + wName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+([\\s\\S]+)"));
++              const body = bodyMatch ? bodyMatch[1] : text;
++              console.log("[ceo-proxy] CEO agent mentioned worker:", foundWorker.name, "- auto-dispatching");
++              const task = {
++                id: crypto.randomUUID(),
++                assignedTo: foundWid,
++                type: "message",
++                message: "@CEO: " + body,
++                filePath: null,
++                status: "pending",
++                createdAt: new Date().toISOString(),
++                completedAt: null,
++                result: null,
++              };
++              const taskData = loadJson(TASKS_FILE, { tasks: [], results: [] });
++              taskData.tasks.push(task);
++              saveJson(TASKS_FILE, taskData);
++              injectToGateway("CEO \u2192 " + foundWorker.name, body);
++              console.log("[ceo-proxy] Auto-dispatched task to", foundWorker.name, "taskId:", task.id);
++            }
++          }
++        }
+       } catch {}
+     });
+     ws.on("close", () => {
+-- 
+2.40.0.windows.1
+

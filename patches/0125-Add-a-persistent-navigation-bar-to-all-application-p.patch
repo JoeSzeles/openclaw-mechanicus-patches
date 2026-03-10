@@ -1,0 +1,86 @@
+From c9278cf74039c0c6229f11cfa13186494294c7d2 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 07:14:10 +0000
+Subject: [PATCH 125/244] Add a persistent navigation bar to all application
+ pages
+
+Modify the proxy to inject the navigation bar script into the main SPA and other HTML pages, and adjust styling to prevent content overlap.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 9fd593fb-0fb6-4ae8-a49e-b77fb35d3201
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/cR6uqrI
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs           | 28 +++++++++++++++++++++++++---
+ ui/public/nav-inject.js |  5 ++---
+ 2 files changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index b9e4413a8..4927ca75e 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -1386,7 +1386,8 @@ function proxyReq(req, res, retries = 3) {
+     method: req.method,
+     headers: { ...req.headers, host: "127.0.0.1:" + GATEWAY_PORT },
+   };
+-  const noCache = /\/(worker-chat|nav-inject|token-init|workers|processes)\.(js|css|html)/.test(req.url);
++  const noCache = /\/(worker-chat|nav-inject|token-init|workers|processes|model-config)\.(js|css|html)/.test(req.url);
++  const isHtmlPage = req.url === '/' || req.url === '/index.html' || /^\/(chat|overview|channels|instances|sessions|usage|cron|agents|skills|nodes|config|debug)/i.test(req.url);
+   const p = http.request(opts, (pr) => {
+     const headers = { ...pr.headers };
+     if (noCache) {
+@@ -1394,8 +1395,29 @@ function proxyReq(req, res, retries = 3) {
+       headers["pragma"] = "no-cache";
+       headers["expires"] = "0";
+     }
+-    res.writeHead(pr.statusCode, headers);
+-    pr.pipe(res);
++    const contentType = (pr.headers["content-type"] || "");
++    if (isHtmlPage && contentType.includes("text/html")) {
++      const chunks = [];
++      pr.on("data", (c) => chunks.push(c));
++      pr.on("end", () => {
++        let html = Buffer.concat(chunks).toString("utf-8");
++        if (!html.includes("nav-inject.js")) {
++          const idx = html.indexOf("</body>");
++          if (idx !== -1) {
++            html = html.slice(0, idx) + NAV_INJECT_TAG + html.slice(idx);
++          } else {
++            html += NAV_INJECT_TAG;
++          }
++        }
++        delete headers["content-length"];
++        headers["transfer-encoding"] = "chunked";
++        res.writeHead(pr.statusCode, headers);
++        res.end(html);
++      });
++    } else {
++      res.writeHead(pr.statusCode, headers);
++      pr.pipe(res);
++    }
+   });
+   p.on("error", (err) => {
+     if (retries > 0 && !res.headersSent) {
+diff --git a/ui/public/nav-inject.js b/ui/public/nav-inject.js
+index d523af63f..430977f4b 100644
+--- a/ui/public/nav-inject.js
++++ b/ui/public/nav-inject.js
+@@ -6,11 +6,10 @@
+   var style = document.createElement('style');
+   style.textContent = '#openclaw-nav{position:fixed;top:0;left:0;right:0;z-index:9999;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;height:36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}#openclaw-nav .ocn-links{display:flex;align-items:center;gap:2px}#openclaw-nav a{color:#8b949e;text-decoration:none;font-size:13px;font-weight:500;padding:5px 12px;border-radius:6px;transition:color .15s,background .15s;white-space:nowrap}#openclaw-nav a:hover{color:#e6edf3;background:rgba(255,255,255,.06)}#openclaw-nav a.active{color:#58a6ff;background:rgba(88,166,255,.1)}';
+   document.head.appendChild(style);
++  document.body.insertBefore(nav, document.body.firstChild);
+   var app = document.querySelector('openclaw-app');
+   if (app) {
+-    app.parentNode.insertBefore(nav, app);
+-  } else {
+-    document.body.insertBefore(nav, document.body.firstChild);
++    app.style.paddingTop = '36px';
+   }
+   var loc = window.location.pathname;
+   var links = nav.querySelectorAll('a');
+-- 
+2.40.0.windows.1
+

@@ -1,0 +1,38 @@
+From bb747fa559d8210610c5b5a840f30dfe48f45270 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 11:04:00 +0000
+Subject: [PATCH 026/244] Ensure API keys and tasks are saved permanently
+
+Initialize API keys and tasks files if they do not exist in the ceo-proxy.cjs file.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: intermediate_checkpoint
+Replit-Commit-Event-Id: 740dee53-c097-4446-82e8-750a6f3fb220
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 68f3ae846..a4b3bc740 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -15,6 +15,13 @@ const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+ 
+ fs.mkdirSync(EXCHANGE_DIR, { recursive: true });
+ 
++if (!fs.existsSync(API_KEYS_FILE)) {
++  fs.writeFileSync(API_KEYS_FILE, JSON.stringify({ keys: [] }, null, 2));
++}
++if (!fs.existsSync(TASKS_FILE)) {
++  fs.writeFileSync(TASKS_FILE, JSON.stringify({ tasks: [], results: [] }, null, 2));
++}
++
+ function loadJson(file, fallback) {
+   try { return JSON.parse(fs.readFileSync(file, "utf-8")); }
+   catch { return fallback; }
+-- 
+2.40.0.windows.1
+

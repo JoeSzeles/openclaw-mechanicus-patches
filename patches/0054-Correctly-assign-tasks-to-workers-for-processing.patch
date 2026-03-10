@@ -1,0 +1,38 @@
+From 5c90e78088f17fbcba94bbadf49a488bf3dfb985 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 17:11:47 +0000
+Subject: [PATCH 054/244] Correctly assign tasks to workers for processing
+
+Update the API dispatch handler in `ceo-proxy.cjs` to correctly capture and assign the worker ID to the `assignedTo` field of a task, resolving an issue where tasks were not being assigned due to incorrect ID retrieval from the workers Map.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 96d1d77e-161e-4fa9-8457-e231e7a87166
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: c8b5be8f-1d0c-425c-91c3-72bf29819ae6
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index d938a8e28..80c106466 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -398,11 +398,12 @@ async function handleApi(req, res) {
+     const message = body.message || "";
+     if (!workerName) return json(res, 400, { error: "workerName required" }), true;
+     let w = null;
+-    for (const [, wr] of workers) { if (wr.name.toLowerCase() === workerName.toLowerCase()) { w = wr; break; } }
++    let wid = null;
++    for (const [id, wr] of workers) { if (wr.name.toLowerCase() === workerName.toLowerCase()) { w = wr; wid = id; break; } }
+     if (!w) return json(res, 404, { error: "Worker not found: " + workerName }), true;
+     const task = {
+       id: crypto.randomUUID(),
+-      assignedTo: w.id,
++      assignedTo: wid,
+       type: "message",
+       message: "@CEO: " + message,
+       filePath: null,
+-- 
+2.40.0.windows.1
+

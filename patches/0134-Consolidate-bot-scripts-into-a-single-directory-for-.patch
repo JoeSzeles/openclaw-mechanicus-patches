@@ -1,0 +1,161 @@
+From 14d7a0637f55a6d50febdac87b494e9ff48bf828 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 08:51:07 +0000
+Subject: [PATCH 134/244] Consolidate bot scripts into a single directory for
+ easier management
+
+Removes legacy bot paths from ceo-proxy.cjs and updates SKILL.md files to point to the new location of the bot scripts in the skills/bots/ directory.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 30b4e069-fb76-4387-8072-8b19a972c93e
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/n8CkMU1
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                                 | 40 ++++++-------------
+ replit.md                                     |  2 +-
+ .../ig-signal-monitor.cjs}                    |  0
+ .../bot.cjs => bots/ig-trading-bot.cjs}       |  0
+ skills/ig-signal-monitor/SKILL.md             |  4 +-
+ skills/ig-trading-bot/SKILL.md                |  8 ++--
+ 6 files changed, 19 insertions(+), 35 deletions(-)
+ rename skills/{ig-signal-monitor/monitor.cjs => bots/ig-signal-monitor.cjs} (100%)
+ rename skills/{ig-trading-bot/bot.cjs => bots/ig-trading-bot.cjs} (100%)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 8646ebfb1..58a96b027 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -229,40 +229,24 @@ function startRegisteredBots() {
+ }
+ 
+ const BOTS_DIR = path.join(process.cwd(), "skills", "bots");
+-const LEGACY_BOT_PATHS = [
+-  { id: "ig-signal-monitor", cmd: "node skills/ig-signal-monitor/monitor.cjs", script: "skills/ig-signal-monitor/monitor.cjs" },
+-  { id: "ig-trading-bot", cmd: "node skills/ig-trading-bot/bot.cjs", script: "skills/ig-trading-bot/bot.cjs" },
+-];
+ 
+ function autoRegisterBotScripts() {
++  if (!fs.existsSync(BOTS_DIR)) return;
+   const registry = loadBotRegistry();
+   let changed = false;
+-
+-  for (const def of LEGACY_BOT_PATHS) {
+-    const scriptPath = path.join(process.cwd(), def.script);
+-    if (!fs.existsSync(scriptPath)) continue;
+-    if (registry.find(b => b.id === def.id)) continue;
+-    registry.push({ id: def.id, cmd: def.cmd, enabled: true, addedBy: "auto", addedAt: new Date().toISOString() });
+-    console.log(`[bot-mgr] Auto-registered legacy bot ${def.id}`);
+-    changed = true;
+-  }
+-
+-  if (fs.existsSync(BOTS_DIR)) {
+-    try {
+-      const files = fs.readdirSync(BOTS_DIR).filter(f => f.endsWith(".cjs"));
+-      for (const file of files) {
+-        const id = file.replace(/\.cjs$/, "");
+-        if (registry.find(b => b.id === id)) continue;
+-        const relPath = `skills/bots/${file}`;
+-        registry.push({ id, cmd: `node ${relPath}`, enabled: true, addedBy: "auto-scan", addedAt: new Date().toISOString() });
+-        console.log(`[bot-mgr] Auto-registered bot from skills/bots/: ${id}`);
+-        changed = true;
+-      }
+-    } catch (e) {
+-      console.error(`[bot-mgr] Error scanning ${BOTS_DIR}:`, e.message);
++  try {
++    const files = fs.readdirSync(BOTS_DIR).filter(f => f.endsWith(".cjs"));
++    for (const file of files) {
++      const id = file.replace(/\.cjs$/, "");
++      if (registry.find(b => b.id === id)) continue;
++      const relPath = `skills/bots/${file}`;
++      registry.push({ id, cmd: `node ${relPath}`, enabled: true, addedBy: "auto-scan", addedAt: new Date().toISOString() });
++      console.log(`[bot-mgr] Auto-registered bot: ${id}`);
++      changed = true;
+     }
++  } catch (e) {
++    console.error(`[bot-mgr] Error scanning ${BOTS_DIR}:`, e.message);
+   }
+-
+   if (changed) saveBotRegistry(registry);
+ }
+ 
+diff --git a/replit.md b/replit.md
+index 3e71844bb..aebcd5517 100644
+--- a/replit.md
++++ b/replit.md
+@@ -39,7 +39,7 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+ -   **Persistent Storage**: All OpenClaw data, including configuration, agents, API keys, worker tasks, chat history, and file exchange, persists across container restarts in the `.openclaw/` directory.
+ -   **Canvas Static File Serving**: The CEO proxy serves files from `.openclaw/canvas/` at `/__openclaw__/canvas/` without authentication. Canvas API: `DELETE /api/canvas/page/{filename}` removes a page from manifest + disk (protected pages: index.html, manifest.json, ig-dashboard.html). `GET /api/canvas/manifest` returns manifest entries. Skills and agents can write HTML dashboards, charts, and reports to this directory and link users directly. No separate web server or custom port needed. A manifest system (`.openclaw/canvas/manifest.json`) tracks all published pages for dynamic discovery on the Canvas hub (`/__openclaw__/canvas/`). Agents register new pages by adding entries to the manifest JSON array.
+ -   **Auto-Token Injection**: The gateway authentication token is automatically injected into the Control UI at startup, eliminating manual configuration.
+--   **Process Manager & Bot Registry**: A web UI (`/processes.html`) shows registered bots with start/stop/remove controls, a "Run at startup" checkbox toggle, AND ad-hoc running processes. Bot registry persists in `.openclaw/bot-registry.json` — registered bots with `enabled: true` auto-restart on server restart with exponential backoff (5s→60s max). The "Startup" checkbox toggle lets you control auto-restart independently from start/stop (critical for trading bots managing margin positions). API: `GET /api/processes` (list ad-hoc), `POST /api/processes/kill` (kill by PID), `GET /api/bots` (list registered bots), `POST /api/bots/register` (register a bot with id+cmd), `POST /api/bots/{id}/start|stop` (control), `PATCH /api/bots/{id}` (toggle enabled flag without starting/stopping), `DELETE /api/bots/{id}` (remove).
++-   **Process Manager & Bot Registry**: A web UI (`/processes.html`) shows registered bots with start/stop/remove controls, a "Run at startup" checkbox toggle, AND ad-hoc running processes. Bot registry persists in `.openclaw/bot-registry.json` — registered bots with `enabled: true` auto-restart on server restart with exponential backoff (5s→60s max). The "Startup" checkbox toggle lets you control auto-restart independently from start/stop (critical for trading bots managing margin positions). **All bot scripts live in `skills/bots/` as `.cjs` files** — the system auto-scans this folder on startup and registers any new scripts (filename minus `.cjs` = bot ID). API: `GET /api/processes` (list ad-hoc), `POST /api/processes/kill` (kill by PID), `GET /api/bots` (list registered bots), `POST /api/bots/register` (register a bot with id+cmd), `POST /api/bots/{id}/start|stop` (control), `PATCH /api/bots/{id}` (toggle enabled flag without starting/stopping), `DELETE /api/bots/{id}` (remove).
+ -   **IG API Proxy**: Live IG Group API endpoints in ceo-proxy.cjs with session token caching (5-min TTL). Endpoints: `GET /api/ig/account` (balance/margin), `GET /api/ig/positions` (open positions), `GET /api/ig/prices?epics=...` (current prices), `POST /api/ig/refresh-snapshots` (refresh config snapshot files for dashboard). Graceful fallback if IG env vars not configured.
+ -   **Chat Rich Media (Canvas Embeds)**: The chat UI supports inline iframe embeds for canvas pages. `![canvas](/__openclaw__/canvas/page.html)` renders as a sandboxed iframe. Raw `<iframe src="/__openclaw__/canvas/...">` also works. DOMPurify restricts iframe src to `/__openclaw__/canvas/` URLs only. Enhanced markdown tables with alternating row colors and hover highlighting.
+ -   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, AI Model Config, Workers, and Processes pages.
+diff --git a/skills/ig-signal-monitor/monitor.cjs b/skills/bots/ig-signal-monitor.cjs
+similarity index 100%
+rename from skills/ig-signal-monitor/monitor.cjs
+rename to skills/bots/ig-signal-monitor.cjs
+diff --git a/skills/ig-trading-bot/bot.cjs b/skills/bots/ig-trading-bot.cjs
+similarity index 100%
+rename from skills/ig-trading-bot/bot.cjs
+rename to skills/bots/ig-trading-bot.cjs
+diff --git a/skills/ig-signal-monitor/SKILL.md b/skills/ig-signal-monitor/SKILL.md
+index 6a8810bdf..1c1e0d002 100644
+--- a/skills/ig-signal-monitor/SKILL.md
++++ b/skills/ig-signal-monitor/SKILL.md
+@@ -78,7 +78,7 @@ You can add signal overrides on individual instruments:
+ ### Test Mode (one cycle, no persistent loop)
+ 
+ ```bash
+-node skills/ig-signal-monitor/monitor.cjs --test
++node skills/bots/ig-signal-monitor.cjs --test
+ ```
+ 
+ Runs a single poll cycle, prints what signals would fire, then exits. Use this to verify config and connectivity before running the full loop.
+@@ -86,7 +86,7 @@ Runs a single poll cycle, prints what signals would fire, then exits. Use this t
+ ### Full Loop
+ 
+ ```bash
+-node skills/ig-signal-monitor/monitor.cjs
++node skills/bots/ig-signal-monitor.cjs
+ ```
+ 
+ Runs continuously, polling at the configured interval. Writes alerts to `.openclaw/ig-alerts.json`.
+diff --git a/skills/ig-trading-bot/SKILL.md b/skills/ig-trading-bot/SKILL.md
+index 67a9fad46..030f4a400 100644
+--- a/skills/ig-trading-bot/SKILL.md
++++ b/skills/ig-trading-bot/SKILL.md
+@@ -11,8 +11,8 @@ Automated CFD trading bot for the IG Group platform. Executes trades based on co
+ ## Quick Start
+ 
+ 1. Create/edit the strategy config at `.openclaw/ig-strategy.json`
+-2. Test with: `node skills/ig-trading-bot/bot.cjs --test`
+-3. Run live: `node skills/ig-trading-bot/bot.cjs`
++2. Test with: `node skills/bots/ig-trading-bot.cjs --test`
++3. Run live: `node skills/bots/ig-trading-bot.cjs`
+ 
+ ## Strategy Config
+ 
+@@ -79,7 +79,7 @@ The bot reads its configuration from `.openclaw/ig-strategy.json`.
+ Simulates one cycle without placing real trades:
+ 
+ ```bash
+-node skills/ig-trading-bot/bot.cjs --test
++node skills/bots/ig-trading-bot.cjs --test
+ ```
+ 
+ This will:
+@@ -92,7 +92,7 @@ This will:
+ ### Live Mode
+ 
+ ```bash
+-node skills/ig-trading-bot/bot.cjs
++node skills/bots/ig-trading-bot.cjs
+ ```
+ 
+ Runs continuously, polling prices and executing trades when conditions are met. Press Ctrl+C to stop.
+-- 
+2.40.0.windows.1
+

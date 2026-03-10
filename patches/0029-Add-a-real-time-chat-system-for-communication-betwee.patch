@@ -1,0 +1,147 @@
+From ca940df9e9f6801f90ed8088a94e66948609d9da Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 11:37:04 +0000
+Subject: [PATCH 029/244] Add a real-time chat system for communication between
+ the CEO and worker bees
+
+Implements new `/api/chat` endpoints in `ceo-proxy.cjs` for sending, receiving, and deleting chat messages. Integrates chat display into the Worker Bees dashboard (`workers.html`, `workers.js`, `worker-chat.js`) and updates documentation in `replit.md`. Chat history is persisted in `.openclaw/ceo-chat.json`.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: intermediate_checkpoint
+Replit-Commit-Event-Id: 536a674b-4ce6-450e-b3cc-a601a16ab49d
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 52 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ replit.md     | 14 +++++++++++++-
+ 2 files changed, 65 insertions(+), 1 deletion(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index a4b3bc740..0ce545686 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -11,6 +11,7 @@ const DATA_DIR = path.join(OPENCLAW_HOME, ".openclaw");
+ const API_KEYS_FILE = path.join(DATA_DIR, "api-keys.json");
+ const EXCHANGE_DIR = path.join(DATA_DIR, "exchange");
+ const TASKS_FILE = path.join(DATA_DIR, "worker-tasks.json");
++const CHAT_FILE = path.join(DATA_DIR, "ceo-chat.json");
+ const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || "";
+ 
+ fs.mkdirSync(EXCHANGE_DIR, { recursive: true });
+@@ -21,6 +22,9 @@ if (!fs.existsSync(API_KEYS_FILE)) {
+ if (!fs.existsSync(TASKS_FILE)) {
+   fs.writeFileSync(TASKS_FILE, JSON.stringify({ tasks: [], results: [] }, null, 2));
+ }
++if (!fs.existsSync(CHAT_FILE)) {
++  fs.writeFileSync(CHAT_FILE, JSON.stringify({ messages: [] }, null, 2));
++}
+ 
+ function loadJson(file, fallback) {
+   try { return JSON.parse(fs.readFileSync(file, "utf-8")); }
+@@ -294,6 +298,53 @@ async function handleExchange(req, res, p) {
+   return json(res, 404, { error: "Not found" });
+ }
+ 
++async function handleChat(req, res, p) {
++  const url = new URL(req.url, "http://localhost");
++
++  if (req.method === "GET" && p === "/api/chat") {
++    const isGw = authGateway(req);
++    const apiKey = authWorker(req);
++    if (!isGw && !apiKey) return json(res, 401, { error: "Unauthorized" });
++    const data = loadJson(CHAT_FILE, { messages: [] });
++    const since = url.searchParams.get("since");
++    let msgs = data.messages || [];
++    if (since) {
++      const sinceTs = new Date(since).getTime();
++      msgs = msgs.filter((m) => new Date(m.ts).getTime() > sinceTs);
++    }
++    const limit = parseInt(url.searchParams.get("limit") || "100", 10);
++    msgs = msgs.slice(-limit);
++    return json(res, 200, { messages: msgs });
++  }
++
++  if (req.method === "POST" && p === "/api/chat") {
++    const isGw = authGateway(req);
++    const apiKey = authWorker(req);
++    if (!isGw && !apiKey) return json(res, 401, { error: "Unauthorized" });
++    const body = JSON.parse((await readBody(req)).toString() || "{}");
++    const msg = {
++      id: crypto.randomUUID(),
++      from: body.from || (isGw ? "CEO" : (apiKey ? apiKey.name : "unknown")),
++      role: isGw ? "ceo" : "worker",
++      text: body.text || body.message || "",
++      ts: new Date().toISOString(),
++    };
++    const data = loadJson(CHAT_FILE, { messages: [] });
++    data.messages.push(msg);
++    if (data.messages.length > 500) data.messages = data.messages.slice(-500);
++    saveJson(CHAT_FILE, data);
++    return json(res, 201, msg);
++  }
++
++  if (req.method === "DELETE" && p === "/api/chat") {
++    if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
++    saveJson(CHAT_FILE, { messages: [] });
++    return json(res, 200, { ok: true });
++  }
++
++  return json(res, 404, { error: "Not found" });
++}
++
+ async function handleApi(req, res) {
+   const url = new URL(req.url, "http://localhost");
+   const p = url.pathname;
+@@ -312,6 +363,7 @@ async function handleApi(req, res) {
+   if (p.startsWith("/api/workers")) { await handleWorkers(req, res, p); return true; }
+   if (p.startsWith("/api/tasks")) { await handleTasks(req, res, p); return true; }
+   if (p.startsWith("/api/exchange")) { await handleExchange(req, res, p); return true; }
++  if (p.startsWith("/api/chat")) { await handleChat(req, res, p); return true; }
+   return false;
+ }
+ 
+diff --git a/replit.md b/replit.md
+index 8db979a00..03070bc56 100644
+--- a/replit.md
++++ b/replit.md
+@@ -61,9 +61,17 @@ The CEO (this Replit instance) can dispatch tasks to local OpenClaw worker insta
+ - API key management UI (generate, copy, reveal, toggle, delete)
+ - Connected workers list with status (online/stale)
+ - Task dispatch form with worker selection and task types
++- CEO/Worker Bee Chat panel with real-time messaging (polls every 5s)
+ - File exchange browser with upload/download
+ - Task history with results
+-- Connection guide with PowerShell/bash scripts
++- Tabbed connection scripts (PowerShell / Bash) with banner, chat polling, workspace folder
++
++**CEO/Worker Bee Chat** (`/api/chat`)
++- Shared chat log between CEO and all worker bees
++- Workers poll for new messages alongside tasks (displayed locally in console)
++- Chat persisted in `.openclaw/ceo-chat.json` (max 500 messages)
++- Messages sent from dashboard chat or from @worker addressing on main Control UI
++- Worker bees announce when they come online and post errors/ACKs to chat
+ 
+ ### AI Model Providers
+ Two providers are pre-configured:
+@@ -148,6 +156,7 @@ The gateway auth token is automatically injected into the Control UI via `token-
+ - `dist/control-ui/model-config.html` - AI Model Configuration page
+ - `dist/control-ui/model-config.js` - Model config page logic (WebSocket comms, UI rendering)
+ - `dist/control-ui/model-config.css` - Model config page styles
++- `dist/control-ui/worker-chat.js` - @worker addressing interception for main dashboard chat
+ - `dist/control-ui/nav-inject.js` - Navigation bar injection script (adds nav to all pages)
+ - `dist/control-ui/token-init.js` - Auto-generated at startup, injects auth token
+ - `openclaw.json` - Seed config (copied to .openclaw/ on first run only)
+@@ -178,6 +187,9 @@ The gateway auth token is automatically injected into the Control UI via `token-
+ | GET | /api/exchange/download/:file | Any | Download exchange file |
+ | POST | /api/exchange/upload | Worker/Gateway | Upload file to exchange |
+ | DELETE | /api/exchange/:file | Gateway | Delete exchange file |
++| GET | /api/chat | Any | Get chat messages (supports ?since=&limit=) |
++| POST | /api/chat | Any | Post chat message ({from, text}) |
++| DELETE | /api/chat | Gateway | Clear all chat history |
+ 
+ ## Environment Variables & Secrets
+ | Variable | Purpose |
+-- 
+2.40.0.windows.1
+

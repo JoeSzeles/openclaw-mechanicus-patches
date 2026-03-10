@@ -1,0 +1,125 @@
+From 5a08bba5938c4fb1bf1dfc94f66cd3c471d46134 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Wed, 18 Feb 2026 06:02:12 +0000
+Subject: [PATCH 001/244] Add setup guide for deploying the AI gateway
+ application
+
+Create a detailed `replit.md` file outlining the project overview, architecture, build steps, and environment variable configurations for deploying the OpenClaw AI gateway.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: intermediate_checkpoint
+Replit-Commit-Event-Id: e484aaa2-0725-4992-93bf-8fc9871e05da
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/YhClZ0C
+Replit-Helium-Checkpoint-Created: true
+---
+ .replit   | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ replit.md | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 89 insertions(+)
+ create mode 100644 .replit
+ create mode 100644 replit.md
+
+diff --git a/.replit b/.replit
+new file mode 100644
+index 000000000..742073f79
+--- /dev/null
++++ b/.replit
+@@ -0,0 +1,45 @@
++modules = ["swift-5.8", "bash", "nodejs-22"]
++[agent]
++expertMode = true
++
++[nix]
++channel = "stable-25_05"
++
++[userenv]
++
++[userenv.shared]
++OPENCLAW_GATEWAY_PORT = "5000"
++OPENCLAW_GATEWAY_TOKEN = "4e38d19916ace326b63cfd867b58d2287ce9fa445c7ea4a07b6403d89e366a53"
++OPENCLAW_SKIP_CHANNELS = "1"
++
++[workflows]
++runButton = "Project"
++
++[[workflows.workflow]]
++name = "Project"
++mode = "parallel"
++author = "agent"
++
++[[workflows.workflow.tasks]]
++task = "workflow.run"
++args = "Start application"
++
++[[workflows.workflow]]
++name = "Start application"
++author = "agent"
++
++[workflows.workflow.metadata]
++outputType = "webview"
++
++[[workflows.workflow.tasks]]
++task = "shell.exec"
++args = "cd /home/runner/workspace && COREPACK_ENABLE_STRICT=0 node dist/entry.js gateway --bind lan --port 5000 --allow-unconfigured"
++waitForPort = 5000
++
++[[ports]]
++localPort = 5000
++externalPort = 80
++
++[deployment]
++deploymentTarget = "vm"
++run = ["node", "dist/entry.js", "gateway", "--bind", "lan", "--port", "5000", "--allow-unconfigured"]
+diff --git a/replit.md b/replit.md
+new file mode 100644
+index 000000000..a6fb0edf0
+--- /dev/null
++++ b/replit.md
+@@ -0,0 +1,44 @@
++# OpenClaw
++
++## Overview
++OpenClaw is a multi-channel AI gateway with extensible messaging integrations. It provides a WebSocket-based gateway server with a web-based control UI dashboard for managing AI chat sessions, channels, agents, and configuration.
++
++## Current State
++- Running on Replit with Node.js 22
++- Gateway server bound to 0.0.0.0:5000 with LAN bind mode
++- Control UI pre-built in dist/control-ui/
++- Channels are skipped (OPENCLAW_SKIP_CHANNELS=1) for basic operation
++
++## Project Architecture
++- **Language**: TypeScript (Node.js >= 22.12.0)
++- **Package Manager**: pnpm (10.23.0 specified in packageManager field)
++- **Build Tool**: tsdown (TypeScript bundler)
++- **UI**: Vite-based Lit web components in `ui/` directory, built to `dist/control-ui/`
++- **Entry Point**: `dist/entry.js` (compiled from `src/entry.ts`)
++- **Gateway CLI**: `node dist/entry.js gateway [options]`
++
++## Key Directories
++- `src/` - TypeScript source code
++- `src/gateway/` - Gateway server implementation
++- `src/cli/` - CLI command handlers
++- `src/config/` - Configuration loading
++- `ui/` - Control UI (Vite + Lit)
++- `dist/` - Built output
++- `dist/control-ui/` - Built UI assets
++
++## Environment Variables
++- `OPENCLAW_GATEWAY_PORT` - Gateway port (set to 5000)
++- `OPENCLAW_GATEWAY_TOKEN` - Auth token for gateway access
++- `OPENCLAW_SKIP_CHANNELS` - Skip channel initialization (set to 1)
++- `COREPACK_ENABLE_STRICT` - Must be 0 to avoid pnpm version conflicts
++
++## Workflow
++- **Start application**: Runs gateway server on port 5000 with LAN bind mode
++
++## Build Steps
++1. Install deps: `npx pnpm@10.23.0 install --no-frozen-lockfile`
++2. Build main project: Already pre-built in dist/
++3. Build UI: `cd ui && npx pnpm@10.23.0 run build`
++
++## User Preferences
++(none recorded yet)
+-- 
+2.40.0.windows.1
+

@@ -1,0 +1,1462 @@
+From 6532a4b882db8103d493c67a6527a85528f87659 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 10:51:02 +0000
+Subject: [PATCH 140/244] Add IG trading profile switching and streaming
+ support
+
+Implement credential profile management for IG trading, enabling seamless switching between demo and live accounts. Integrate Lightstreamer for real-time price streaming and enhance the dashboard to display streaming status. Refactor API interactions to support streaming and improve error handling. Update documentation and UI elements accordingly.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: a0be0cb0-30cf-454e-8eaa-af02eed4755a
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/1xdP3Qa
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 357 ++++++++++++++++++++++++++++--
+ docs/IG_TRADING_SETUP.md          | 125 ++++++++++-
+ pnpm-lock.yaml                    |  35 +++
+ replit.md                         |   8 +-
+ skills/bots/ig-signal-monitor.cjs |  84 ++++++-
+ skills/bots/ig-trading-bot.cjs    |  75 ++++++-
+ ui/public/model-config.html       | 167 +++++++++++---
+ ui/public/model-config.js         | 186 ++++++++++++++++
+ ui/public/nav-inject.js           |   2 +-
+ 9 files changed, 962 insertions(+), 77 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 797ff4d4e..ad6c5b5e6 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -21,19 +21,244 @@ const BOT_REGISTRY_FILE = path.join(DATA_DIR, "bot-registry.json");
+ const https = require("https");
+ 
+ // IG API session cache
+-let igSession = { cst: null, xst: null, ts: 0 };
++let igSession = { cst: null, xst: null, ts: 0, lightstreamerEndpoint: null };
+ const IG_SESSION_TTL = 5 * 60 * 1000;
+ 
+-// Bot process manager
+-const botProcesses = new Map();
++// IG response cache
++const igResponseCache = new Map();
++const IG_CACHE_TTL = 30000;
++
++function igCacheGet(key) {
++  const entry = igResponseCache.get(key);
++  if (!entry) return null;
++  if (Date.now() - entry.ts > IG_CACHE_TTL) { igResponseCache.delete(key); return null; }
++  return entry.data;
++}
++
++function igCacheSet(key, data) {
++  igResponseCache.set(key, { data, ts: Date.now() });
++}
++
++function igCacheInvalidate() {
++  igResponseCache.clear();
++}
++
++// IG credential profiles
++const IG_CONFIG_FILE = path.join(DATA_DIR, "ig-config.json");
++
++function loadIgConfig() {
++  try {
++    if (fs.existsSync(IG_CONFIG_FILE)) return JSON.parse(fs.readFileSync(IG_CONFIG_FILE, "utf8"));
++  } catch (_) {}
++  return null;
++}
++
++function saveIgConfig(config) {
++  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
++  fs.writeFileSync(IG_CONFIG_FILE, JSON.stringify(config, null, 2));
++}
++
++function getDefaultIgConfig() {
++  return {
++    activeProfile: "demo",
++    profiles: {
++      demo: {
++        label: "Demo Account",
++        baseUrl: "https://demo-api.ig.com/gateway/deal",
++        apiKey: "",
++        username: "",
++        password: "",
++        accountId: ""
++      },
++      live: {
++        label: "Live Account",
++        baseUrl: "https://api.ig.com/gateway/deal",
++        apiKey: "",
++        username: "",
++        password: "",
++        accountId: ""
++      }
++    }
++  };
++}
++
++function ensureIgConfig() {
++  let config = loadIgConfig();
++  if (!config) {
++    config = getDefaultIgConfig();
++    if (process.env.IG_API_KEY || process.env.IG_USERNAME) {
++      const profile = (process.env.IG_BASE_URL || "").includes("demo-api") ? "demo" : "live";
++      config.activeProfile = profile;
++      config.profiles[profile].apiKey = process.env.IG_API_KEY || "";
++      config.profiles[profile].username = process.env.IG_USERNAME || "";
++      config.profiles[profile].password = process.env.IG_PASSWORD || "";
++      config.profiles[profile].accountId = process.env.IG_ACCOUNT_ID || "";
++      config.profiles[profile].baseUrl = process.env.IG_BASE_URL || config.profiles[profile].baseUrl;
++      console.log(`[ig-config] Seeded ${profile} profile from env vars`);
++    }
++    saveIgConfig(config);
++  }
++  return config;
++}
++
++function getActiveIgProfile() {
++  const config = ensureIgConfig();
++  const profile = config.profiles[config.activeProfile];
++  if (!profile) return null;
++  return { ...profile, profileName: config.activeProfile };
++}
+ 
+ function igConfigured() {
+-  return !!(process.env.IG_API_KEY && process.env.IG_USERNAME && process.env.IG_PASSWORD && process.env.IG_BASE_URL);
++  const p = getActiveIgProfile();
++  return !!(p && p.apiKey && p.username && p.password && p.baseUrl);
++}
++
++// Lightstreamer streaming
++let lsClient = null;
++let lsSubscription = null;
++let lsStatus = "disconnected";
++let lsConnectedEpics = [];
++const streamedPrices = new Map();
++
++function getStreamedPrices() {
++  const result = {};
++  for (const [epic, data] of streamedPrices) {
++    result[epic] = { ...data };
++  }
++  return result;
++}
++
++function collectInstrumentEpics() {
++  const epics = new Set();
++  try {
++    const monCfg = path.join(DATA_DIR, "ig-monitor-config.json");
++    if (fs.existsSync(monCfg)) {
++      const cfg = JSON.parse(fs.readFileSync(monCfg, "utf8"));
++      if (cfg.instruments) cfg.instruments.forEach(i => { if (i.epic) epics.add(i.epic); });
++    }
++  } catch (_) {}
++  try {
++    const strCfg = path.join(DATA_DIR, "ig-strategy.json");
++    if (fs.existsSync(strCfg)) {
++      const cfg = JSON.parse(fs.readFileSync(strCfg, "utf8"));
++      if (cfg.strategies) cfg.strategies.forEach(s => { if (s.instrument) epics.add(s.instrument); });
++    }
++  } catch (_) {}
++  return [...epics].slice(0, 40);
++}
++
++async function startLightstreamer() {
++  if (!igConfigured()) { lsStatus = "not_configured"; return; }
++  try {
++    const { LightstreamerClient, Subscription } = require("lightstreamer-client-node");
++    const session = await igAuth();
++    if (!igSession.lightstreamerEndpoint) {
++      console.log("[lightstreamer] No endpoint from session, skipping");
++      lsStatus = "no_endpoint";
++      return;
++    }
++    if (lsClient) { try { lsClient.disconnect(); } catch (_) {} }
++
++    const client = new LightstreamerClient(igSession.lightstreamerEndpoint, "DEFAULT");
++    const profile = getActiveIgProfile();
++    client.connectionDetails.setUser(profile.accountId);
++    client.connectionDetails.setPassword(`CST-${session.cst}|XST-${session.xst}`);
++
++    client.addListener({
++      onStatusChange: (status) => {
++        console.log("[lightstreamer] Status:", status);
++        if (status.startsWith("CONNECTED")) lsStatus = "connected";
++        else if (status.startsWith("DISCONNECTED")) lsStatus = "disconnected";
++        else if (status.startsWith("CONNECTING") || status.startsWith("STALLED")) lsStatus = "reconnecting";
++      },
++      onServerError: (code, msg) => {
++        console.log("[lightstreamer] Server error:", code, msg);
++        lsStatus = "error";
++      }
++    });
++
++    client.connect();
++    lsClient = client;
++
++    const epics = collectInstrumentEpics();
++    if (epics.length === 0) {
++      console.log("[lightstreamer] No instruments to subscribe to");
++      lsStatus = "connected";
++      lsConnectedEpics = [];
++      return;
++    }
++
++    const items = epics.map(e => `L1:${e}`);
++    const fields = ["BID", "OFFER", "HIGH", "LOW", "MID_OPEN", "MARKET_STATE", "UPDATE_TIME"];
++    const sub = new Subscription("MERGE", items, fields);
++    sub.setRequestedSnapshot("yes");
++    sub.addListener({
++      onSubscription: () => {
++        console.log(`[lightstreamer] Subscribed to ${epics.length} instruments`);
++        lsConnectedEpics = epics;
++      },
++      onSubscriptionError: (code, msg) => {
++        console.error(`[lightstreamer] Subscription error: ${code} ${msg}`);
++        if (msg && msg.includes("Invalid account type")) {
++          console.log("[lightstreamer] This IG account type does not support streaming. Prices will use REST polling instead.");
++          lsStatus = "unsupported";
++        }
++      },
++      onItemUpdate: (info) => {
++        const epicFull = info.getItemName();
++        const epic = epicFull.startsWith("L1:") ? epicFull.slice(3) : epicFull;
++        const bid = parseFloat(info.getValue("BID")) || null;
++        const offer = parseFloat(info.getValue("OFFER")) || null;
++        const mid = (bid && offer) ? (bid + offer) / 2 : null;
++        streamedPrices.set(epic, {
++          bid, offer, mid,
++          high: parseFloat(info.getValue("HIGH")) || null,
++          low: parseFloat(info.getValue("LOW")) || null,
++          midOpen: parseFloat(info.getValue("MID_OPEN")) || null,
++          marketState: info.getValue("MARKET_STATE") || null,
++          updateTime: info.getValue("UPDATE_TIME") || null,
++          timestamp: Date.now()
++        });
++      },
++      onUnsubscription: () => {
++        console.log("[lightstreamer] Unsubscribed");
++        lsConnectedEpics = [];
++      },
++      onCommandSecondLevelSubscriptionError: (code, msg) => {
++        console.error(`[lightstreamer] 2nd level error: ${code} ${msg}`);
++      }
++    });
++    client.subscribe(sub);
++    lsSubscription = sub;
++    console.log(`[lightstreamer] Connecting to ${igSession.lightstreamerEndpoint}, subscribing to ${epics.length} instruments`);
++  } catch (e) {
++    console.error("[lightstreamer] Error starting:", e.message);
++    lsStatus = "error";
++  }
++}
++
++function stopLightstreamer() {
++  if (lsClient) {
++    try {
++      if (lsSubscription) lsClient.unsubscribe(lsSubscription);
++      lsClient.disconnect();
++    } catch (_) {}
++    lsClient = null;
++    lsSubscription = null;
++    lsStatus = "disconnected";
++    lsConnectedEpics = [];
++    streamedPrices.clear();
++    console.log("[lightstreamer] Disconnected");
++  }
+ }
+ 
++// Bot process manager
++const botProcesses = new Map();
++
+ function igRequest(method, urlPath, headers, body) {
+   return new Promise((resolve, reject) => {
+-    const base = process.env.IG_BASE_URL || "";
++    const profile = getActiveIgProfile();
++    const base = (profile && profile.baseUrl) || process.env.IG_BASE_URL || "";
+     const url = new URL(urlPath.startsWith("http") ? urlPath : base + urlPath);
+     const mod = url.protocol === "https:" ? https : http;
+     const opts = {
+@@ -60,23 +285,31 @@ async function igAuth() {
+   if (igSession.cst && Date.now() - igSession.ts < IG_SESSION_TTL) {
+     return { cst: igSession.cst, xst: igSession.xst };
+   }
++  const profile = getActiveIgProfile();
++  if (!profile) throw new Error("No active IG profile configured");
+   const res = await igRequest("POST", "/session", {
+     "Content-Type": "application/json; charset=UTF-8",
+     Accept: "application/json; charset=UTF-8",
+-    "X-IG-API-KEY": process.env.IG_API_KEY,
++    "X-IG-API-KEY": profile.apiKey,
+     Version: "2",
+-  }, JSON.stringify({ identifier: process.env.IG_USERNAME, password: process.env.IG_PASSWORD }));
+-  if (res.status !== 200) throw new Error("IG auth failed: " + res.status);
++  }, JSON.stringify({ identifier: profile.username, password: profile.password }));
++  if (res.status !== 200) throw new Error("IG auth failed: " + res.status + " " + res.body);
+   const cst = res.headers["cst"] || res.headers["CST"];
+   const xst = res.headers["x-security-token"] || res.headers["X-SECURITY-TOKEN"];
+   if (!cst || !xst) throw new Error("IG auth missing tokens");
+-  igSession = { cst, xst, ts: Date.now() };
++  let lsEndpoint = null;
++  try {
++    const body = JSON.parse(res.body);
++    lsEndpoint = body.lightstreamerEndpoint || null;
++  } catch (_) {}
++  igSession = { cst, xst, ts: Date.now(), lightstreamerEndpoint: lsEndpoint };
+   return { cst, xst };
+ }
+ 
+ function igHeaders(session) {
++  const profile = getActiveIgProfile();
+   return {
+-    "X-IG-API-KEY": process.env.IG_API_KEY,
++    "X-IG-API-KEY": (profile && profile.apiKey) || process.env.IG_API_KEY || "",
+     CST: session.cst,
+     "X-SECURITY-TOKEN": session.xst,
+     "Content-Type": "application/json; charset=UTF-8",
+@@ -84,38 +317,130 @@ function igHeaders(session) {
+   };
+ }
+ 
++function maskSecret(val) {
++  if (!val || val.length < 4) return val ? "****" : "";
++  return val.slice(0, 2) + "****" + val.slice(-2);
++}
++
+ async function handleIgApi(req, res, p) {
+   if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
+-  if (!igConfigured()) return json(res, 503, { error: "IG not configured — set IG_API_KEY, IG_USERNAME, IG_PASSWORD, IG_BASE_URL env vars" });
+ 
+   try {
++    if (req.method === "GET" && p === "/api/ig/config") {
++      const config = ensureIgConfig();
++      const masked = JSON.parse(JSON.stringify(config));
++      for (const key of Object.keys(masked.profiles)) {
++        const pr = masked.profiles[key];
++        pr.apiKey = maskSecret(pr.apiKey);
++        pr.username = maskSecret(pr.username);
++        pr.password = maskSecret(pr.password);
++        pr.hasCredentials = !!(config.profiles[key].apiKey && config.profiles[key].username && config.profiles[key].password);
++      }
++      masked.streaming = { status: lsStatus, connectedEpics: lsConnectedEpics, priceCount: streamedPrices.size };
++      return json(res, 200, masked);
++    }
++
++    if (req.method === "POST" && p === "/api/ig/config") {
++      const body = JSON.parse((await readBody(req)).toString() || "{}");
++      const config = ensureIgConfig();
++      if (body.activeProfile && config.profiles[body.activeProfile]) {
++        const oldProfile = config.activeProfile;
++        config.activeProfile = body.activeProfile;
++        if (oldProfile !== body.activeProfile) {
++          igSession = { cst: null, xst: null, ts: 0, lightstreamerEndpoint: null };
++          igCacheInvalidate();
++          stopLightstreamer();
++          console.log(`[ig-config] Switched profile: ${oldProfile} -> ${body.activeProfile}`);
++        }
++      }
++      if (body.profiles) {
++        for (const key of Object.keys(body.profiles)) {
++          if (!config.profiles[key]) continue;
++          const src = body.profiles[key];
++          if (src.apiKey !== undefined && !src.apiKey.includes("****")) config.profiles[key].apiKey = src.apiKey;
++          if (src.username !== undefined && !src.username.includes("****")) config.profiles[key].username = src.username;
++          if (src.password !== undefined && !src.password.includes("****")) config.profiles[key].password = src.password;
++          if (src.accountId !== undefined) config.profiles[key].accountId = src.accountId;
++        }
++      }
++      saveIgConfig(config);
++      if (igConfigured()) {
++        igSession = { cst: null, xst: null, ts: 0, lightstreamerEndpoint: null };
++        igCacheInvalidate();
++        setTimeout(() => startLightstreamer(), 1000);
++      }
++      return json(res, 200, { ok: true, activeProfile: config.activeProfile });
++    }
++
++    if (req.method === "POST" && p === "/api/ig/config/test") {
++      if (!igConfigured()) return json(res, 400, { error: "No credentials configured for active profile" });
++      try {
++        const session = await igAuth();
++        const profile = getActiveIgProfile();
++        return json(res, 200, { ok: true, profile: profile.profileName, lightstreamerEndpoint: igSession.lightstreamerEndpoint || null });
++      } catch (e) {
++        return json(res, 200, { ok: false, error: e.message });
++      }
++    }
++
++    if (req.method === "GET" && p === "/api/ig/stream/prices") {
++      const prices = getStreamedPrices();
++      return json(res, 200, { streaming: lsStatus === "connected", prices });
++    }
++
++    if (req.method === "GET" && p === "/api/ig/stream/status") {
++      return json(res, 200, {
++        status: lsStatus,
++        connectedEpics: lsConnectedEpics,
++        priceCount: streamedPrices.size,
++        activeProfile: getActiveIgProfile()?.profileName || null,
++        lightstreamerEndpoint: igSession.lightstreamerEndpoint || null
++      });
++    }
++
++    if (!igConfigured()) return json(res, 503, { error: "IG not configured — set credentials in Config page or env vars" });
++
+     if (req.method === "GET" && p === "/api/ig/positions") {
++      const cached = igCacheGet("positions");
++      if (cached) return json(res, 200, cached);
+       const session = await igAuth();
+       const r = await igRequest("GET", "/positions", { ...igHeaders(session), Version: "2" });
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
++      const data = JSON.parse(r.body);
++      igCacheSet("positions", data);
++      return json(res, 200, data);
+     }
+ 
+     if (req.method === "GET" && p === "/api/ig/account") {
++      const cached = igCacheGet("account");
++      if (cached) return json(res, 200, cached);
+       const session = await igAuth();
+       const r = await igRequest("GET", "/accounts", igHeaders(session));
+       if (r.status !== 200) return json(res, r.status, { error: "IG API error", detail: r.body });
+-      return json(res, 200, JSON.parse(r.body));
++      const data = JSON.parse(r.body);
++      igCacheSet("account", data);
++      return json(res, 200, data);
+     }
+ 
+     if (req.method === "GET" && p.startsWith("/api/ig/prices")) {
+       const url = new URL("http://localhost" + req.url);
+       const epics = url.searchParams.get("epics");
+       if (!epics) return json(res, 400, { error: "Missing ?epics= param" });
++      const epicList = epics.split(",").map(s => s.trim()).filter(Boolean);
++      const cacheKey = "prices:" + epicList.sort().join(",");
++      const cached = igCacheGet(cacheKey);
++      if (cached) return json(res, 200, cached);
+       const session = await igAuth();
+       const results = {};
+-      for (const epic of epics.split(",").map(s => s.trim()).filter(Boolean)) {
++      for (const epic of epicList) {
+         try {
+           const r = await igRequest("GET", "/markets/" + epic, igHeaders(session));
+           if (r.status === 200) results[epic] = JSON.parse(r.body);
+         } catch (_) {}
+       }
+-      return json(res, 200, { prices: results });
++      const data = { prices: results };
++      igCacheSet(cacheKey, data);
++      return json(res, 200, data);
+     }
+ 
+     if (req.method === "POST" && p === "/api/ig/refresh-snapshots") {
+@@ -1617,10 +1942,12 @@ server.on("upgrade", (req, socket, head) => {
+ 
+ server.listen(PROXY_PORT, "0.0.0.0", () => {
+   console.log(`[ceo-proxy] listening on 0.0.0.0:${PROXY_PORT}, proxying to gateway:${GATEWAY_PORT}`);
++  ensureIgConfig();
+   updateCrewFile();
+   writeConfigSnapshots();
+   autoRegisterBotScripts();
+   startRegisteredBots();
++  setTimeout(() => startLightstreamer(), 5000);
+ });
+ 
+ setInterval(() => {
+diff --git a/docs/IG_TRADING_SETUP.md b/docs/IG_TRADING_SETUP.md
+index 787050ec4..aaae97d5f 100644
+--- a/docs/IG_TRADING_SETUP.md
++++ b/docs/IG_TRADING_SETUP.md
+@@ -28,9 +28,59 @@ Live API base URL: `https://api.ig.com/gateway/deal`
+ 
+ > **CRITICAL**: Demo keys ONLY work on `demo-api.ig.com`. Live keys ONLY work on `api.ig.com`. Using a demo key on the live server returns `error.security.api-key-invalid`. Each account is limited to one API key.
+ 
+-## Environment Variables
++## Credential Profiles (Demo/Live Switching)
+ 
+-Set these in Replit Secrets:
++OpenClaw Cloud supports two credential profiles — **Demo** and **Live** — stored in `.openclaw/ig-config.json`. You can switch between them from the **Config** page without restarting.
++
++### How It Works
++
++1. On first startup, environment variables (`IG_API_KEY`, etc.) are used to seed the demo profile
++2. Both profiles are stored in `.openclaw/ig-config.json` with full credentials
++3. All IG code (proxy, bots, dashboard) reads from the **active profile** — not env vars directly
++4. Switching profiles:
++   - Clears cached IG sessions
++   - Disconnects and reconnects Lightstreamer to the correct endpoint
++   - Bots pick up the new credentials on their next cycle
++
++### Config Page
++
++Navigate to **Config > IG Trading** to:
++- Toggle between Demo and Live profiles
++- Enter/update credentials for each profile (passwords are masked in the UI)
++- Test the connection with a single click
++- View Lightstreamer streaming status
++
++### Manual Configuration
++
++The profile config file at `.openclaw/ig-config.json`:
++
++```json
++{
++  "activeProfile": "demo",
++  "profiles": {
++    "demo": {
++      "label": "Demo Account",
++      "baseUrl": "https://demo-api.ig.com/gateway/deal",
++      "apiKey": "your-demo-api-key",
++      "username": "your-username",
++      "password": "your-password",
++      "accountId": "Z3MJKY"
++    },
++    "live": {
++      "label": "Live Account",
++      "baseUrl": "https://api.ig.com/gateway/deal",
++      "apiKey": "",
++      "username": "",
++      "password": "",
++      "accountId": ""
++    }
++  }
++}
++```
++
++### Environment Variables (Legacy/Seed)
++
++Environment variables are still supported and are used to seed the initial profile if `ig-config.json` doesn't exist:
+ 
+ | Variable | Required | Example | Description |
+ |----------|----------|---------|-------------|
+@@ -40,6 +90,8 @@ Set these in Replit Secrets:
+ | `IG_ACCOUNT_ID` | Yes | `Z3MJKY` | Your IG account identifier |
+ | `IG_BASE_URL` | Yes | `https://demo-api.ig.com/gateway/deal` | API endpoint (demo or live) |
+ 
++Once profiles are configured via the Config page, env vars are no longer read directly.
++
+ ## Testing Your Connection
+ 
+ ```bash
+@@ -154,18 +206,25 @@ Executes trades based on configurable strategy rules with built-in risk controls
+ 
+ ## Dashboard
+ 
+-The IG Trading Dashboard is available at `/__openclaw__/canvas/ig-dashboard.html` and auto-refreshes every 30 seconds.
++The IG Trading Dashboard is available at `/__openclaw__/canvas/ig-dashboard.html`.
+ 
+ ![IG Trading Dashboard](images/ig-dashboard.png)
+ 
+ It shows:
+-- **Account balance, available funds, unrealised P&L** (LIVE from API)
+-- **Open positions** with entry, current price, and P&L (LIVE from API)
++- **Account balance, available funds, unrealised P&L** (LIVE from API, cached 30s)
++- **Open positions** with entry, current price, and P&L (LIVE from API, cached 30s)
++- **Streamed prices** with bid/offer/spread/state (STREAMING via Lightstreamer, updated every 5s)
+ - **Price charts** with bid/offer/mid (SNAPSHOT from price history)
+ - **Monitor and bot status** (ACTIVE/INACTIVE)
+ - **Watched instruments** and **active strategies** (SNAPSHOT from config files)
+ 
+-Badge system: green **LIVE** badge for sections fetched from the IG API in real-time, grey **SNAPSHOT** badge for sections loaded from local config files.
++Badge system:
++- Green **STREAMING** badge: prices delivered via Lightstreamer in real-time (5-second UI refresh)
++- Green **LIVE** badge: data fetched from IG REST API (cached 30s)
++- Grey **SNAPSHOT** badge: data loaded from local config files
++- Orange **POLLING** badge: streaming unavailable, falling back to REST
++
++The dashboard uses JavaScript-based refresh intervals instead of meta-refresh: streamed prices update every 5 seconds, full dashboard refresh every 30 seconds.
+ 
+ ## Rate Limits
+ 
+@@ -251,7 +310,7 @@ Both bots support configurable rate limiting via their config files:
+ - **Reduce instruments** being monitored if hitting limits
+ - **Use the IG Trading Dashboard** (which uses cached data) instead of making direct API calls for viewing
+ - **Avoid restarting bots frequently** — each restart triggers a fresh authentication
+-- **Consider Lightstreamer** for real-time price data in future implementations
++- **Enable Lightstreamer streaming** to eliminate REST polling for prices (see below)
+ 
+ ## Trade Proof Reader
+ 
+@@ -284,6 +343,58 @@ Features:
+ - Performance metrics: P&L, win rate, Sharpe ratio, max drawdown, profit factor
+ - Results published as interactive HTML pages on the Canvas hub
+ 
++## Lightstreamer Streaming
++
++OpenClaw Cloud uses IG's Lightstreamer streaming API for real-time price data, eliminating the need for REST polling and dramatically reducing API quota usage.
++
++### How It Works
++
++1. On startup (5 seconds after the proxy boots), the system authenticates with IG and connects to the Lightstreamer endpoint
++2. It subscribes to L1 (Level 1) price data for all instruments configured in the signal monitor and trading bot configs
++3. Price updates arrive in real-time and are stored in memory
++4. The dashboard, bots, and any other consumer can read streamed prices from `/api/ig/stream/prices` at zero API quota cost
++5. If Lightstreamer is unavailable, everything falls back to REST polling automatically
++
++### Streaming Endpoints
++
++| Endpoint | Method | Description |
++|----------|--------|-------------|
++| `/api/ig/stream/prices` | GET | Returns all currently streamed prices (zero quota) |
++| `/api/ig/stream/status` | GET | Returns Lightstreamer connection status |
++
++### Subscription Limits
++
++- **Maximum 40 concurrent L1 subscriptions** per Lightstreamer connection
++- Each instrument (EPIC) uses one subscription
++- The system auto-subscribes to all EPICs found in bot configs on startup
++- Exceeding the limit will cause subscription errors (the system handles this gracefully)
++
++### Lightstreamer Endpoints
++
++| Account Type | Lightstreamer Endpoint |
++|-------------|----------------------|
++| **Demo** | `https://demo-apd.marketdatasystems.com` |
++| **Live** | Returned in the IG session response (`lightstreamerEndpoint` field) |
++
++### Bot Integration
++
++Both bots automatically try streamed prices before falling back to REST:
++
++1. Bot checks `/api/ig/stream/prices` for the instrument
++2. If a valid price exists (< 60 seconds old), it uses it (zero quota)
++3. If streaming is unavailable or data is stale, it falls back to REST `/markets/{epic}`
++
++To disable streaming for a bot, set `"useStreaming": false` in its config file.
++
++### Response Caching
++
++The proxy also caches REST responses for 30 seconds on these endpoints:
++- `/api/ig/account`
++- `/api/ig/positions`
++- `/api/ig/prices`
++
++This means multiple dashboard refreshes within 30 seconds reuse cached data instead of making fresh API calls. The cache is invalidated when a trade is executed.
++
+ ## Troubleshooting
+ 
+ ### `error.public-api.exceeded-api-key-allowance` (403)
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 1c7914d54..7f1f61a5a 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -121,6 +121,9 @@ importers:
+       jszip:
+         specifier: ^3.10.1
+         version: 3.10.1
++      lightstreamer-client-node:
++        specifier: ^9.2.2
++        version: 9.2.2
+       linkedom:
+         specifier: ^0.18.12
+         version: 0.18.12
+@@ -3309,6 +3312,7 @@ packages:
+   basic-ftp@5.1.0:
+     resolution: {integrity: sha512-RkaJzeJKDbaDWTIPiJwubyljaEPwpVWkm9Rt5h9Nd6h7tEXTJ3VB4qxdZBioV7JO5yLUaOKwz7vDOzlncUsegw==}
+     engines: {node: '>=10.0.0'}
++    deprecated: Security vulnerability fixed in 5.2.0, please upgrade
+ 
+   bcrypt-pbkdf@1.0.2:
+     resolution: {integrity: sha512-qeFIXtP4MSoi6NLqO12WfqARWWuCKi2Rn/9hJLEmtB5yTNr9DqFWkJRCf2qShWzPeAMRnOgCrq0sg/KLv5ES9w==}
+@@ -3499,6 +3503,9 @@ packages:
+     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
+     engines: {node: '>= 0.6'}
+ 
++  cookiejar@2.1.4:
++    resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
++
+   core-util-is@1.0.2:
+     resolution: {integrity: sha512-3lqz5YjWTYnW6dlDa5TLaTCcShfar1e40rmcJVwCBJC6mWlFuj0eCHIElmG1g5kyuJ/GD+8Wn4FFCcz4gJPfaQ==}
+ 
+@@ -4209,6 +4216,10 @@ packages:
+   jsonfile@6.2.0:
+     resolution: {integrity: sha512-FGuPw30AdOIUTRMC2OMRtQV+jkVj2cfPqSeWXv1NEAJ1qZ5zb1X6z1mFhbfOB/iy3ssJCD+3KuZ8r8C3uVFlAg==}
+ 
++  jsonpatch@3.1.0:
++    resolution: {integrity: sha512-rJa0FepwDzebgYAuT389AtziWfn3EZA4N5e/B8d50IC1glqlZ7njo7iAI/ph5MYw2GGH7lCE6DGqBGQ7TVa06w==}
++    engines: {node: '>=0.4.0'}
++
+   jsonwebtoken@9.0.3:
+     resolution: {integrity: sha512-MT/xP0CrubFRNLNKvxJ2BYfy53Zkm++5bX9dtuPbqAeQpTVe0MQTFhao8+Cp//EmJp244xt6Drw/GVEGCUj40g==}
+     engines: {node: '>=12', npm: '>=6'}
+@@ -4319,6 +4330,9 @@ packages:
+     resolution: {integrity: sha512-utfs7Pr5uJyyvDETitgsaqSyjCb2qNRAtuqUeWIAKztsOYdcACf2KtARYXg2pSvhkt+9NfoaNY7fxjl6nuMjIQ==}
+     engines: {node: '>= 12.0.0'}
+ 
++  lightstreamer-client-node@9.2.2:
++    resolution: {integrity: sha512-8SHmv61Op6+VCpUPR3dDb9+XKn16bEz9ThSi/wqY7mPGya1RYQ4MjLha7EeHizZD8+are47HQzBlJtkWiboBnA==}
++
+   limiter@1.1.5:
+     resolution: {integrity: sha512-FWWMIEOxz3GwUI4Ts/IvgVy6LPvoMPgjMdQ185nN6psJyBJ4yOpzqm695/h5umdLJg2vW3GR5iG11MAkR2AzJA==}
+ 
+@@ -5734,6 +5748,11 @@ packages:
+       utf-8-validate:
+         optional: true
+ 
++  xmlhttprequest@https://codeload.github.com/driverdan/node-XMLHttpRequest/tar.gz/97966e4ca1c9f2cc5574d8775cbdacebfec75455:
++    resolution: {tarball: https://codeload.github.com/driverdan/node-XMLHttpRequest/tar.gz/97966e4ca1c9f2cc5574d8775cbdacebfec75455}
++    version: 1.8.0
++    engines: {node: '>=0.4.0'}
++
+   y18n@5.0.8:
+     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
+     engines: {node: '>=10'}
+@@ -9129,6 +9148,8 @@ snapshots:
+ 
+   cookie@0.7.2: {}
+ 
++  cookiejar@2.1.4: {}
++
+   core-util-is@1.0.2: {}
+ 
+   core-util-is@1.0.3: {}
+@@ -9905,6 +9926,8 @@ snapshots:
+     optionalDependencies:
+       graceful-fs: 4.2.11
+ 
++  jsonpatch@3.1.0: {}
++
+   jsonwebtoken@9.0.3:
+     dependencies:
+       jws: 4.0.1
+@@ -10019,6 +10042,16 @@ snapshots:
+       lightningcss-win32-x64-msvc: 1.30.2
+     optional: true
+ 
++  lightstreamer-client-node@9.2.2:
++    dependencies:
++      cookiejar: 2.1.4
++      jsonpatch: 3.1.0
++      ws: 8.19.0
++      xmlhttprequest: https://codeload.github.com/driverdan/node-XMLHttpRequest/tar.gz/97966e4ca1c9f2cc5574d8775cbdacebfec75455
++    transitivePeerDependencies:
++      - bufferutil
++      - utf-8-validate
++
+   limiter@1.1.5: {}
+ 
+   linkedom@0.18.12:
+@@ -11582,6 +11615,8 @@ snapshots:
+ 
+   ws@8.19.0: {}
+ 
++  xmlhttprequest@https://codeload.github.com/driverdan/node-XMLHttpRequest/tar.gz/97966e4ca1c9f2cc5574d8775cbdacebfec75455: {}
++
+   y18n@5.0.8: {}
+ 
+   yallist@4.0.0: {}
+diff --git a/replit.md b/replit.md
+index 879124df9..8825c9a7e 100644
+--- a/replit.md
++++ b/replit.md
+@@ -35,14 +35,14 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+     -   **CREW.md Auto-Sync**: `.openclaw/workspace/CREW.md` is automatically updated with live worker bee status (name, online/stale, platform, connected since, last seen) on startup, worker registration, deletion, and every 60 seconds. The CEO agent reads this file when asked about crew status. BOOTSTRAP.md instructs the agent to check CREW.md.
+     -   **Agent Avatars**: Round circle avatars with white border and colored background with initials displayed in worker lists and chat bubbles.
+     -   **Shared Space**: A shared folder (`.openclaw/sharedspace/`) accessible by all agents via `/api/sharedspace` REST endpoints (list, read, write, delete, mkdir, download). Both worker API keys and gateway token auth accepted. Separate from the CEO's private workspace for security. Web UI file browser on the Workers Dashboard page. Worker scripts include `SharedSpace-List`, `SharedSpace-Read`, `SharedSpace-Write` helper functions.
+--   **AI Model Configuration Page**: A custom web UI (`/model-config.html`) allows viewing and switching the primary agent model, adding/removing model providers (with base URL, API key, API type), and managing individual models.
++-   **Config Page**: A unified web UI (`/model-config.html`) with tabs for **AI Models** (model/provider configuration) and **IG Trading** (demo/live profile switching, credential management, Lightstreamer streaming status). Renamed from "AI Model Config" to "Config" in the navigation bar.
+ -   **Persistent Storage**: All OpenClaw data, including configuration, agents, API keys, worker tasks, chat history, and file exchange, persists across container restarts in the `.openclaw/` directory.
+ -   **Canvas Static File Serving**: The CEO proxy serves files from `.openclaw/canvas/` at `/__openclaw__/canvas/` without authentication. Canvas API: `DELETE /api/canvas/page/{filename}` removes a page from manifest + disk (protected pages: index.html, manifest.json, ig-dashboard.html). `GET /api/canvas/manifest` returns manifest entries. Skills and agents can write HTML dashboards, charts, and reports to this directory and link users directly. No separate web server or custom port needed. A manifest system (`.openclaw/canvas/manifest.json`) tracks all published pages for dynamic discovery on the Canvas hub (`/__openclaw__/canvas/`). Agents register new pages by adding entries to the manifest JSON array.
+ -   **Auto-Token Injection**: The gateway authentication token is automatically injected into the Control UI at startup, eliminating manual configuration.
+ -   **Process Manager & Bot Registry**: A web UI (`/processes.html`) shows registered bots with start/stop/remove controls, a "Run at startup" checkbox toggle, AND ad-hoc running processes. Bot registry persists in `.openclaw/bot-registry.json` — registered bots with `enabled: true` auto-restart on server restart with exponential backoff (5s→60s max). The "Startup" checkbox toggle lets you control auto-restart independently from start/stop (critical for trading bots managing margin positions). **All bot scripts live in `skills/bots/` as `.cjs` files** — the system auto-scans this folder on startup and registers any new scripts (filename minus `.cjs` = bot ID). API: `GET /api/processes` (list ad-hoc), `POST /api/processes/kill` (kill by PID), `GET /api/bots` (list registered bots), `POST /api/bots/register` (register a bot with id+cmd), `POST /api/bots/{id}/start|stop` (control), `PATCH /api/bots/{id}` (toggle enabled flag without starting/stopping), `DELETE /api/bots/{id}` (remove).
+--   **IG API Proxy**: Live IG Group API endpoints in ceo-proxy.cjs with session token caching (5-min TTL). Endpoints: `GET /api/ig/account` (balance/margin), `GET /api/ig/positions` (open positions), `GET /api/ig/prices?epics=...` (current prices), `POST /api/ig/refresh-snapshots` (refresh config snapshot files for dashboard). Graceful fallback if IG env vars not configured.
++-   **IG API Proxy**: Live IG Group API endpoints in ceo-proxy.cjs with session token caching (5-min TTL) and response caching (30s TTL). Endpoints: `GET /api/ig/account` (balance/margin), `GET /api/ig/positions` (open positions), `GET /api/ig/prices?epics=...` (current prices), `POST /api/ig/refresh-snapshots` (refresh config snapshot files for dashboard), `GET/POST /api/ig/config` (credential profile management), `POST /api/ig/config/test` (connection test), `GET /api/ig/stream/prices` (zero-quota streamed prices), `GET /api/ig/stream/status` (streaming status). Graceful fallback if IG credentials not configured.
+ -   **Chat Rich Media (Canvas Embeds)**: The chat UI supports inline iframe embeds for canvas pages. `![canvas](/__openclaw__/canvas/page.html)` renders as a sandboxed iframe. Raw `<iframe src="/__openclaw__/canvas/...">` also works. DOMPurify restricts iframe src to `/__openclaw__/canvas/` URLs only. Enhanced markdown tables with alternating row colors and hover highlighting.
+--   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, AI Model Config, Workers, and Processes pages.
++-   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, Config, Workers, and Processes pages.
+ 
+ ### Technical Implementation Details:
+ -   **Language**: TypeScript (Node.js >= 22.12.0)
+@@ -73,7 +73,7 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+     -   Signal monitor config: `.openclaw/ig-monitor-config.json`, alerts: `.openclaw/ig-alerts.json`.
+     -   Trading bot config: `.openclaw/ig-strategy.json`, log: `.openclaw/ig-bot-log.json`.
+     -   Dashboard: `.openclaw/canvas/ig-dashboard.html` (viewable at `/__openclaw__/canvas/ig-dashboard.html`). Shows LIVE account/positions data via `/api/ig/*` endpoints + SNAPSHOT data from config files. Badge system: green "LIVE" for API-fetched, grey "SNAPSHOT" for file-based sections.
+-    -   Credentials stored in env vars: `IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`, `IG_ACCOUNT_ID`, `IG_BASE_URL`.
++    -   Credentials stored in `.openclaw/ig-config.json` with demo/live profiles. Env vars (`IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`, `IG_ACCOUNT_ID`, `IG_BASE_URL`) used as seed on first run only.
+     -   Reference docs: `.openclaw/workspace/IG_TRADING.md` (API reference), `docs/IG_TRADING_SETUP.md` (setup guide with rate limits).
+ -   **Replit Secrets Management**: Securely stores API keys like `XAI_API_KEY`, `OPENCLAW_GATEWAY_TOKEN`, and IG credentials.
+ -   **Replit AI Integrations**: Provides access to OpenAI API key and base URL.
+diff --git a/skills/bots/ig-signal-monitor.cjs b/skills/bots/ig-signal-monitor.cjs
+index 9ce9d91b3..cd9a1030f 100644
+--- a/skills/bots/ig-signal-monitor.cjs
++++ b/skills/bots/ig-signal-monitor.cjs
+@@ -9,6 +9,7 @@ const path = require("path");
+ const CONFIG_PATH = path.join(process.cwd(), ".openclaw", "ig-monitor-config.json");
+ const ALERTS_PATH = path.join(process.cwd(), ".openclaw", "ig-alerts.json");
+ const CANVAS_DIR = path.join(process.cwd(), ".openclaw", "canvas");
++const IG_CONFIG_FILE = path.join(process.cwd(), ".openclaw", "ig-config.json");
+ const TEST_MODE = process.argv.includes("--test");
+ 
+ const priceHistory = {};
+@@ -122,20 +123,67 @@ function request(method, urlStr, headers, body) {
+   });
+ }
+ 
++function getIgCredentials() {
++  try {
++    if (fs.existsSync(IG_CONFIG_FILE)) {
++      const igCfg = JSON.parse(fs.readFileSync(IG_CONFIG_FILE, "utf8"));
++      const profile = igCfg.profiles[igCfg.activeProfile];
++      if (profile && profile.apiKey && profile.username && profile.password && profile.baseUrl) {
++        return { baseUrl: profile.baseUrl, apiKey: profile.apiKey, username: profile.username, password: profile.password, accountId: profile.accountId, profile: igCfg.activeProfile };
++      }
++    }
++  } catch (_) {}
++  return {
++    baseUrl: process.env.IG_BASE_URL || "",
++    apiKey: process.env.IG_API_KEY || "",
++    username: process.env.IG_USERNAME || "",
++    password: process.env.IG_PASSWORD || "",
++    accountId: process.env.IG_ACCOUNT_ID || "",
++    profile: "env"
++  };
++}
++
+ function getEnv(name) {
+-  const v = process.env[name];
+-  if (!v) {
+-    log(`Missing environment variable: ${name}`);
+-    process.exit(1);
+-  }
+-  return v;
++  const creds = getIgCredentials();
++  const map = { IG_BASE_URL: creds.baseUrl, IG_API_KEY: creds.apiKey, IG_USERNAME: creds.username, IG_PASSWORD: creds.password, IG_ACCOUNT_ID: creds.accountId };
++  return map[name] || process.env[name] || "";
++}
++
++async function fetchStreamedPrice(epic) {
++  try {
++    const res = await request("GET", "http://localhost:5000/api/ig/stream/prices", {
++      Authorization: "Bearer " + (process.env.OPENCLAW_GATEWAY_TOKEN || ""),
++      Accept: "application/json"
++    });
++    if (res.status === 200) {
++      const data = JSON.parse(res.body);
++      if (data.streaming && data.prices && data.prices[epic]) {
++        const p = data.prices[epic];
++        if (p.bid && p.offer && (Date.now() - p.timestamp) < 60000) {
++          return {
++            snapshot: {
++              bid: p.bid, offer: p.offer, marketStatus: p.marketState || "TRADEABLE",
++              updateTime: new Date(p.timestamp).toISOString()
++            }
++          };
++        }
++      }
++    }
++  } catch (_) {}
++  return null;
+ }
+ 
+ async function authenticate(config) {
+-  const baseUrl = getEnv("IG_BASE_URL");
+-  const apiKey = getEnv("IG_API_KEY");
+-  const username = getEnv("IG_USERNAME");
+-  const password = getEnv("IG_PASSWORD");
++  const creds = getIgCredentials();
++  const baseUrl = creds.baseUrl;
++  const apiKey = creds.apiKey;
++  const username = creds.username;
++  const password = creds.password;
++
++  if (!baseUrl || !apiKey || !username || !password) {
++    log("Missing IG credentials. Set them in Config page or env vars.");
++    return false;
++  }
+ 
+   trackApiCall();
+   log("Authenticating with IG API...");
+@@ -303,11 +351,21 @@ function detectSignals(instrument, config) {
+ 
+ async function pollCycle(config) {
+   const allSignals = [];
++  const useStreaming = config.useStreaming !== false;
+ 
+   for (let i = 0; i < config.instruments.length; i++) {
+     const instrument = config.instruments[i];
+-    if (i > 0) await rateLimitedSleep(config);
+-    const data = await fetchPrice(instrument.epic, config);
++    let data = null;
++    if (useStreaming) {
++      data = await fetchStreamedPrice(instrument.epic);
++      if (data) {
++        // no need for rate limit sleep — streaming data is free
++      }
++    }
++    if (!data) {
++      if (i > 0) await rateLimitedSleep(config);
++      data = await fetchPrice(instrument.epic, config);
++    }
+     if (!data || !data.snapshot) {
+       log(`No data for ${instrument.name} (${instrument.epic})`);
+       continue;
+@@ -364,6 +422,8 @@ async function run() {
+   log(TEST_MODE ? "Starting in TEST mode (single cycle)" : "Starting signal monitor");
+ 
+   const config = loadConfig();
++  const creds = getIgCredentials();
++  log(`Using IG profile: ${creds.profile} (${creds.baseUrl.includes("demo") ? "DEMO" : "LIVE"})`);
+ 
+   if (!config.enabled) {
+     log("Monitor is disabled in config. Set enabled=true to start.");
+diff --git a/skills/bots/ig-trading-bot.cjs b/skills/bots/ig-trading-bot.cjs
+index 7e199ad79..75319dd82 100644
+--- a/skills/bots/ig-trading-bot.cjs
++++ b/skills/bots/ig-trading-bot.cjs
+@@ -11,6 +11,7 @@ const LOG_PATH = path.join(process.cwd(), ".openclaw", "ig-bot-log.json");
+ const ALERTS_PATH = path.join(process.cwd(), ".openclaw", "ig-alerts.json");
+ const DASHBOARD_DIR = path.join(process.cwd(), ".openclaw", "canvas");
+ const DASHBOARD_PATH = path.join(DASHBOARD_DIR, "ig-bot-status.html");
++const IG_CONFIG_FILE = path.join(process.cwd(), ".openclaw", "ig-config.json");
+ 
+ const TEST_MODE = process.argv.includes("--test");
+ 
+@@ -129,16 +130,37 @@ function loadAlerts() {
+   return [];
+ }
+ 
++function getIgCredentials() {
++  try {
++    if (fs.existsSync(IG_CONFIG_FILE)) {
++      const igCfg = JSON.parse(fs.readFileSync(IG_CONFIG_FILE, "utf8"));
++      const profile = igCfg.profiles[igCfg.activeProfile];
++      if (profile && profile.apiKey && profile.username && profile.password && profile.baseUrl) {
++        return { baseUrl: profile.baseUrl, apiKey: profile.apiKey, username: profile.username, password: profile.password, accountId: profile.accountId, profile: igCfg.activeProfile };
++      }
++    }
++  } catch (_) {}
++  return {
++    baseUrl: process.env.IG_BASE_URL || "https://demo-api.ig.com/gateway/deal",
++    apiKey: process.env.IG_API_KEY || "",
++    username: process.env.IG_USERNAME || "",
++    password: process.env.IG_PASSWORD || "",
++    accountId: process.env.IG_ACCOUNT_ID || "",
++    profile: "env"
++  };
++}
++
+ function request(method, urlPath, body, extraHeaders) {
+   return new Promise((resolve, reject) => {
+-    const baseUrl = process.env.IG_BASE_URL || "https://demo-api.ig.com/gateway/deal";
+-    const full = baseUrl.replace(/\/+$/, "") + urlPath;
++    const creds = getIgCredentials();
++    const baseUrl = urlPath.startsWith("http") ? "" : creds.baseUrl;
++    const full = urlPath.startsWith("http") ? urlPath : baseUrl.replace(/\/+$/, "") + urlPath;
+     const parsed = new URL(full);
+     const isHttps = parsed.protocol === "https:";
+     const headers = {
+       "Content-Type": "application/json; charset=UTF-8",
+       Accept: "application/json; charset=UTF-8",
+-      "X-IG-API-KEY": process.env.IG_API_KEY || "",
++      "X-IG-API-KEY": creds.apiKey,
+       ...(sessionTokens.cst ? { CST: sessionTokens.cst } : {}),
+       ...(sessionTokens.securityToken ? { "X-SECURITY-TOKEN": sessionTokens.securityToken } : {}),
+       ...(extraHeaders || {})
+@@ -171,13 +193,36 @@ function request(method, urlPath, body, extraHeaders) {
+   });
+ }
+ 
++async function fetchStreamedPrice(epic) {
++  try {
++    const res = await request("GET", "http://localhost:5000/api/ig/stream/prices", null, {
++      Authorization: "Bearer " + (process.env.OPENCLAW_GATEWAY_TOKEN || ""),
++    });
++    if (res.status === 200 && res.body) {
++      if (res.body.streaming && res.body.prices && res.body.prices[epic]) {
++        const p = res.body.prices[epic];
++        if (p.bid && p.offer && (Date.now() - p.timestamp) < 60000) {
++          return {
++            snapshot: {
++              bid: p.bid, offer: p.offer, marketStatus: p.marketState || "TRADEABLE",
++              updateTime: new Date(p.timestamp).toISOString()
++            }
++          };
++        }
++      }
++    }
++  } catch (_) {}
++  return null;
++}
++
+ async function authenticate() {
+-  const apiKey = process.env.IG_API_KEY;
+-  const username = process.env.IG_USERNAME;
+-  const password = process.env.IG_PASSWORD;
++  const creds = getIgCredentials();
++  const apiKey = creds.apiKey;
++  const username = creds.username;
++  const password = creds.password;
+ 
+   if (!apiKey || !username || !password) {
+-    throw new Error("Missing IG credentials. Set IG_API_KEY, IG_USERNAME, IG_PASSWORD env vars.");
++    throw new Error("Missing IG credentials. Set them in Config page or env vars.");
+   }
+ 
+   await checkApiQuota(currentConfig);
+@@ -658,8 +703,14 @@ async function runCycle(config) {
+     const strategy = strategies[i];
+     log("INFO", `Evaluating: ${strategy.name || strategy.instrument}`);
+ 
+-    if (i > 0) await rateLimitedSleep(config);
+-    const marketData = await fetchPrice(strategy.instrument);
++    let marketData = null;
++    if (config.useStreaming !== false) {
++      marketData = await fetchStreamedPrice(strategy.instrument);
++    }
++    if (!marketData) {
++      if (i > 0) await rateLimitedSleep(config);
++      marketData = await fetchPrice(strategy.instrument);
++    }
+     if (!marketData) {
+       log("WARN", `Skipping ${strategy.instrument} — could not fetch price.`);
+       continue;
+@@ -700,7 +751,9 @@ async function runCycle(config) {
+ }
+ 
+ async function main() {
+-  console.log(`\n=== IG Trading Bot ${TEST_MODE ? "(TEST MODE)" : "(LIVE)"} ===\n`);
++  const creds = getIgCredentials();
++  console.log(`\n=== IG Trading Bot ${TEST_MODE ? "(TEST MODE)" : "(LIVE)"} ===`);
++  console.log(`Using IG profile: ${creds.profile} (${creds.baseUrl.includes("demo") ? "DEMO" : "LIVE"})\n`);
+ 
+   const config = loadConfig();
+   currentConfig = config;
+@@ -718,7 +771,7 @@ async function main() {
+ 
+   const accounts = await fetchAccounts();
+   if (accounts?.accounts?.length > 0) {
+-    const acct = accounts.accounts.find((a) => a.accountId === process.env.IG_ACCOUNT_ID) || accounts.accounts[0];
++    const acct = accounts.accounts.find((a) => a.accountId === creds.accountId) || accounts.accounts[0];
+     accountBalance = acct.balance?.balance || acct.balance?.available || null;
+     log("INFO", `Account: ${acct.accountId}, Balance: ${accountBalance}`);
+   }
+diff --git a/ui/public/model-config.html b/ui/public/model-config.html
+index bae3bb1e3..bd852ce11 100644
+--- a/ui/public/model-config.html
++++ b/ui/public/model-config.html
+@@ -3,12 +3,18 @@
+ <head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-<title>AI Model Config — OpenClaw Cloud</title>
++<title>Config — OpenClaw Cloud</title>
+ <style>
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:20px;padding-top:56px}
+ h1{font-size:24px;font-weight:600;color:#e6edf3;margin-bottom:8px}
+ .subtitle{color:#8b949e;font-size:14px;margin-bottom:24px}
++.tabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid #30363d;padding-bottom:0}
++.tab{padding:8px 16px;cursor:pointer;color:#8b949e;font-size:14px;font-weight:500;border:1px solid transparent;border-bottom:2px solid transparent;border-radius:6px 6px 0 0;transition:all .15s}
++.tab:hover{color:#e6edf3;background:rgba(255,255,255,.04)}
++.tab.active{color:#e6edf3;border-bottom:2px solid #58a6ff;background:rgba(88,166,255,.08)}
++.tab-content{display:none}
++.tab-content.active{display:block}
+ .section{margin-bottom:32px}
+ .section-title{font-size:18px;font-weight:600;color:#e6edf3;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+ .section-icon{font-size:20px}
+@@ -20,53 +26,160 @@ h1{font-size:24px;font-weight:600;color:#e6edf3;margin-bottom:8px}
+ .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase}
+ .badge-primary{background:rgba(35,134,54,.3);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
+ .badge-active{background:rgba(56,139,253,.2);color:#58a6ff;border:1px solid rgba(88,166,255,.3)}
++.badge-warn{background:rgba(187,128,9,.2);color:#d29922;border:1px solid rgba(187,128,9,.3)}
++.badge-error{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.3)}
+ table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:6px;overflow:hidden}
+ th{background:#21262d;color:#8b949e;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #30363d}
+ td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:13px;color:#c9d1d9}
+ tr:last-child td{border-bottom:none}
+ tr:hover{background:#1c2128}
+ .empty{color:#8b949e;font-size:14px;text-align:center;padding:32px}
+-.form-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end}
+-.form-group{display:flex;flex-direction:column;gap:4px}
++.form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end}
++.form-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px}
+ .form-group label{font-size:12px;color:#8b949e;font-weight:500}
+-.form-group input,.form-group select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;min-width:180px}
+-.btn-add{background:#238636;color:#fff;border:1px solid rgba(240,246,252,.1);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
+-.btn-add:hover{background:#2ea043}
+-.btn-delete{background:#da3633;color:#fff;border:1px solid rgba(240,246,252,.1);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px}
+-.btn-delete:hover{background:#f85149}
+-.btn-secondary{background:#30363d;color:#c9d1d9;border:1px solid rgba(240,246,252,.1);padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500}
++.form-group input,.form-group select{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:8px 12px;border-radius:6px;font-size:14px;font-family:monospace;width:100%}
++.form-group input:focus{border-color:#58a6ff;outline:none}
++.form-group input[readonly]{color:#8b949e;cursor:not-allowed}
++.btn{padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;border:1px solid rgba(240,246,252,.1);transition:all .15s}
++.btn-primary{background:#238636;color:#fff}
++.btn-primary:hover{background:#2ea043}
++.btn-secondary{background:#30363d;color:#c9d1d9}
+ .btn-secondary:hover{background:#484f58}
++.btn-danger{background:#da3633;color:#fff}
++.btn-danger:hover{background:#f85149}
++.btn-small{padding:4px 10px;font-size:12px}
++.btn:disabled{opacity:.5;cursor:not-allowed}
++.toggle-container{display:flex;align-items:center;gap:16px;margin-bottom:16px}
++.toggle-switch{position:relative;width:140px;height:36px;border-radius:18px;border:2px solid #30363d;overflow:hidden;cursor:pointer;background:#161b22;display:flex}
++.toggle-option{flex:1;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;z-index:1;transition:color .2s;color:#8b949e;text-transform:uppercase}
++.toggle-option.active{color:#fff}
++.toggle-slider{position:absolute;top:2px;height:calc(100% - 4px);width:50%;border-radius:14px;transition:left .2s ease;pointer-events:none}
++.toggle-slider.demo{left:2px;background:#d29922}
++.toggle-slider.live{left:calc(50% - 2px);background:#da3633}
++.profile-section{margin-bottom:24px}
++.profile-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
++.profile-badge{padding:4px 12px;border-radius:12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
++.profile-badge.demo{background:rgba(210,153,34,.2);color:#d29922;border:1px solid rgba(210,153,34,.3)}
++.profile-badge.live{background:rgba(218,54,51,.2);color:#f85149;border:1px solid rgba(248,81,73,.3)}
++.profile-badge.active-badge{background:rgba(63,185,80,.2);color:#3fb950;border:1px solid rgba(63,185,80,.3)}
++.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
++.status-dot.green{background:#3fb950}
++.status-dot.yellow{background:#d29922}
++.status-dot.red{background:#f85149}
++.status-dot.grey{background:#484f58}
++.streaming-info{display:flex;gap:24px;flex-wrap:wrap;margin-top:12px}
++.streaming-stat{font-size:13px;color:#8b949e}
++.streaming-stat strong{color:#e6edf3}
++.link{color:#58a6ff;text-decoration:none;font-size:13px}
++.link:hover{text-decoration:underline}
++.info-text{font-size:13px;color:#8b949e;margin-bottom:16px}
++.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+ .toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:6px;font-size:14px;display:none;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+ .toast.show{display:block}
+ .toast.success{background:#238636;color:#fff}
+ .toast.error{background:#da3633;color:#fff}
+-.info-text{font-size:13px;color:#8b949e;margin-bottom:16px}
+ </style>
+ </head>
+ <body>
+-<h1>AI Model Configuration</h1>
+-<p class="subtitle">View and manage AI model providers and models</p>
++<h1>Configuration</h1>
++<p class="subtitle">Manage AI models, IG Trading accounts, and streaming settings</p>
+ 
+-<div class="section">
+-<div class="section-title"><span class="section-icon">🧠</span> Current Agent Model</div>
+-<div id="currentModel"><p class="empty">Loading...</p></div>
++<div class="tabs">
++  <div class="tab active" data-tab="ai-models">AI Models</div>
++  <div class="tab" data-tab="ig-trading">IG Trading</div>
+ </div>
+ 
+-<div class="section">
+-<div class="section-title"><span class="section-icon">🔌</span> Model Providers</div>
+-<p class="info-text">Providers are configured in openclaw.json. Add providers with their API base URL and key.</p>
+-<div id="providerList"><p class="empty">Loading...</p></div>
++<div id="tab-ai-models" class="tab-content active">
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#129504;</span> Current Agent Model</div>
++    <div id="currentModel"><p class="empty">Loading...</p></div>
++  </div>
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#128268;</span> Model Providers</div>
++    <p class="info-text">Providers are configured in openclaw.json. Add providers with their API base URL and key.</p>
++    <div id="providerList"><p class="empty">Loading...</p></div>
++  </div>
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#128203;</span> Available Models</div>
++    <div id="modelList"><p class="empty">Loading...</p></div>
++  </div>
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#9881;&#65039;</span> Raw Configuration</div>
++    <p class="info-text">Direct view of the agents section from openclaw.json</p>
++    <div id="rawConfig"><p class="empty">Loading...</p></div>
++  </div>
+ </div>
+ 
+-<div class="section">
+-<div class="section-title"><span class="section-icon">📋</span> Available Models</div>
+-<div id="modelList"><p class="empty">Loading...</p></div>
+-</div>
++<div id="tab-ig-trading" class="tab-content">
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#128200;</span> Account Profile</div>
++    <div class="toggle-container">
++      <span style="font-size:13px;color:#8b949e;">Account Mode:</span>
++      <div class="toggle-switch" id="profileToggle">
++        <div class="toggle-option" data-profile="demo">Demo</div>
++        <div class="toggle-option" data-profile="live">Live</div>
++        <div class="toggle-slider demo"></div>
++      </div>
++      <span id="profileStatus" style="font-size:13px;"></span>
++    </div>
++  </div>
++
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#128273;</span> Demo Account Credentials</div>
++    <div class="card" id="demoProfileCard">
++      <div class="profile-header">
++        <div><span class="profile-badge demo">DEMO</span></div>
++        <a class="link" href="https://demo-api-capital.backend-capital.com" target="_blank" rel="noopener">Get Demo API Key &#8599;</a>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>API Key</label><input type="password" id="demo-apiKey" placeholder="Enter demo API key" autocomplete="off"></div>
++        <div class="form-group"><label>Account ID</label><input type="text" id="demo-accountId" placeholder="e.g. Z3MJKY"></div>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>Username</label><input type="password" id="demo-username" placeholder="IG username" autocomplete="off"></div>
++        <div class="form-group"><label>Password</label><input type="password" id="demo-password" placeholder="IG password" autocomplete="off"></div>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>Base URL</label><input type="text" id="demo-baseUrl" value="https://demo-api.ig.com/gateway/deal" readonly></div>
++      </div>
++      <div class="btn-row">
++        <button class="btn btn-primary" onclick="saveProfile('demo')">Save Demo Credentials</button>
++        <button class="btn btn-secondary" onclick="testConnection()">Test Connection</button>
++      </div>
++    </div>
++  </div>
++
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#128273;</span> Live Account Credentials</div>
++    <div class="card" id="liveProfileCard">
++      <div class="profile-header">
++        <div><span class="profile-badge live">LIVE</span></div>
++        <a class="link" href="https://www.ig.com/en/myig/settings/api-keys" target="_blank" rel="noopener">Get Live API Key &#8599;</a>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>API Key</label><input type="password" id="live-apiKey" placeholder="Enter live API key" autocomplete="off"></div>
++        <div class="form-group"><label>Account ID</label><input type="text" id="live-accountId" placeholder="e.g. ABC123"></div>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>Username</label><input type="password" id="live-username" placeholder="IG username" autocomplete="off"></div>
++        <div class="form-group"><label>Password</label><input type="password" id="live-password" placeholder="IG password" autocomplete="off"></div>
++      </div>
++      <div class="form-row">
++        <div class="form-group"><label>Base URL</label><input type="text" id="live-baseUrl" value="https://api.ig.com/gateway/deal" readonly></div>
++      </div>
++      <div class="btn-row">
++        <button class="btn btn-primary" onclick="saveProfile('live')">Save Live Credentials</button>
++        <button class="btn btn-secondary" onclick="testConnection()">Test Connection</button>
++      </div>
++    </div>
++  </div>
+ 
+-<div class="section">
+-<div class="section-title"><span class="section-icon">⚙️</span> Raw Configuration</div>
+-<p class="info-text">Direct view of the agents section from openclaw.json</p>
+-<div id="rawConfig"><p class="empty">Loading...</p></div>
++  <div class="section">
++    <div class="section-title"><span class="section-icon">&#9889;</span> Streaming Status</div>
++    <div class="card" id="streamingCard">
++      <p class="empty">Loading streaming status...</p>
++    </div>
++  </div>
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+diff --git a/ui/public/model-config.js b/ui/public/model-config.js
+index 99da14420..e98cacacb 100644
+--- a/ui/public/model-config.js
++++ b/ui/public/model-config.js
+@@ -25,6 +25,19 @@ function escHtml(s) {
+   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+ }
+ 
++var tabs = document.querySelectorAll('.tab');
++var tabContents = document.querySelectorAll('.tab-content');
++for (var i = 0; i < tabs.length; i++) {
++  tabs[i].addEventListener('click', function() {
++    var target = this.getAttribute('data-tab');
++    for (var j = 0; j < tabs.length; j++) tabs[j].classList.remove('active');
++    for (var j = 0; j < tabContents.length; j++) tabContents[j].classList.remove('active');
++    this.classList.add('active');
++    document.getElementById('tab-' + target).classList.add('active');
++    if (target === 'ig-trading') loadIgConfig();
++  });
++}
++
+ function loadConfig() {
+   apiFetch('/__openclaw/control-ui-config.json').then(function(r) {
+     if (!r.ok) throw new Error('Config not available (status ' + r.status + ')');
+@@ -89,4 +102,177 @@ function renderConfig(config) {
+   document.getElementById('rawConfig').innerHTML = '<div class="card"><pre style="font-size:12px;color:#c9d1d9;white-space:pre-wrap;max-height:400px;overflow:auto">' + escHtml(raw) + '</pre></div>';
+ }
+ 
++var currentIgConfig = null;
++
++function loadIgConfig() {
++  apiFetch('/api/ig/config').then(function(r) {
++    if (!r.ok) throw new Error('IG config not available');
++    return r.json();
++  }).then(function(config) {
++    currentIgConfig = config;
++    renderIgConfig(config);
++  }).catch(function(e) {
++    document.getElementById('streamingCard').innerHTML = '<p style="color:#8b949e">Could not load IG config: ' + escHtml(e.message) + '</p>';
++  });
++}
++
++function renderIgConfig(config) {
++  var active = config.activeProfile || 'demo';
++  var toggle = document.getElementById('profileToggle');
++  var slider = toggle.querySelector('.toggle-slider');
++  var options = toggle.querySelectorAll('.toggle-option');
++
++  slider.className = 'toggle-slider ' + active;
++  for (var i = 0; i < options.length; i++) {
++    var prof = options[i].getAttribute('data-profile');
++    if (prof === active) options[i].classList.add('active');
++    else options[i].classList.remove('active');
++  }
++
++  var statusEl = document.getElementById('profileStatus');
++  if (active === 'demo') {
++    statusEl.innerHTML = '<span class="badge badge-warn">DEMO MODE</span>';
++  } else {
++    statusEl.innerHTML = '<span class="badge badge-error">LIVE TRADING</span>';
++  }
++
++  var profiles = ['demo', 'live'];
++  for (var p = 0; p < profiles.length; p++) {
++    var key = profiles[p];
++    var prof = config.profiles[key];
++    if (!prof) continue;
++    var apiKeyEl = document.getElementById(key + '-apiKey');
++    var usernameEl = document.getElementById(key + '-username');
++    var passwordEl = document.getElementById(key + '-password');
++    var accountIdEl = document.getElementById(key + '-accountId');
++    if (apiKeyEl) apiKeyEl.placeholder = prof.hasCredentials ? prof.apiKey : 'Enter API key';
++    if (usernameEl) usernameEl.placeholder = prof.hasCredentials ? prof.username : 'Enter username';
++    if (passwordEl) passwordEl.placeholder = prof.hasCredentials ? '********' : 'Enter password';
++    if (accountIdEl) accountIdEl.value = prof.accountId || '';
++    apiKeyEl.value = '';
++    usernameEl.value = '';
++    passwordEl.value = '';
++  }
++
++  var activeCard = document.getElementById(active + 'ProfileCard');
++  var inactiveCard = document.getElementById((active === 'demo' ? 'live' : 'demo') + 'ProfileCard');
++  if (activeCard) activeCard.style.borderColor = active === 'demo' ? '#d29922' : '#da3633';
++  if (inactiveCard) inactiveCard.style.borderColor = '#30363d';
++
++  renderStreamingStatus(config.streaming);
++}
++
++function renderStreamingStatus(streaming) {
++  if (!streaming) {
++    document.getElementById('streamingCard').innerHTML = '<p class="empty">Streaming info not available</p>';
++    return;
++  }
++  var dotClass = 'grey';
++  var label = streaming.status || 'unknown';
++  if (streaming.status === 'connected') dotClass = 'green';
++  else if (streaming.status === 'reconnecting') dotClass = 'yellow';
++  else if (streaming.status === 'error') dotClass = 'red';
++
++  var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">';
++  html += '<span class="status-dot ' + dotClass + '"></span>';
++  html += '<span style="font-size:14px;font-weight:500;color:#e6edf3">Lightstreamer: ' + escHtml(label.toUpperCase()) + '</span>';
++  if (streaming.status === 'connected') html += ' <span class="badge badge-primary">STREAMING</span>';
++  else html += ' <span class="badge badge-warn">POLLING</span>';
++  html += '</div>';
++
++  html += '<div class="streaming-info">';
++  html += '<div class="streaming-stat">Instruments: <strong>' + (streaming.connectedEpics ? streaming.connectedEpics.length : 0) + '</strong></div>';
++  html += '<div class="streaming-stat">Price updates: <strong>' + (streaming.priceCount || 0) + '</strong></div>';
++  html += '</div>';
++
++  if (streaming.connectedEpics && streaming.connectedEpics.length > 0) {
++    html += '<div style="margin-top:12px;font-size:12px;color:#8b949e">';
++    html += '<strong>Subscribed:</strong> ' + streaming.connectedEpics.map(function(e) { return escHtml(e); }).join(', ');
++    html += '</div>';
++  }
++
++  document.getElementById('streamingCard').innerHTML = html;
++}
++
++document.getElementById('profileToggle').addEventListener('click', function(e) {
++  var option = e.target.closest('.toggle-option');
++  if (!option) return;
++  var newProfile = option.getAttribute('data-profile');
++  if (!newProfile || (currentIgConfig && currentIgConfig.activeProfile === newProfile)) return;
++
++  if (newProfile === 'live') {
++    if (!confirm('Switch to LIVE trading? Real money will be at risk.')) return;
++  }
++
++  apiFetch('/api/ig/config', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ activeProfile: newProfile })
++  }).then(function(r) { return r.json(); }).then(function(data) {
++    if (data.ok) {
++      showToast('Switched to ' + newProfile.toUpperCase() + ' profile', 'success');
++      loadIgConfig();
++    } else {
++      showToast('Failed to switch: ' + (data.error || 'Unknown error'), 'error');
++    }
++  }).catch(function(e) {
++    showToast('Error: ' + e.message, 'error');
++  });
++});
++
++function saveProfile(profileName) {
++  var updates = {};
++  var apiKey = document.getElementById(profileName + '-apiKey').value;
++  var username = document.getElementById(profileName + '-username').value;
++  var password = document.getElementById(profileName + '-password').value;
++  var accountId = document.getElementById(profileName + '-accountId').value;
++
++  if (apiKey) updates.apiKey = apiKey;
++  if (username) updates.username = username;
++  if (password) updates.password = password;
++  if (accountId !== undefined) updates.accountId = accountId;
++
++  if (Object.keys(updates).length === 0 && !accountId) {
++    showToast('No changes to save', 'error');
++    return;
++  }
++
++  var body = { profiles: {} };
++  body.profiles[profileName] = updates;
++
++  apiFetch('/api/ig/config', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(body)
++  }).then(function(r) { return r.json(); }).then(function(data) {
++    if (data.ok) {
++      showToast(profileName.toUpperCase() + ' credentials saved', 'success');
++      loadIgConfig();
++    } else {
++      showToast('Failed to save: ' + (data.error || 'Unknown error'), 'error');
++    }
++  }).catch(function(e) {
++    showToast('Error: ' + e.message, 'error');
++  });
++}
++
++function testConnection() {
++  showToast('Testing connection...', 'success');
++  apiFetch('/api/ig/config/test', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: '{}'
++  }).then(function(r) { return r.json(); }).then(function(data) {
++    if (data.ok) {
++      showToast('Connection successful! Profile: ' + data.profile + (data.lightstreamerEndpoint ? ', Streaming: ' + data.lightstreamerEndpoint : ''), 'success');
++      loadIgConfig();
++    } else {
++      showToast('Connection failed: ' + (data.error || 'Unknown error'), 'error');
++    }
++  }).catch(function(e) {
++    showToast('Error: ' + e.message, 'error');
++  });
++}
++
+ loadConfig();
++loadIgConfig();
+diff --git a/ui/public/nav-inject.js b/ui/public/nav-inject.js
+index 430977f4b..91b69bc69 100644
+--- a/ui/public/nav-inject.js
++++ b/ui/public/nav-inject.js
+@@ -2,7 +2,7 @@
+   if (document.getElementById('openclaw-nav')) return;
+   var nav = document.createElement('div');
+   nav.id = 'openclaw-nav';
+-  nav.innerHTML = '<div class="ocn-links"><a href="/">Dashboard</a><a href="/__openclaw__/canvas/">Canvas</a><a href="/model-config.html">AI Model Config</a><a href="/workers.html">Workers</a><a href="/processes.html">Processes</a></div>';
++  nav.innerHTML = '<div class="ocn-links"><a href="/">Dashboard</a><a href="/__openclaw__/canvas/">Canvas</a><a href="/model-config.html">Config</a><a href="/workers.html">Workers</a><a href="/processes.html">Processes</a></div>';
+   var style = document.createElement('style');
+   style.textContent = '#openclaw-nav{position:fixed;top:0;left:0;right:0;z-index:9999;background:#161b22;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;height:36px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}#openclaw-nav .ocn-links{display:flex;align-items:center;gap:2px}#openclaw-nav a{color:#8b949e;text-decoration:none;font-size:13px;font-weight:500;padding:5px 12px;border-radius:6px;transition:color .15s,background .15s;white-space:nowrap}#openclaw-nav a:hover{color:#e6edf3;background:rgba(255,255,255,.06)}#openclaw-nav a.active{color:#58a6ff;background:rgba(88,166,255,.1)}';
+   document.head.appendChild(style);
+-- 
+2.40.0.windows.1
+

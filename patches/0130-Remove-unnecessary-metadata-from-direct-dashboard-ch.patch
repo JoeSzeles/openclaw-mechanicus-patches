@@ -1,0 +1,50 @@
+From 0e2a1eeb55fb72467787e903ff7746ea95cd6a6e Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 08:26:28 +0000
+Subject: [PATCH 130/244] Remove unnecessary metadata from direct dashboard
+ chat messages
+
+Skip adding "Conversation info (untrusted metadata)" to messages originating from the control UI when in a direct chat session. This prevents visual clutter in the dashboard's chat interface while preserving metadata for other channels.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: a14fa5a9-4767-44d4-b130-af52915be87a
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/vkA0lRF
+Replit-Helium-Checkpoint-Created: true
+---
+ src/auto-reply/reply/inbound-meta.ts | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/auto-reply/reply/inbound-meta.ts b/src/auto-reply/reply/inbound-meta.ts
+index 17338d061..75c003fe0 100644
+--- a/src/auto-reply/reply/inbound-meta.ts
++++ b/src/auto-reply/reply/inbound-meta.ts
+@@ -59,11 +59,13 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
+   const blocks: string[] = [];
+   const chatType = normalizeChatType(ctx.ChatType);
+   const isDirect = !chatType || chatType === "direct";
++  const senderId = safeTrim(ctx.SenderId);
++  const isControlUi = senderId === "openclaw-control-ui";
+ 
+   const conversationInfo = {
+     message_id: safeTrim(ctx.MessageSid),
+     conversation_label: isDirect ? undefined : safeTrim(ctx.ConversationLabel),
+-    sender: safeTrim(ctx.SenderE164) ?? safeTrim(ctx.SenderId) ?? safeTrim(ctx.SenderUsername),
++    sender: safeTrim(ctx.SenderE164) ?? senderId ?? safeTrim(ctx.SenderUsername),
+     group_subject: safeTrim(ctx.GroupSubject),
+     group_channel: safeTrim(ctx.GroupChannel),
+     group_space: safeTrim(ctx.GroupSpace),
+@@ -71,7 +73,8 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
+     is_forum: ctx.IsForum === true ? true : undefined,
+     was_mentioned: ctx.WasMentioned === true ? true : undefined,
+   };
+-  if (Object.values(conversationInfo).some((v) => v !== undefined)) {
++  const skipConversationInfo = isDirect && isControlUi;
++  if (!skipConversationInfo && Object.values(conversationInfo).some((v) => v !== undefined)) {
+     blocks.push(
+       [
+         "Conversation info (untrusted metadata):",
+-- 
+2.40.0.windows.1
+

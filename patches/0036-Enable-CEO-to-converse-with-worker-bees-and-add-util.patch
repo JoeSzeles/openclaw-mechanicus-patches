@@ -1,0 +1,57 @@
+From 1f81557f2aedd1b47765fd60bc18deebedd9b04c Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 13:32:03 +0000
+Subject: [PATCH 036/244] Enable CEO to converse with worker bees and add
+ utility features
+
+Add CEO-worker conversation prefix, a clear history button for tasks, and copy functionality to script tabs.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: intermediate_checkpoint
+Replit-Commit-Event-Id: 2df380aa-bc00-4f04-840c-c431e2526cf9
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 5 +++++
+ replit.md     | 8 +++++++-
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 0ce545686..469fa1c4e 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -226,6 +226,11 @@ async function handleTasks(req, res, p) {
+     return json(res, 201, task);
+   }
+ 
++  if (req.method === "DELETE" && p === "/api/tasks") {
++    saveJson(TASKS_FILE, { tasks: [], results: [] });
++    return json(res, 200, { ok: true });
++  }
++
+   if (req.method === "DELETE" && p.match(/^\/api\/tasks\/[^/]+$/)) {
+     const id = p.split("/")[3];
+     const data = loadJson(TASKS_FILE, { tasks: [], results: [] });
+diff --git a/replit.md b/replit.md
+index 912457cc2..d26660e0c 100644
+--- a/replit.md
++++ b/replit.md
+@@ -229,7 +229,13 @@ The gateway auth token is automatically injected into the Control UI via `token-
+ - **Persistent storage**: All OpenClaw data must persist across restarts and be manually clearable by deleting `.openclaw/`.
+ - **Config seeding**: start.sh only copies seed config if `.openclaw/openclaw.json` doesn't exist, to avoid overwriting user changes.
+ 
+-## Recent Changes (Feb 2026)
++## Recent Changes (Feb 23, 2026)
++- **CEO→Worker @CEO labeling**: All messages from CEO to workers are prefixed with `@CEO:` so workers clearly know who's talking. CEO's outgoing messages also appear in the main Dashboard chat.
++- **Task History Clear All**: Workers Dashboard has a "Clear All" button to wipe task history (DELETE /api/tasks endpoint)
++- **Copy Script button**: PowerShell/Bash connection script tabs have a "Copy Script" button to copy the active script to clipboard
++- **fakeChat for worker responses**: Worker responses appear in main Dashboard chat via synthetic WebSocket events (no chat.inject, no CEO agent triggering)
++
++## Earlier Changes (Feb 2026)
+ - **CEO/Worker system**: Added reverse proxy architecture (ceo-proxy.cjs on port 5000, gateway on port 5001)
+ - **API key management**: Generate, list, reveal, toggle, delete worker API keys
+ - **Worker registration & task dispatch**: REST API for workers to register, poll tasks, submit results
+-- 
+2.40.0.windows.1
+

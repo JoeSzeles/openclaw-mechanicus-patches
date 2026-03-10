@@ -1,0 +1,109 @@
+From a6c337fb2005c4e8505d13c747b0de718fc18e8b Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 09:11:18 +0000
+Subject: [PATCH 190/244] Ensure agent responses are sent to the correct chat
+ session
+
+Modify the injectToGateway function to accept an optional target session, ensuring responses are sent back to the originating chat session instead of always defaulting to the webchat session.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 906b397c-0d51-4c51-938d-028fd77f33b5
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 7060f0d4-2413-45e8-92d8-5aff4f4ec688
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/906b397c-0d51-4c51-938d-028fd77f33b5/Lg99RrH
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 8 ++++----
+ dist/control-ui/model-config.html | 6 +++---
+ dist/control-ui/processes.html    | 6 +++---
+ dist/control-ui/workers.html      | 6 +++---
+ 4 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 83b364485..03967c329 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -1574,7 +1574,7 @@ function connectGateway() {
+                   const body = bodyMatch ? bodyMatch[1].trim() : userText;
+                   console.log(`[ceo-proxy] User directly @mentioned ${target.type} ${target.name} - dispatching`);
+                   dispatchToTarget(target, body, "User");
+-                  injectToGateway("User → " + target.name, body);
++                  injectToGateway("User → " + target.name, body, evtSessionKey || undefined);
+                 }
+               }
+             }
+@@ -1615,7 +1615,7 @@ function connectGateway() {
+               const body = bodyMatch ? bodyMatch[1].trim() : text;
+               console.log(`[ceo-proxy] Agent ${senderLabel} @mentioned ${target.type} ${target.name} - dispatching`);
+               dispatchToTarget(target, body, senderLabel);
+-              injectToGateway(senderLabel + " → " + target.name, body);
++              injectToGateway(senderLabel + " → " + target.name, body, evtSessionKey || undefined);
+             }
+           }
+         }
+@@ -1682,12 +1682,12 @@ function getActiveSessionKey() {
+   return gwWebchatSessionKey || gwSessionKey || "agent:main:main";
+ }
+ 
+-function injectToGateway(label, message) {
++function injectToGateway(label, message, targetSession) {
+   if (!gatewayWs || gatewayWs.readyState !== WebSocket.OPEN) {
+     console.log("[ceo-proxy] No gateway WS for inject");
+     return;
+   }
+-  const sessionKey = getActiveSessionKey();
++  const sessionKey = targetSession || getActiveSessionKey();
+   const id = "gw-inject-" + (++gwReqCounter) + "-" + Date.now();
+   const frame = {
+     type: "req", id, method: "chat.inject",
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index a380d0376..6b6927a37 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772355396"></script>
+-<script src="/model-config.js?v=1772355396"></script>
+-<script src="/nav-inject.js?v=1772355396"></script>
++<script src="/token-init.js?v=1772356233"></script>
++<script src="/model-config.js?v=1772356233"></script>
++<script src="/nav-inject.js?v=1772356233"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index 504a54d59..09fcf15a7 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772355396"></script>
+-<script src="/processes.js?v=1772355396"></script>
+-<script src="/nav-inject.js?v=1772355396"></script>
++<script src="/token-init.js?v=1772356233"></script>
++<script src="/processes.js?v=1772356233"></script>
++<script src="/nav-inject.js?v=1772356233"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 6949e7462..11822adaa 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772355396"></script>
+-<script src="/workers.js?v=1772355396"></script>
+-<script src="/nav-inject.js?v=1772355396"></script>
++<script src="/token-init.js?v=1772356233"></script>
++<script src="/workers.js?v=1772356233"></script>
++<script src="/nav-inject.js?v=1772356233"></script>
+ </body>
+ </html>
+-- 
+2.40.0.windows.1
+

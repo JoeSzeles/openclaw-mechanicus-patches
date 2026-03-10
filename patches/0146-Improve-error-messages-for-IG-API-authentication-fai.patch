@@ -1,0 +1,44 @@
+From e9c255436af8b5c6a79cf72d56564147f79aec6c Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 12:04:09 +0000
+Subject: [PATCH 146/244] Improve error messages for IG API authentication
+ failures
+
+Clean up raw HTML error responses from the IG API and provide more specific error messages for various HTTP status codes.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: cc32d156-02e2-4c04-9f52-9dcfce84abbd
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/SoYG0KA
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index ad6c5b5e6..adf0269e3 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -293,7 +293,17 @@ async function igAuth() {
+     "X-IG-API-KEY": profile.apiKey,
+     Version: "2",
+   }, JSON.stringify({ identifier: profile.username, password: profile.password }));
+-  if (res.status !== 200) throw new Error("IG auth failed: " + res.status + " " + res.body);
++  if (res.status !== 200) {
++    let errDetail = res.body || "";
++    if (errDetail.includes("<html") || errDetail.includes("<HTML")) {
++      if (res.status === 503) errDetail = "IG API servers unavailable (503) — may be an outage or IP block";
++      else if (res.status === 500) errDetail = "IG API internal server error (500)";
++      else errDetail = "IG API returned HTTP " + res.status;
++    } else {
++      try { const ej = JSON.parse(errDetail); errDetail = ej.errorCode || ej.error || errDetail; } catch(_) {}
++    }
++    throw new Error("IG auth failed: " + errDetail);
++  }
+   const cst = res.headers["cst"] || res.headers["CST"];
+   const xst = res.headers["x-security-token"] || res.headers["X-SECURITY-TOKEN"];
+   if (!cst || !xst) throw new Error("IG auth missing tokens");
+-- 
+2.40.0.windows.1
+

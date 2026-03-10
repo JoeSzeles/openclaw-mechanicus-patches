@@ -1,0 +1,125 @@
+From 82f4b825a8005491870dce7e4b63dd2edddc7135 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 04:35:28 +0000
+Subject: [PATCH 113/244] Add a process manager to view and control running
+ scripts
+
+Integrate a new API endpoint and UI for managing bot, monitor, and skill processes.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 5908a8b8-9882-476a-8697-e613771614f3
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/vucpenw
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 64 ++++++++++++++++++++++++++++++++++++++++++++++++++-
+ replit.md     |  3 ++-
+ 2 files changed, 65 insertions(+), 2 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index eec879d0a..8476eb213 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -928,6 +928,67 @@ async function handleAgentChat(req, res) {
+   }
+ }
+ 
++const { execSync } = require("child_process");
++
++function getRunningProcesses() {
++  try {
++    const out = execSync("ps aux --sort=-start_time", { encoding: "utf-8", timeout: 5000 });
++    const lines = out.trim().split("\n").slice(1);
++    const procs = [];
++    for (const line of lines) {
++      const parts = line.trim().split(/\s+/);
++      if (parts.length < 11) continue;
++      const pid = parseInt(parts[1]);
++      const cpu = parts[2];
++      const mem = parts[3];
++      const startTime = parts[8];
++      const cmd = parts.slice(10).join(" ");
++      if (cmd.includes("monitor.cjs") || cmd.includes("bot.cjs") ||
++          cmd.includes("ig-signal-monitor") || cmd.includes("ig-trading-bot") ||
++          (cmd.includes("node ") && cmd.includes("skills/"))) {
++        let name = "Unknown Script";
++        let type = "script";
++        if (cmd.includes("monitor.cjs") || cmd.includes("ig-signal-monitor")) { name = "Signal Monitor"; type = "monitor"; }
++        else if (cmd.includes("bot.cjs") || cmd.includes("ig-trading-bot")) { name = "Trading Bot"; type = "bot"; }
++        else {
++          const m = cmd.match(/skills\/([^/]+)\//);
++          if (m) name = m[1];
++        }
++        procs.push({ pid, name, type, cpu, mem, startTime, cmd });
++      }
++    }
++    return procs;
++  } catch (_) { return []; }
++}
++
++async function handleProcesses(req, res, p) {
++  if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" });
++
++  if (req.method === "GET" && p === "/api/processes") {
++    const procs = getRunningProcesses();
++    return json(res, 200, { processes: procs });
++  }
++
++  if (req.method === "POST" && p === "/api/processes/kill") {
++    const body = JSON.parse((await readBody(req)).toString() || "{}");
++    const pid = parseInt(body.pid);
++    if (!pid || isNaN(pid)) return json(res, 400, { error: "pid required" });
++    const procs = getRunningProcesses();
++    const found = procs.find(pr => pr.pid === pid);
++    if (!found) return json(res, 404, { error: "Process not found or not a managed script" });
++    try {
++      process.kill(pid, "SIGTERM");
++      setTimeout(() => { try { process.kill(pid, 0); process.kill(pid, "SIGKILL"); } catch (_) {} }, 3000);
++      console.log("[ceo-proxy] Killed process:", found.name, "pid:", pid);
++      return json(res, 200, { ok: true, killed: found.name, pid });
++    } catch (err) {
++      return json(res, 500, { error: "Failed to kill: " + err.message });
++    }
++  }
++
++  return json(res, 404, { error: "Not found" });
++}
++
+ async function handleApi(req, res) {
+   const url = new URL(req.url, "http://localhost");
+   const p = url.pathname;
+@@ -975,6 +1036,7 @@ async function handleApi(req, res) {
+     return json(res, 201, { ok: true, taskId: task.id, workerName: w.name }), true;
+   }
+ 
++  if (p.startsWith("/api/processes")) { await handleProcesses(req, res, p); return true; }
+   if (p.startsWith("/api/keys")) { await handleApiKeys(req, res, p); return true; }
+   if (p.startsWith("/api/workers")) { await handleWorkers(req, res, p); return true; }
+   if (p.startsWith("/api/tasks")) { await handleTasks(req, res, p); return true; }
+@@ -1000,7 +1062,7 @@ function proxyReq(req, res, retries = 3) {
+     method: req.method,
+     headers: { ...req.headers, host: "127.0.0.1:" + GATEWAY_PORT },
+   };
+-  const noCache = /\/(worker-chat|nav-inject|token-init|workers)\.(js|css|html)/.test(req.url);
++  const noCache = /\/(worker-chat|nav-inject|token-init|workers|processes)\.(js|css|html)/.test(req.url);
+   const p = http.request(opts, (pr) => {
+     const headers = { ...pr.headers };
+     if (noCache) {
+diff --git a/replit.md b/replit.md
+index 7981472db..826f72f91 100644
+--- a/replit.md
++++ b/replit.md
+@@ -39,7 +39,8 @@ OpenClaw Cloud operates with a "CEO Proxy + Gateway" architecture where two comp
+ -   **Persistent Storage**: All OpenClaw data, including configuration, agents, API keys, worker tasks, chat history, and file exchange, persists across container restarts in the `.openclaw/` directory.
+ -   **Canvas Static File Serving**: The CEO proxy serves files from `.openclaw/canvas/` at `/__openclaw__/canvas/` without authentication. Skills and agents can write HTML dashboards, charts, and reports to this directory and link users directly. No separate web server or custom port needed. A manifest system (`.openclaw/canvas/manifest.json`) tracks all published pages for dynamic discovery on the Canvas hub (`/__openclaw__/canvas/`). Agents register new pages by adding entries to the manifest JSON array.
+ -   **Auto-Token Injection**: The gateway authentication token is automatically injected into the Control UI at startup, eliminating manual configuration.
+--   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, AI Model Config, and Workers pages.
++-   **Process Manager**: A web UI (`/processes.html`) shows all running bot scripts, monitors, and skill processes. Uses OS-level process discovery (`ps aux`) filtered to `skills/` scripts. Supports killing processes with SIGTERM/SIGKILL fallback. Auto-refreshes every 10 seconds. API: `GET /api/processes` (list), `POST /api/processes/kill` (kill by PID).
++-   **Navigation Bar**: An injected navigation bar provides easy access to the Dashboard, Canvas, AI Model Config, Workers, and Processes pages.
+ 
+ ### Technical Implementation Details:
+ -   **Language**: TypeScript (Node.js >= 22.12.0)
+-- 
+2.40.0.windows.1
+

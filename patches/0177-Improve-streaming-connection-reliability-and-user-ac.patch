@@ -1,0 +1,172 @@
+From f7439cc5694c8032789c2d2d013bc99f46afac22 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sun, 1 Mar 2026 06:34:37 +0000
+Subject: [PATCH 177/244] Improve streaming connection reliability and user
+ account data display
+
+Add a new subscription for account-level data, ensuring the connection status remains "connected" even if market data subscriptions fail due to account type restrictions. Also updates file versions in several HTML files.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 048f7f8d-2d2b-443d-b63e-36d1731f9f72
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/kWZ4Vq5
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs                     | 46 ++++++++++++++++++++++++-------
+ dist/control-ui/model-config.html |  6 ++--
+ dist/control-ui/processes.html    |  6 ++--
+ dist/control-ui/workers.html      |  6 ++--
+ pnpm-lock.yaml                    |  1 +
+ 5 files changed, 46 insertions(+), 19 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index 2178a1d69..188302f2a 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -240,8 +240,7 @@ async function startLightstreamer() {
+     if (lsLiveActive && lsLiveSession.cst && lsLiveSession.lightstreamerEndpoint) {
+       session = { cst: lsLiveSession.cst, xst: lsLiveSession.xst };
+       endpoint = lsLiveSession.lightstreamerEndpoint;
+-      const liveProfile = getLiveProfile();
+-      accountId = liveProfile ? liveProfile.accountId : null;
++      accountId = lsLiveSession.accountId || (getLiveProfile() ? getLiveProfile().accountId : null);
+       streamSource = "live";
+     } else {
+       session = await igAuth();
+@@ -292,19 +291,19 @@ async function startLightstreamer() {
+     sub.setRequestedSnapshot("yes");
+     sub.addListener({
+       onSubscription: () => {
+-        console.log(`[lightstreamer] Subscribed to ${epics.length} instruments`);
++        console.log(`[lightstreamer] Subscribed to ${epics.length} instruments via ${streamSource}`);
+         lsConnectedEpics = epics;
+       },
+       onSubscriptionError: (code, msg) => {
+-        console.error(`[lightstreamer] Subscription error: ${code} ${msg} | source=${streamSource} items=${JSON.stringify(items)} fields=${JSON.stringify(fields)}`);
++        console.error(`[lightstreamer] Subscription error: ${code} ${msg} | source=${streamSource} items=${JSON.stringify(items)}`);
+         if (msg && msg.includes("Invalid account type")) {
+-          console.log("[lightstreamer] This IG account type does not support streaming. Prices will use REST polling instead.");
+-          lsStatus = "unsupported";
++          console.log("[lightstreamer] L1 market data not available for this account type. Account-level streaming may still work.");
++          if (lsStatus !== "connected") lsStatus = "unsupported";
+         }
+       },
+       onItemUpdate: (info) => {
+         const epicFull = info.getItemName();
+-        const epic = epicFull.startsWith("L1:") ? epicFull.slice(3) : epicFull;
++        const epic = epicFull.includes(":") ? epicFull.split(":").slice(1).join(":") : epicFull;
+         const bid = parseFloat(info.getValue("BID")) || null;
+         const offer = parseFloat(info.getValue("OFFER")) || null;
+         const mid = (bid && offer) ? (bid + offer) / 2 : null;
+@@ -328,6 +327,32 @@ async function startLightstreamer() {
+     });
+     client.subscribe(sub);
+     lsSubscription = sub;
++
++    if (streamSource === "live" && accountId) {
++      const acctSub = new Subscription("MERGE", [`ACCOUNT:${accountId}`], ["DEPOSIT", "PNL", "AVAILABLE_CASH", "FUNDS", "MARGIN", "EQUITY"]);
++      acctSub.setRequestedSnapshot("yes");
++      acctSub.addListener({
++        onSubscription: () => {
++          console.log(`[lightstreamer] ACCOUNT subscription OK for ${accountId}`);
++          if (lsStatus === "unsupported") lsStatus = "connected";
++        },
++        onSubscriptionError: (c2, m2) => console.error(`[lightstreamer] ACCOUNT subscription error: ${c2} ${m2}`),
++        onItemUpdate: (info2) => {
++          const acctData = {
++            deposit: parseFloat(info2.getValue("DEPOSIT")) || null,
++            pnl: parseFloat(info2.getValue("PNL")) || null,
++            availableCash: parseFloat(info2.getValue("AVAILABLE_CASH")) || null,
++            funds: parseFloat(info2.getValue("FUNDS")) || null,
++            margin: parseFloat(info2.getValue("MARGIN")) || null,
++            equity: parseFloat(info2.getValue("EQUITY")) || null,
++            timestamp: Date.now()
++          };
++          streamedPrices.set("__ACCOUNT__", acctData);
++        }
++      });
++      client.subscribe(acctSub);
++    }
++
+     console.log(`[lightstreamer] Connecting to ${endpoint} (via ${streamSource}), subscribing to ${epics.length} instruments`);
+   } catch (e) {
+     console.error("[lightstreamer] Error starting:", e.message);
+@@ -376,10 +401,11 @@ async function liveStreamingLogin() {
+   const xst = res.headers["x-security-token"] || res.headers["X-SECURITY-TOKEN"];
+   if (!cst || !xst) throw new Error("Live auth missing tokens");
+   let lsEndpoint = null;
+-  try { const body = JSON.parse(res.body); lsEndpoint = body.lightstreamerEndpoint || null; } catch (_) {}
++  let sessionBody = {};
++  try { sessionBody = JSON.parse(res.body); lsEndpoint = sessionBody.lightstreamerEndpoint || null; } catch (_) {}
+   if (!lsEndpoint) throw new Error("Live account did not return a Lightstreamer endpoint");
+-  lsLiveSession = { cst, xst, ts: Date.now(), lightstreamerEndpoint: lsEndpoint };
+-  console.log("[live-streaming] Authenticated successfully, endpoint:", lsEndpoint);
++  lsLiveSession = { cst, xst, ts: Date.now(), lightstreamerEndpoint: lsEndpoint, accountType: sessionBody.accountType || null, accountId: sessionBody.currentAccountId || profile.accountId };
++  console.log("[live-streaming] Authenticated successfully, endpoint:", lsEndpoint, "accountType:", sessionBody.accountType, "accountId:", sessionBody.currentAccountId);
+   return { cst, xst, lightstreamerEndpoint: lsEndpoint };
+ }
+ 
+diff --git a/dist/control-ui/model-config.html b/dist/control-ui/model-config.html
+index 88eaeeda0..11b1b4ba4 100644
+--- a/dist/control-ui/model-config.html
++++ b/dist/control-ui/model-config.html
+@@ -190,8 +190,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772345649"></script>
+-<script src="/model-config.js?v=1772345649"></script>
+-<script src="/nav-inject.js?v=1772345649"></script>
++<script src="/token-init.js?v=1772346831"></script>
++<script src="/model-config.js?v=1772346831"></script>
++<script src="/nav-inject.js?v=1772346831"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/processes.html b/dist/control-ui/processes.html
+index 038713a67..d8f5fbf9a 100644
+--- a/dist/control-ui/processes.html
++++ b/dist/control-ui/processes.html
+@@ -72,8 +72,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772345649"></script>
+-<script src="/processes.js?v=1772345649"></script>
+-<script src="/nav-inject.js?v=1772345649"></script>
++<script src="/token-init.js?v=1772346831"></script>
++<script src="/processes.js?v=1772346831"></script>
++<script src="/nav-inject.js?v=1772346831"></script>
+ </body>
+ </html>
+diff --git a/dist/control-ui/workers.html b/dist/control-ui/workers.html
+index 8f9c80185..6cf6f5dd2 100644
+--- a/dist/control-ui/workers.html
++++ b/dist/control-ui/workers.html
+@@ -151,8 +151,8 @@ tr:hover{background:#1c2128}
+ </div>
+ 
+ <div id="toast" class="toast"></div>
+-<script src="/token-init.js?v=1772345649"></script>
+-<script src="/workers.js?v=1772345649"></script>
+-<script src="/nav-inject.js?v=1772345649"></script>
++<script src="/token-init.js?v=1772346831"></script>
++<script src="/workers.js?v=1772346831"></script>
++<script src="/nav-inject.js?v=1772346831"></script>
+ </body>
+ </html>
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 4b55ae3b3..eb1eb2807 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -2540,6 +2540,7 @@ packages:
+   basic-ftp@5.1.0:
+     resolution: {integrity: sha512-RkaJzeJKDbaDWTIPiJwubyljaEPwpVWkm9Rt5h9Nd6h7tEXTJ3VB4qxdZBioV7JO5yLUaOKwz7vDOzlncUsegw==}
+     engines: {node: '>=10.0.0'}
++    deprecated: Security vulnerability fixed in 5.2.0, please upgrade
+ 
+   before-after-hook@4.0.0:
+     resolution: {integrity: sha512-q6tR3RPqIB1pMiTRMFcZwuG5T8vwp+vUvEG0vuI6B+Rikh5BfPp2fQ82c925FOs+b0lcFQ8CFrL+KbilfZFhOQ==}
+-- 
+2.40.0.windows.1
+

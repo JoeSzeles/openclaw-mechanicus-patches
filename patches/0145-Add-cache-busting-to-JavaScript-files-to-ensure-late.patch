@@ -1,0 +1,36 @@
+From 916b3b29a848a1071801a93436cb9811f7c0cd31 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 11:58:28 +0000
+Subject: [PATCH 145/244] Add cache-busting to JavaScript files to ensure
+ latest versions load
+
+Update start.sh script to append cache-busting query parameters to all JavaScript file references within HTML files, preventing browser caching issues.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d517740c-e24b-4d05-80ee-1f4fb8ac02ea
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 91eb4233-36d8-4329-bf2c-8551f89fb631
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/d517740c-e24b-4d05-80ee-1f4fb8ac02ea/SoYG0KA
+Replit-Helium-Checkpoint-Created: true
+---
+ start.sh | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/start.sh b/start.sh
+index b0980f604..6a0155b21 100755
+--- a/start.sh
++++ b/start.sh
+@@ -13,8 +13,8 @@ JSEOF
+ 
+ for htmlfile in /home/runner/workspace/dist/control-ui/model-config.html /home/runner/workspace/dist/control-ui/workers.html /home/runner/workspace/dist/control-ui/processes.html; do
+   if [ -f "$htmlfile" ]; then
+-    sed -i "s|/token-init\.js\"|/token-init.js?v=${CACHE_BUST}\"|g" "$htmlfile"
+-    sed -i "s|/token-init\.js?v=[0-9]*\"|/token-init.js?v=${CACHE_BUST}\"|g" "$htmlfile"
++    sed -i "s|\.js\"|.js?v=${CACHE_BUST}\"|g" "$htmlfile"
++    sed -i "s|\.js?v=[0-9]*\"|.js?v=${CACHE_BUST}\"|g" "$htmlfile"
+   fi
+ done
+ 
+-- 
+2.40.0.windows.1
+

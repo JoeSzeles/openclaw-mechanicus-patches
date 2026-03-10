@@ -1,0 +1,35 @@
+From 8fb53ad6b5a93e02fce52b05257d63053fa38f46 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 17:52:51 +0000
+Subject: [PATCH 062/244] Improve message relay to workers by only sending the
+ core request
+
+Refine the message body extraction in `ceo-proxy.cjs` to capture only the first line after a worker mention, ensuring that extraneous agent commentary is excluded.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: d785e033-2d00-42a6-8d33-fda89b7733ba
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 62c7b15f-ce89-417a-b4fd-4a85e8cad434
+Replit-Helium-Checkpoint-Created: true
+---
+ ceo-proxy.cjs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ceo-proxy.cjs b/ceo-proxy.cjs
+index d1eddd74c..f47ee5f64 100644
+--- a/ceo-proxy.cjs
++++ b/ceo-proxy.cjs
+@@ -88,8 +88,8 @@ function connectGateway() {
+               }
+               lastAutoDispatch[foundWorker.name] = now;
+               const nameEsc = foundWorker.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+-              const bodyMatch = text.match(new RegExp("@" + nameEsc + "\\s+([\\s\\S]+)", "i"));
+-              const body = bodyMatch ? bodyMatch[1].trim() : text;
++              const lineMatch = text.match(new RegExp("@" + nameEsc + "\\s+(.+)", "i"));
++              const body = lineMatch ? lineMatch[1].trim() : text;
+               console.log("[ceo-proxy] CEO agent @mentioned worker:", foundWorker.name, "- auto-dispatching");
+               const task = {
+                 id: crypto.randomUUID(),
+-- 
+2.40.0.windows.1
+

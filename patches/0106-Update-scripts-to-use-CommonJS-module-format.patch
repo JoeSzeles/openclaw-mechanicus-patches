@@ -1,0 +1,88 @@
+From 0b74beb124b616cca4cbd9c2aacff9767464b7b0 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Sat, 28 Feb 2026 03:09:01 +0000
+Subject: [PATCH 106/244] Update scripts to use CommonJS module format
+
+Renames the `monitor.js` and `bot.js` files to `.cjs` to resolve CommonJS/ESM conflicts and updates references in `SKILL.md` files.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 9b6db5b8-bb27-4a35-8d77-7730eb3a7059
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: 215a5f7d-8f6c-45c3-a677-5d5d2e43fa5f
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/9b6db5b8-bb27-4a35-8d77-7730eb3a7059/Q4ee3H6
+Replit-Helium-Checkpoint-Created: true
+---
+ skills/ig-signal-monitor/SKILL.md                    | 4 ++--
+ skills/ig-signal-monitor/{monitor.js => monitor.cjs} | 0
+ skills/ig-trading-bot/SKILL.md                       | 8 ++++----
+ skills/ig-trading-bot/{bot.js => bot.cjs}            | 0
+ 4 files changed, 6 insertions(+), 6 deletions(-)
+ rename skills/ig-signal-monitor/{monitor.js => monitor.cjs} (100%)
+ rename skills/ig-trading-bot/{bot.js => bot.cjs} (100%)
+
+diff --git a/skills/ig-signal-monitor/SKILL.md b/skills/ig-signal-monitor/SKILL.md
+index b611338d1..6a8810bdf 100644
+--- a/skills/ig-signal-monitor/SKILL.md
++++ b/skills/ig-signal-monitor/SKILL.md
+@@ -78,7 +78,7 @@ You can add signal overrides on individual instruments:
+ ### Test Mode (one cycle, no persistent loop)
+ 
+ ```bash
+-node skills/ig-signal-monitor/monitor.js --test
++node skills/ig-signal-monitor/monitor.cjs --test
+ ```
+ 
+ Runs a single poll cycle, prints what signals would fire, then exits. Use this to verify config and connectivity before running the full loop.
+@@ -86,7 +86,7 @@ Runs a single poll cycle, prints what signals would fire, then exits. Use this t
+ ### Full Loop
+ 
+ ```bash
+-node skills/ig-signal-monitor/monitor.js
++node skills/ig-signal-monitor/monitor.cjs
+ ```
+ 
+ Runs continuously, polling at the configured interval. Writes alerts to `.openclaw/ig-alerts.json`.
+diff --git a/skills/ig-signal-monitor/monitor.js b/skills/ig-signal-monitor/monitor.cjs
+similarity index 100%
+rename from skills/ig-signal-monitor/monitor.js
+rename to skills/ig-signal-monitor/monitor.cjs
+diff --git a/skills/ig-trading-bot/SKILL.md b/skills/ig-trading-bot/SKILL.md
+index 122b75c81..67a9fad46 100644
+--- a/skills/ig-trading-bot/SKILL.md
++++ b/skills/ig-trading-bot/SKILL.md
+@@ -11,8 +11,8 @@ Automated CFD trading bot for the IG Group platform. Executes trades based on co
+ ## Quick Start
+ 
+ 1. Create/edit the strategy config at `.openclaw/ig-strategy.json`
+-2. Test with: `node skills/ig-trading-bot/bot.js --test`
+-3. Run live: `node skills/ig-trading-bot/bot.js`
++2. Test with: `node skills/ig-trading-bot/bot.cjs --test`
++3. Run live: `node skills/ig-trading-bot/bot.cjs`
+ 
+ ## Strategy Config
+ 
+@@ -79,7 +79,7 @@ The bot reads its configuration from `.openclaw/ig-strategy.json`.
+ Simulates one cycle without placing real trades:
+ 
+ ```bash
+-node skills/ig-trading-bot/bot.js --test
++node skills/ig-trading-bot/bot.cjs --test
+ ```
+ 
+ This will:
+@@ -92,7 +92,7 @@ This will:
+ ### Live Mode
+ 
+ ```bash
+-node skills/ig-trading-bot/bot.js
++node skills/ig-trading-bot/bot.cjs
+ ```
+ 
+ Runs continuously, polling prices and executing trades when conditions are met. Press Ctrl+C to stop.
+diff --git a/skills/ig-trading-bot/bot.js b/skills/ig-trading-bot/bot.cjs
+similarity index 100%
+rename from skills/ig-trading-bot/bot.js
+rename to skills/ig-trading-bot/bot.cjs
+-- 
+2.40.0.windows.1
+

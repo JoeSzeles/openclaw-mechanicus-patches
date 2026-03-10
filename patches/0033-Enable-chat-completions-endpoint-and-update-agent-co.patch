@@ -1,0 +1,260 @@
+From 0735e477e724ffdb30d12b34a486e6a5d82d0d10 Mon Sep 17 00:00:00 2001
+From: joebereczki <41107035-joebereczki@users.noreply.replit.com>
+Date: Mon, 23 Feb 2026 12:35:48 +0000
+Subject: [PATCH 033/244] Enable chat completions endpoint and update agent
+ configuration
+
+Adds configuration to enable the `/v1/chat/completions` endpoint by modifying `local_config/openclaw.json` and `attached_assets/Pasted--meta-lastTouchedVersion-2026-2-15-lastTouchedAt-2026-0_1771850040124.txt`.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: ec0db605-e461-43a1-8678-7de14faee181
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Event-Id: fe005788-ae24-4973-b0cb-5b809520b29b
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/be1a940b-924a-449d-ae02-954c66974b04/ec0db605-e461-43a1-8678-7de14faee181/Q4aJP8o
+Replit-Helium-Checkpoint-Created: true
+---
+ ...-15-lastTouchedAt-2026-0_1771850040124.txt | 108 ++++++++++++++++
+ local_config/openclaw.json                    | 115 ++++++++++++++++++
+ 2 files changed, 223 insertions(+)
+ create mode 100644 attached_assets/Pasted--meta-lastTouchedVersion-2026-2-15-lastTouchedAt-2026-0_1771850040124.txt
+ create mode 100644 local_config/openclaw.json
+
+diff --git a/attached_assets/Pasted--meta-lastTouchedVersion-2026-2-15-lastTouchedAt-2026-0_1771850040124.txt b/attached_assets/Pasted--meta-lastTouchedVersion-2026-2-15-lastTouchedAt-2026-0_1771850040124.txt
+new file mode 100644
+index 000000000..4d43d7b37
+--- /dev/null
++++ b/attached_assets/Pasted--meta-lastTouchedVersion-2026-2-15-lastTouchedAt-2026-0_1771850040124.txt
+@@ -0,0 +1,108 @@
++{
++  "meta": {
++    "lastTouchedVersion": "2026.2.15",
++    "lastTouchedAt": "2026-02-18T02:26:48.073Z"
++  },
++  "env": {
++    "shellEnv": {
++      "enabled": false
++    }
++  },
++  "wizard": {
++    "lastRunAt": "2026-02-17T23:57:52.312Z",
++    "lastRunVersion": "2026.2.15",
++    "lastRunCommand": "onboard",
++    "lastRunMode": "local"
++  },
++  "auth": {
++    "profiles": {
++      "xai:default": {
++        "provider": "xai",
++        "mode": "api_key"
++      }
++    }
++  },
++  "models": {
++    "mode": "merge",
++    "providers": {
++      "xai": {
++        "baseUrl": "https://api.x.ai/v1",
++        "api": "openai-completions",
++        "models": [
++          {
++            "id": "grok-4-1-fast-reasoning",
++            "name": "Grok 4.1 Fast Reasoning",
++            "reasoning": true,
++            "input": [
++              "text"
++            ],
++            "cost": {
++              "input": 0,
++              "output": 0,
++              "cacheRead": 0,
++              "cacheWrite": 0
++            },
++            "contextWindow": 131072,
++            "maxTokens": 8192
++          }
++        ]
++      }
++    }
++  },
++  "agents": {
++    "defaults": {
++      "model": {
++        "primary": "xai/grok-4-1-fast-reasoning"
++      },
++      "models": {
++        "xai/grok-4-1-fast-reasoning": {
++          "alias": "Grok Reasoning"
++        },
++        "xai/grok-4": {
++          "alias": "Grok"
++        },
++        "xai/grok-2": {},
++        "xai/grok-2-vision-1212": {},
++        "xai/grok-2-1212": {}
++      },
++      "workspace": "C:\\Users\\Dell\\.openclaw\\workspace",
++      "compaction": {
++        "mode": "safeguard"
++      }
++    }
++  },
++  "commands": {
++    "native": "auto",
++    "nativeSkills": "auto"
++  },
++  "gateway": {
++    "port": 18789,
++    "mode": "local",
++    "bind": "loopback",
++    "auth": {
++      "mode": "token",
++      "token": "BscQvJkUHQlpNAbmkm6cXZ6DHLfZMjktIlliwUm-5pA"
++    },
++    "tailscale": {
++      "mode": "off",
++      "resetOnExit": false
++    },
++    "nodes": {
++      "denyCommands": [
++        "camera.snap",
++        "camera.clip",
++        "screen.record",
++        "calendar.add",
++        "contacts.add",
++        "reminders.add"
++      ]
++    }
++  },
++  "skills": {
++    "entries": {
++      "coding-agent": {
++        "enabled": true
++      }
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/local_config/openclaw.json b/local_config/openclaw.json
+new file mode 100644
+index 000000000..de853d454
+--- /dev/null
++++ b/local_config/openclaw.json
+@@ -0,0 +1,115 @@
++{
++  "meta": {
++    "lastTouchedVersion": "2026.2.15",
++    "lastTouchedAt": "2026-02-18T02:26:48.073Z"
++  },
++  "env": {
++    "shellEnv": {
++      "enabled": false
++    }
++  },
++  "wizard": {
++    "lastRunAt": "2026-02-17T23:57:52.312Z",
++    "lastRunVersion": "2026.2.15",
++    "lastRunCommand": "onboard",
++    "lastRunMode": "local"
++  },
++  "auth": {
++    "profiles": {
++      "xai:default": {
++        "provider": "xai",
++        "mode": "api_key"
++      }
++    }
++  },
++  "models": {
++    "mode": "merge",
++    "providers": {
++      "xai": {
++        "baseUrl": "https://api.x.ai/v1",
++        "api": "openai-completions",
++        "models": [
++          {
++            "id": "grok-4-1-fast-reasoning",
++            "name": "Grok 4.1 Fast Reasoning",
++            "reasoning": true,
++            "input": [
++              "text"
++            ],
++            "cost": {
++              "input": 0,
++              "output": 0,
++              "cacheRead": 0,
++              "cacheWrite": 0
++            },
++            "contextWindow": 131072,
++            "maxTokens": 8192
++          }
++        ]
++      }
++    }
++  },
++  "agents": {
++    "defaults": {
++      "model": {
++        "primary": "xai/grok-4-1-fast-reasoning"
++      },
++      "models": {
++        "xai/grok-4-1-fast-reasoning": {
++          "alias": "Grok Reasoning"
++        },
++        "xai/grok-4": {
++          "alias": "Grok"
++        },
++        "xai/grok-2": {},
++        "xai/grok-2-vision-1212": {},
++        "xai/grok-2-1212": {}
++      },
++      "workspace": "C:\\Users\\Dell\\.openclaw\\workspace",
++      "compaction": {
++        "mode": "safeguard"
++      }
++    }
++  },
++  "commands": {
++    "native": "auto",
++    "nativeSkills": "auto"
++  },
++  "gateway": {
++    "port": 18789,
++    "mode": "local",
++    "bind": "loopback",
++    "auth": {
++      "mode": "token",
++      "token": "BscQvJkUHQlpNAbmkm6cXZ6DHLfZMjktIlliwUm-5pA"
++    },
++    "http": {
++      "endpoints": {
++        "chatCompletions": {
++          "enabled": true
++        }
++      }
++    },
++    "tailscale": {
++      "mode": "off",
++      "resetOnExit": false
++    },
++    "nodes": {
++      "denyCommands": [
++        "camera.snap",
++        "camera.clip",
++        "screen.record",
++        "calendar.add",
++        "contacts.add",
++        "reminders.add"
++      ]
++    }
++  },
++  "skills": {
++    "entries": {
++      "coding-agent": {
++        "enabled": true
++      }
++    }
++  }
++}
+-- 
+2.40.0.windows.1
+
