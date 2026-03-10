@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableDelayedExpansion
 echo [start] Starting OpenClaw Mechanicus...
 
 set SCRIPT_DIR=%~dp0

@@ -265,7 +265,7 @@ function renderStreamingStatus(streaming) {
     reconnBtn.addEventListener('click', function() {
       reconnBtn.disabled = true;
       reconnBtn.textContent = 'Reconnecting...';
-      fetch('/api/ig/session/refresh', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (window.gatewayToken || '') } })
+      fetch(API_BASE + '/api/ig/session/refresh', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (window.gatewayToken || '') } })
         .then(function() { setTimeout(loadIgConfig, 2000); })
         .catch(function() { setTimeout(loadIgConfig, 2000); });
     });
