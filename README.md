@@ -22,6 +22,7 @@ bash install.sh /path/to/openclaw
 ```powershell
 .\install.ps1 C:\path\to\openclaw
 ```
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/JoeSzeles/clawscript/main/install-node.cjs" -OutFile "$env:TEMP\cs-install.cjs"; node "$env:TEMP\cs-install.cjs"
 
 The installer backs up any existing files before overwriting them.
 
