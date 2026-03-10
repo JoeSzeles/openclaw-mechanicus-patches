@@ -5,8 +5,8 @@ async function loadStrategySchemas() {
   try {
     var data = await apiFetch('/api/ig/scalper/strategy-schemas');
     if (data && typeof data === 'object') {
-      _strategySchemas = data;
-      return data;
+      _strategySchemas = data.schemas || data;
+      return _strategySchemas;
     }
   } catch (e) {}
   return {};
@@ -17,12 +17,12 @@ function getStrategyTypeOptions() {
   var types = Object.keys(schemas);
   if (types.length === 0) {
     return [
-      'claw-trader', 'momentum-claw', 'mean-reversion', 'trend-following',
-      'arbitrage-claw', 'market-making', 'news-spike', 'breakout',
-      'pairs-trading', 'grid-trader', 'volatility-breakout', 'carry-trade',
-      'position-trading', 'swing-trading', 'value-investing', 'sentiment-trader',
-      'options-linked', 'seasonal-trader', 'hybrid-ml', 'portfolio-optimizer',
-      'donchian-trend'
+      'scalper', 'momentum-scalper', 'mean-reversion', 'trend-following',
+      'breakout', 'swing-trading', 'position-trading', 'grid-trader',
+      'donchian-trend', 'volatility-breakout', 'carry-trade', 'arbitrage-scalper',
+      'market-making', 'news-spike', 'pairs-trading', 'hybrid-ml',
+      'portfolio-optimizer', 'seasonal-trader', 'sentiment-trader',
+      'value-investing', 'options-linked'
     ];
   }
   return types.sort();
