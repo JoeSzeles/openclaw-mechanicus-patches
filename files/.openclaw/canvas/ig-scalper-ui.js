@@ -46,7 +46,7 @@ async function loadScalperStatus() {
     var isSelected = editingScalperStrategy === sid;
     var toggleClass = s.enabled ? 'btn-sm btn-toggle' : 'btn-sm btn-toggle off';
     var rowStyle = isSelected ? 'background:rgba(88,166,255,0.08);cursor:pointer' : 'cursor:pointer';
-    var sType = s.strategyType || 'claw-trader';
+    var sType = s.strategyType || 'scalper';
     var typeLabel = sType.replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
     var isCS = typeof isClawScriptStrategy === 'function' && isClawScriptStrategy(sType);
     var csBadge = isCS ? '<span style="background:#56d4dd;color:#0d1117;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:4px">[CS]</span>' : '';
@@ -133,7 +133,7 @@ function downloadScalperTrades() {
     var blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'claw-trader-trades-' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'scalper-trades-' + new Date().toISOString().slice(0,10) + '.json';
     a.click();
     URL.revokeObjectURL(a.href);
   });
@@ -196,7 +196,7 @@ function populateStrategyFields(s) {
   document.getElementById('seditStratStop').value = s.stopDistance != null ? s.stopDistance : '';
   document.getElementById('seditStratLimit').value = s.limitDistance != null ? s.limitDistance : '';
 
-  var sType = s.strategyType || 'claw-trader';
+  var sType = s.strategyType || 'scalper';
   if (typeof isClawScriptStrategy === 'function' && isClawScriptStrategy(sType)) {
     renderClawScriptFields(sType, s);
   } else {
@@ -454,7 +454,7 @@ function showScalperAddModal() {
   var existing = document.getElementById('scalperAddOverlay');
   if (existing) existing.remove();
 
-  var stratTypeHtml = buildStrategyTypeDropdown('claw-trader');
+  var stratTypeHtml = buildStrategyTypeDropdown('scalper');
 
   var overlay = document.createElement('div');
   overlay.id = 'scalperAddOverlay';
@@ -542,7 +542,7 @@ async function submitScalperAdd() {
   var body = {
     instrument: epic,
     name: document.getElementById('scalperAddName').value.trim() || epic,
-    strategyType: typeEl ? typeEl.value : 'claw-trader',
+    strategyType: typeEl ? typeEl.value : 'scalper',
     direction: document.getElementById('scalperAddDir').value,
     size: parseFloat(document.getElementById('scalperAddSize').value) || 0.5,
     stopDistance: parseFloat(document.getElementById('scalperAddStop').value) || 50,

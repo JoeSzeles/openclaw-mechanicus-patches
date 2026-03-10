@@ -2542,7 +2542,7 @@ function downloadScalperTrades() {
     var blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'claw-trader-trades-' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'scalper-trades-' + new Date().toISOString().slice(0,10) + '.json';
     a.click();
     URL.revokeObjectURL(a.href);
   });
@@ -3381,7 +3381,7 @@ function populateBatchStrategyCheckboxes() {
   var schemas = (typeof _strategySchemas !== 'undefined' && _strategySchemas) ? _strategySchemas : (typeof strategySchemas !== 'undefined' ? strategySchemas : {});
   var types = Object.keys(schemas).sort();
   if (types.length === 0) {
-    types = ['claw-trader', 'momentum-claw', 'mean-reversion', 'trend-following', 'breakout', 'grid-trader'];
+    types = ['scalper', 'momentum-scalper', 'mean-reversion', 'trend-following', 'breakout', 'grid-trader'];
   }
   var html = '';
   for (var i = 0; i < types.length; i++) {
