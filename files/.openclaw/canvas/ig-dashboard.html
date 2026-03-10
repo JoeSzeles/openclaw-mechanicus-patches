@@ -2700,6 +2700,10 @@ function findStrategyById(id) {
 function populateStrategyFields(s) {
   document.getElementById('seditStratLabel').textContent = (s.name || s.instrument) + ' (' + s.instrument + ')';
   document.getElementById('seditStratName').value = s.name || '';
+  var typeDropdown = document.getElementById('seditStratTypeContainer');
+  if (typeDropdown && typeof buildStrategyTypeDropdown === 'function') {
+    typeDropdown.innerHTML = buildStrategyTypeDropdown(s.strategyType || 'claw-trader');
+  }
   document.getElementById('seditStratDir').value = s.direction || 'BOTH';
   document.getElementById('seditStratTF').value = s.timeframe || 'MINUTE';
   document.getElementById('seditStratSize').value = s.size != null ? s.size : '';
@@ -2721,7 +2725,7 @@ function renderDynamicIndicators(s) {
   var container = document.getElementById('dynamicIndicatorFilters');
   if (!container) return;
   var sType = s.strategyType || '';
-  var schemas = _strategySchemas || strategySchemas || {};
+  var schemas = (typeof _strategySchemas !== 'undefined' && _strategySchemas) ? _strategySchemas : (typeof strategySchemas !== 'undefined' ? strategySchemas : {});
   var schema = schemas[sType];
   if (!schema || !schema.configSchema || schema.configSchema.length === 0) {
     renderFallbackIndicators(s);
@@ -2865,8 +2869,10 @@ function cancelStrategySettings() {
 async function saveStrategySettings() {
   var id = editingScalperStrategy;
   if (id === null) { showToast('No strategy selected', false); return; }
+  var stratTypeEl = document.getElementById('seditStratType');
   var body = {
     name: document.getElementById('seditStratName').value,
+    strategyType: stratTypeEl ? stratTypeEl.value : undefined,
     direction: document.getElementById('seditStratDir').value,
     timeframe: document.getElementById('seditStratTF').value || 'MINUTE',
     size: parseFloat(document.getElementById('seditStratSize').value) || undefined,
@@ -2885,7 +2891,7 @@ async function saveStrategySettings() {
   var dynFields = document.querySelectorAll('.dynamic-indicator-field');
   if (dynFields.length > 0) {
     var dynVals = collectDynamicIndicatorValues();
-    for (var dk in dynVals) { body[dk] = dynVals[dk]; }
+    for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
   } else {
     var rsiOn = document.getElementById('seditRsiOn');
     if (rsiOn) {
@@ -2908,9 +2914,17 @@ async function saveStrategySettings() {
       body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
     }
   }
-  var r = await apiPut('/api/ig/scalper/strategies/' + id, body);
-  if (r && r.ok) showToast('Strategy saved', true);
-  else showToast('Failed to save strategy: ' + (r && r.error ? r.error : 'unknown'), false);
+  if (typeof collectClawScriptFieldValues === 'function') {
+    var csVals = collectClawScriptFieldValues();
+    for (var csKey in csVals) { if (csVals.hasOwnProperty(csKey)) body[csKey] = csVals[csKey]; }
+  }
+  try {
+    var r = await apiPut('/api/ig/scalper/strategies/' + id, body);
+    if (r && r.ok) showToast('Strategy saved', true);
+    else showToast('Failed to save strategy: ' + (r && r.error ? r.error : 'unknown'), false);
+  } catch (e) {
+    showToast('Save error: ' + e.message, false);
+  }
   document.getElementById('strategySettingsEdit').style.display = 'none';
   editingScalperStrategy = null;
   loadScalperStatus();
@@ -3396,7 +3410,7 @@ function initBatchBacktestUI() {
 function populateBatchStrategyCheckboxes() {
   var container = document.getElementById('batchBtStratChecks');
   if (!container) return;
-  var schemas = _strategySchemas || strategySchemas || {};
+  var schemas = (typeof _strategySchemas !== 'undefined' && _strategySchemas) ? _strategySchemas : (typeof strategySchemas !== 'undefined' ? strategySchemas : {});
   var types = Object.keys(schemas).sort();
   if (types.length === 0) {
     types = ['claw-trader', 'momentum-claw', 'mean-reversion', 'trend-following', 'breakout', 'grid-trader'];

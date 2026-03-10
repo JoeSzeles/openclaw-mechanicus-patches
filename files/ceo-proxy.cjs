@@ -5,8 +5,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { WebSocket } = require("ws");
 
-const GATEWAY_PORT = 5001;
-const PROXY_PORT = 5000;
+const GATEWAY_PORT = parseInt(process.env.OPENCLAW_GATEWAY_PORT || "5001", 10);
+const PROXY_PORT = parseInt(process.env.OPENCLAW_PROXY_PORT || "5000", 10);
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || "/home/runner/workspace";
 const DATA_DIR = path.join(OPENCLAW_HOME, ".openclaw");
 const API_KEYS_FILE = path.join(DATA_DIR, "api-keys.json");
@@ -98,15 +98,22 @@ function isLoginExempt(req) {
   return false;
 }
 function serveLoginPage(req, res) {
-  const loginPath = path.join(__dirname, "dist", "control-ui", "login.html");
-  try {
-    const html = fs.readFileSync(loginPath, "utf8");
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(html);
-  } catch (e) {
-    res.writeHead(500, { "Content-Type": "text/plain" });
-    res.end("Login page not found");
+  const candidates = [
+    path.join(__dirname, "ui", "public", "login.html"),
+    path.join(__dirname, "dist", "control-ui", "login.html"),
+  ];
+  for (const loginPath of candidates) {
+    if (fs.existsSync(loginPath)) {
+      try {
+        const html = fs.readFileSync(loginPath, "utf8");
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(html);
+        return;
+      } catch (_) {}
+    }
   }
+  res.writeHead(500, { "Content-Type": "text/plain" });
+  res.end("Login page not found");
 }
 
 // IG API persistent session
@@ -3305,6 +3312,7 @@ async function handleIgApi(req, res, p) {
 
     return json(res, 404, { error: "Unknown IG endpoint" });
   } catch (e) {
+    if (e.code === "NO_DATABASE") return json(res, 503, { error: "Database not configured", detail: "Set DATABASE_URL in your .env file to enable this feature" });
     return json(res, 500, { error: e.message });
   }
 }
@@ -3379,6 +3387,7 @@ async function handleAgentsApi(req, res, p) {
     }
     return json(res, 404, { error: "Unknown agent endpoint" });
   } catch (e) {
+    if (e.code === "NO_DATABASE") return json(res, 503, { error: "Database not configured", detail: "Set DATABASE_URL in your .env file to enable this feature" });
     return json(res, 500, { error: e.message });
   }
 }
@@ -5187,6 +5196,49 @@ const LOADING_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Op
 .c{text-align:center}h2{margin-bottom:8px}</style></head>
 <body><div class="c"><h2>OpenClaw Cloud</h2><p style="color:#8b949e">Gateway is starting up. <a href="/" style="color:#58a6ff">Reload</a></p></div></body></html>`;
 
+const CUSTOM_PAGES = {
+  "/model-config.html": "model-config.html",
+  "/model-config.js": "model-config.js",
+  "/processes.html": "processes.html",
+  "/processes.js": "processes.js",
+  "/workers.html": "workers.html",
+  "/workers.js": "workers.js",
+  "/nav-inject.js": "nav-inject.js",
+  "/login.html": "login.html",
+};
+
+function serveCustomPage(req, res) {
+  const url = new URL(req.url, "http://localhost");
+  const file = CUSTOM_PAGES[url.pathname];
+  if (!file) return false;
+  const dirs = [
+    path.join(__dirname, "ui", "public"),
+    path.join(__dirname, "dist", "control-ui"),
+  ];
+  for (const dir of dirs) {
+    const fp = path.join(dir, file);
+    if (fs.existsSync(fp)) {
+      const ext = path.extname(file);
+      const ct = MIME_TYPES[ext] || "application/octet-stream";
+      let content = fs.readFileSync(fp, "utf8");
+      if (ext === ".html" && !content.includes("nav-inject.js")) {
+        const idx = content.indexOf("</body>");
+        if (idx !== -1) content = content.slice(0, idx) + NAV_INJECT_TAG + content.slice(idx);
+        else content += NAV_INJECT_TAG;
+      }
+      res.writeHead(200, {
+        "Content-Type": ct,
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      });
+      res.end(content);
+      return true;
+    }
+  }
+  return false;
+}
+
 function proxyReq(req, res, retries = 3) {
   const opts = {
     hostname: "127.0.0.1",
@@ -5199,6 +5251,10 @@ function proxyReq(req, res, retries = 3) {
   const isHtmlPage = req.url === '/' || req.url === '/index.html' || /^\/(chat|overview|channels|instances|sessions|usage|cron|agents|skills|nodes|config|debug)/i.test(req.url);
   const p = http.request(opts, (pr) => {
     const headers = { ...pr.headers };
+    if (noCache || isHtmlPage) {
+      delete headers["content-security-policy"];
+      delete headers["x-content-type-options"];
+    }
     if (noCache) {
       headers["cache-control"] = "no-cache, no-store, must-revalidate";
       headers["pragma"] = "no-cache";
@@ -5246,6 +5302,7 @@ function proxyReq(req, res, retries = 3) {
 }
 
 const NAV_INJECT_TAG = '<script src="/nav-inject.js"></script>';
+
 
 function unescapeHtmlEntities(html) {
   return html
@@ -5492,6 +5549,7 @@ const server = http.createServer(async (req, res) => {
       }
       return serveLoginPage(req, res);
     }
+    if (serveCustomPage(req, res)) return;
     if (serveCanvas(req, res)) return;
     if (!(await handleApi(req, res))) proxyReq(req, res);
   } catch (err) {
@@ -5532,14 +5590,24 @@ server.on("upgrade", (req, socket, head) => {
   p.end();
 });
 
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[ceo-proxy] FATAL: Port ${PROXY_PORT} is already in use. Kill the other process or set OPENCLAW_PROXY_PORT in .env`);
+  } else {
+    console.error(`[ceo-proxy] FATAL:`, err.message);
+  }
+  process.exit(1);
+});
+
 server.listen(PROXY_PORT, "0.0.0.0", () => {
-  console.log(`[ceo-proxy] listening on 0.0.0.0:${PROXY_PORT}, proxying to gateway:${GATEWAY_PORT}`);
+  console.log(`[ceo-proxy] listening on http://localhost:${PROXY_PORT} (proxying gateway on port ${GATEWAY_PORT})`);
   const igConfig = ensureIgConfig();
   const ap = igConfig.activeProfile || "none";
   const hasDemo = !!(igConfig.profiles && igConfig.profiles.demo && igConfig.profiles.demo.apiKey);
   const hasLive = !!(igConfig.profiles && igConfig.profiles.live && igConfig.profiles.live.apiKey);
   console.log(`[startup] IG profiles: demo=${hasDemo ? "configured" : "empty"}, live=${hasLive ? "configured" : "empty"}, active=${ap}`);
-  console.log(`[startup] Database: ${process.env.DATABASE_URL ? "configured" : "not configured (file-only mode)"}`);
+  console.log(`[startup] Database: ${process.env.DATABASE_URL ? "configured (PostgreSQL)" : "not configured (CSV file fallback in ~/.openclaw/db/)"}`);
+  if (!process.env.DATABASE_URL) console.log(`[startup] Tip: set DATABASE_URL in .env to use PostgreSQL for better performance`);
   console.log(`[startup] Login: ${(LOGIN_USER && LOGIN_PASS) ? "protected (user: " + LOGIN_USER + ")" : "open (no password)"}`);
   updateCrewFile();
   writeConfigSnapshots();

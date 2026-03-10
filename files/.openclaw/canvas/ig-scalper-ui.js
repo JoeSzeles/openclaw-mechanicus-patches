@@ -291,28 +291,45 @@ async function saveStrategySettings() {
     maxSize: parseFloat(document.getElementById('seditMaxSize').value) || 10,
     profitTarget: parseFloat(document.getElementById('seditProfitTarget').value) || 0,
     trailingStop: parseFloat(document.getElementById('seditTrailingStop').value) || 0,
-    warmupMs: (parseInt(document.getElementById('seditWarmup').value, 10) || 60) * 1000,
-    rsiEnabled: document.getElementById('seditRsiOn').checked,
-    rsiPeriod: parseInt(document.getElementById('seditRsiPeriod').value, 10) || 14,
-    rsiOverbought: parseInt(document.getElementById('seditRsiOB').value, 10) || 70,
-    rsiOversold: parseInt(document.getElementById('seditRsiOS').value, 10) || 30,
-    emaEnabled: document.getElementById('seditEmaOn').checked,
-    emaShort: parseInt(document.getElementById('seditEmaShort').value, 10) || 9,
-    emaLong: parseInt(document.getElementById('seditEmaLong').value, 10) || 21,
-    macdEnabled: document.getElementById('seditMacdOn').checked,
-    macdFast: parseInt(document.getElementById('seditMacdFast').value, 10) || 12,
-    macdSlow: parseInt(document.getElementById('seditMacdSlow').value, 10) || 26,
-    macdSignal: parseInt(document.getElementById('seditMacdSignal').value, 10) || 9
+    warmupMs: (parseInt(document.getElementById('seditWarmup').value, 10) || 60) * 1000
   };
-  if (typeof collectClawScriptFieldValues === 'function') {
-    var csVals = collectClawScriptFieldValues();
-    for (var csKey in csVals) {
-      if (csVals.hasOwnProperty(csKey)) body[csKey] = csVals[csKey];
+  var dynFields = document.querySelectorAll('.dynamic-indicator-field');
+  if (dynFields.length > 0) {
+    var dynVals = typeof collectDynamicIndicatorValues === 'function' ? collectDynamicIndicatorValues() : {};
+    for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
+  } else {
+    var rsiOn = document.getElementById('seditRsiOn');
+    if (rsiOn) {
+      body.rsiEnabled = rsiOn.checked;
+      body.rsiPeriod = parseInt((document.getElementById('seditRsiPeriod') || {}).value, 10) || 14;
+      body.rsiOverbought = parseInt((document.getElementById('seditRsiOB') || {}).value, 10) || 70;
+      body.rsiOversold = parseInt((document.getElementById('seditRsiOS') || {}).value, 10) || 30;
+    }
+    var emaOn = document.getElementById('seditEmaOn');
+    if (emaOn) {
+      body.emaEnabled = emaOn.checked;
+      body.emaShort = parseInt((document.getElementById('seditEmaShort') || {}).value, 10) || 9;
+      body.emaLong = parseInt((document.getElementById('seditEmaLong') || {}).value, 10) || 21;
+    }
+    var macdOn = document.getElementById('seditMacdOn');
+    if (macdOn) {
+      body.macdEnabled = macdOn.checked;
+      body.macdFast = parseInt((document.getElementById('seditMacdFast') || {}).value, 10) || 12;
+      body.macdSlow = parseInt((document.getElementById('seditMacdSlow') || {}).value, 10) || 26;
+      body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
     }
   }
-  var r = await apiPut('/api/ig/scalper/strategies/' + id, body);
-  if (r && r.ok) showToast('Strategy saved', true);
-  else showToast('Failed to save strategy: ' + (r && r.error ? r.error : 'unknown'), false);
+  if (typeof collectClawScriptFieldValues === 'function') {
+    var csVals = collectClawScriptFieldValues();
+    for (var csKey in csVals) { if (csVals.hasOwnProperty(csKey)) body[csKey] = csVals[csKey]; }
+  }
+  try {
+    var r = await apiPut('/api/ig/scalper/strategies/' + id, body);
+    if (r && r.ok) showToast('Strategy saved', true);
+    else showToast('Failed to save strategy: ' + (r && r.error ? r.error : 'unknown'), false);
+  } catch (e) {
+    showToast('Save error: ' + e.message, false);
+  }
   document.getElementById('strategySettingsEdit').style.display = 'none';
   editingScalperStrategy = null;
   loadScalperStatus();
