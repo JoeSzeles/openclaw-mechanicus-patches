@@ -7,11 +7,17 @@ if (!TOKEN) {
   try { var m = document.cookie.match(/openclaw_token=([^;]+)/); if (m) TOKEN = m[1]; } catch(e) {}
 }
 
+var API_BASE = (function() {
+  var port = parseInt(window.location.port, 10);
+  if (port === 18789 || port === 5001) return 'http://' + window.location.hostname + ':5000';
+  return '';
+})();
+
 var COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#2980b9'];
 function avatarColor(name) { var h = 0; for (var i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return COLORS[Math.abs(h) % COLORS.length]; }
 function initials(name) { var p = name.split(/[\s-]+/); return p.length > 1 ? (p[0][0] + p[p.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase(); }
 function showToast(msg, type) { var t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show ' + (type||''); setTimeout(function(){ t.className = 'toast'; }, 3000); }
-function apiFetch(url, opts) { opts = opts || {}; opts.headers = opts.headers || {}; if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN; return fetch(url, opts); }
+function apiFetch(url, opts) { opts = opts || {}; opts.headers = opts.headers || {}; if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN; return fetch(API_BASE + url, opts); }
 function formatSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
 function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
