@@ -1074,7 +1074,7 @@ async function routeRequest(req, res, p, m, url) {
 
   if (m === 'GET' && p === '/api/ig/scalper') {
     const cfgPath = join(DATA_DIR, 'ig-scalper-config.json');
-    const defaults = { enabled: false, strategies: [], riskPerTrade: 1, maxConcurrentTrades: 3, cooldownSeconds: 60 };
+    const defaults = { enabled: false, strategies: [], riskPerTrade: 1, maxConcurrentTrades: 3, cooldownSeconds: 60, budget: 0, maxDrawdown: 0, maxMarginPct: 0, breakEvenBuffer: 0 };
     return json(res, 200, loadJsonFile(cfgPath, defaults)), true;
   }
 
