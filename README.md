@@ -2,7 +2,15 @@
 
 IG Trading system for OpenClaw. Adds 23 strategies, batch backtesting with optimization memory, AI calibration, equity curve visualization, live signal monitoring, and the IG Trading Dashboard.
 
-## Install
+## Quick Install (Windows PowerShell)
+
+Run this command to install directly from GitHub:
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/JoeSzeles/openclaw-mechanicus-patches/main/install-node.cjs" -OutFile "$env:TEMP\mechanicus-install.cjs"; node "$env:TEMP\mechanicus-install.cjs"
+```
+
+## Manual Install
 
 **Linux / Mac:**
 ```bash
@@ -15,24 +23,18 @@ bash install.sh /path/to/openclaw
 ```powershell
 git clone https://github.com/JoeSzeles/openclaw-mechanicus-patches.git
 cd openclaw-mechanicus-patches
-.\install.ps1 C:\path\to\openclaw
+.\install.ps1
 ```
 
-The installer backs up any existing files before overwriting them.
+## Post-Install
 
-## Uninstall
-
-Restores all original files from the backup created during install.
+Ensure you install the required trading dependencies in your OpenClaw folder:
 
 ```bash
-bash uninstall.sh /path/to/openclaw
+npm install pg lightstreamer-client-node
 ```
 
-```powershell
-.\uninstall.ps1 C:\path\to\openclaw
-```
-
-## Environment Variables
+## Post-Install Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
@@ -42,17 +44,3 @@ bash uninstall.sh /path/to/openclaw
 | `IG_ACCOUNT_TYPE` | Yes | `demo` or `live` |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `GROQ_API_KEY` | No | Groq API key for AI calibration |
-
-## What's Included
-
-- **IG Trading Dashboard** — backtest, optimize, monitor, and trade from one UI
-- **23 strategies** — scalper, trend-following, mean-reversion, breakout, Donchian, grid, pairs, and more
-- **Batch backtester** — run multiple instruments/strategies/timeframes with optimization memory
-- **AI calibration agent** — Groq-powered multi-cycle parameter tuning
-- **ClawScript** — custom strategy language with editor, parser, and flow builder
-- **Signal monitor** — real-time alerts from strategy signals
-- **Trade Claw engine** — live trade execution via IG REST API
-
-## Database
-
-Tables (`optimization_memory`, `scalper_backtests`) are created automatically on first run. Requires PostgreSQL.
