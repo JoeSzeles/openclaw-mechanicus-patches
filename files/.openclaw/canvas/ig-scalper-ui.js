@@ -187,7 +187,7 @@ function populateStrategyFields(s) {
 
   var typeDropdown = document.getElementById('seditStratTypeContainer');
   if (typeDropdown) {
-    typeDropdown.innerHTML = buildStrategyTypeDropdown(s.strategyType || 'claw-trader');
+    typeDropdown.innerHTML = buildStrategyTypeDropdown(s.strategyType || 'scalper');
   }
 
   document.getElementById('seditStratDir').value = s.direction || 'BOTH';
@@ -195,26 +195,6 @@ function populateStrategyFields(s) {
   document.getElementById('seditStratSize').value = s.size != null ? s.size : '';
   document.getElementById('seditStratStop').value = s.stopDistance != null ? s.stopDistance : '';
   document.getElementById('seditStratLimit').value = s.limitDistance != null ? s.limitDistance : '';
-  document.getElementById('seditStratMom').value = s.minMomentumPct != null ? s.minMomentumPct : 0.03;
-  document.getElementById('seditCooldown').value = s.cooldownMs != null ? s.cooldownMs : 6000;
-  document.getElementById('seditTicks').value = s.tickWindow != null ? s.tickWindow : 15;
-  document.getElementById('seditMaxPos').value = s.maxOpenPositions != null ? s.maxOpenPositions : 2;
-  document.getElementById('seditMinSize').value = s.minSize != null ? s.minSize : 0.5;
-  document.getElementById('seditMaxSize').value = s.maxSize != null ? s.maxSize : 10;
-  document.getElementById('seditProfitTarget').value = s.profitTarget != null ? s.profitTarget : 0;
-  document.getElementById('seditTrailingStop').value = s.trailingStop != null ? s.trailingStop : 0;
-  document.getElementById('seditWarmup').value = Math.round((s.warmupMs != null ? s.warmupMs : 60000) / 1000);
-  document.getElementById('seditRsiOn').checked = !!s.rsiEnabled;
-  document.getElementById('seditRsiPeriod').value = s.rsiPeriod || 14;
-  document.getElementById('seditRsiOB').value = s.rsiOverbought || 70;
-  document.getElementById('seditRsiOS').value = s.rsiOversold || 30;
-  document.getElementById('seditEmaOn').checked = !!s.emaEnabled;
-  document.getElementById('seditEmaShort').value = s.emaShort || 9;
-  document.getElementById('seditEmaLong').value = s.emaLong || 21;
-  document.getElementById('seditMacdOn').checked = !!s.macdEnabled;
-  document.getElementById('seditMacdFast').value = s.macdFast || 12;
-  document.getElementById('seditMacdSlow').value = s.macdSlow || 26;
-  document.getElementById('seditMacdSignal').value = s.macdSignal || 9;
 
   var sType = s.strategyType || 'claw-trader';
   if (typeof isClawScriptStrategy === 'function' && isClawScriptStrategy(sType)) {
@@ -277,47 +257,34 @@ async function saveStrategySettings() {
   var stratTypeEl = document.getElementById('seditStratType');
   var body = {
     name: document.getElementById('seditStratName').value,
-    strategyType: stratTypeEl ? stratTypeEl.value : 'claw-trader',
+    strategyType: stratTypeEl ? stratTypeEl.value : 'scalper',
     direction: document.getElementById('seditStratDir').value,
     timeframe: document.getElementById('seditStratTF').value || 'MINUTE',
     size: parseFloat(document.getElementById('seditStratSize').value) || undefined,
     stopDistance: parseFloat(document.getElementById('seditStratStop').value) || undefined,
-    limitDistance: parseFloat(document.getElementById('seditStratLimit').value) || undefined,
-    minMomentumPct: parseFloat(document.getElementById('seditStratMom').value) || 0.03,
-    cooldownMs: parseInt(document.getElementById('seditCooldown').value, 10) || 6000,
-    tickWindow: parseInt(document.getElementById('seditTicks').value, 10) || 15,
-    maxOpenPositions: parseInt(document.getElementById('seditMaxPos').value, 10) || 2,
-    minSize: parseFloat(document.getElementById('seditMinSize').value) || 0.5,
-    maxSize: parseFloat(document.getElementById('seditMaxSize').value) || 10,
-    profitTarget: parseFloat(document.getElementById('seditProfitTarget').value) || 0,
-    trailingStop: parseFloat(document.getElementById('seditTrailingStop').value) || 0,
-    warmupMs: (parseInt(document.getElementById('seditWarmup').value, 10) || 60) * 1000
+    limitDistance: parseFloat(document.getElementById('seditStratLimit').value) || undefined
   };
-  var dynFields = document.querySelectorAll('.dynamic-indicator-field');
-  if (dynFields.length > 0) {
-    var dynVals = typeof collectDynamicIndicatorValues === 'function' ? collectDynamicIndicatorValues() : {};
-    for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
-  } else {
-    var rsiOn = document.getElementById('seditRsiOn');
-    if (rsiOn) {
-      body.rsiEnabled = rsiOn.checked;
-      body.rsiPeriod = parseInt((document.getElementById('seditRsiPeriod') || {}).value, 10) || 14;
-      body.rsiOverbought = parseInt((document.getElementById('seditRsiOB') || {}).value, 10) || 70;
-      body.rsiOversold = parseInt((document.getElementById('seditRsiOS') || {}).value, 10) || 30;
-    }
-    var emaOn = document.getElementById('seditEmaOn');
-    if (emaOn) {
-      body.emaEnabled = emaOn.checked;
-      body.emaShort = parseInt((document.getElementById('seditEmaShort') || {}).value, 10) || 9;
-      body.emaLong = parseInt((document.getElementById('seditEmaLong') || {}).value, 10) || 21;
-    }
-    var macdOn = document.getElementById('seditMacdOn');
-    if (macdOn) {
-      body.macdEnabled = macdOn.checked;
-      body.macdFast = parseInt((document.getElementById('seditMacdFast') || {}).value, 10) || 12;
-      body.macdSlow = parseInt((document.getElementById('seditMacdSlow') || {}).value, 10) || 26;
-      body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
-    }
+  var dynVals = typeof collectDynamicIndicatorValues === 'function' ? collectDynamicIndicatorValues() : {};
+  for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
+  var rsiOn = document.getElementById('seditRsiOn');
+  if (rsiOn && !dynVals.hasOwnProperty('rsiEnabled')) {
+    body.rsiEnabled = rsiOn.checked;
+    body.rsiPeriod = parseInt((document.getElementById('seditRsiPeriod') || {}).value, 10) || 14;
+    body.rsiOverbought = parseInt((document.getElementById('seditRsiOB') || {}).value, 10) || 70;
+    body.rsiOversold = parseInt((document.getElementById('seditRsiOS') || {}).value, 10) || 30;
+  }
+  var emaOn = document.getElementById('seditEmaOn');
+  if (emaOn && !dynVals.hasOwnProperty('emaEnabled')) {
+    body.emaEnabled = emaOn.checked;
+    body.emaShort = parseInt((document.getElementById('seditEmaShort') || {}).value, 10) || 9;
+    body.emaLong = parseInt((document.getElementById('seditEmaLong') || {}).value, 10) || 21;
+  }
+  var macdOn = document.getElementById('seditMacdOn');
+  if (macdOn && !dynVals.hasOwnProperty('macdEnabled')) {
+    body.macdEnabled = macdOn.checked;
+    body.macdFast = parseInt((document.getElementById('seditMacdFast') || {}).value, 10) || 12;
+    body.macdSlow = parseInt((document.getElementById('seditMacdSlow') || {}).value, 10) || 26;
+    body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
   }
   if (typeof collectClawScriptFieldValues === 'function') {
     var csVals = collectClawScriptFieldValues();

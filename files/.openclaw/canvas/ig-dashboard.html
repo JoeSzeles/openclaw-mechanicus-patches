@@ -454,20 +454,11 @@ tr:hover { background: rgba(88,166,255,0.04); }
             <div data-field-wrapper><label style="color:#8b949e">Name</label><input class="edit-input" id="seditStratName" type="text" data-config-field="name"></div>
             <div data-field-wrapper><label style="color:#8b949e">Direction</label><select class="edit-input" id="seditStratDir" data-config-field="direction"><option value="BOTH">BOTH</option><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
             <div data-field-wrapper><label style="color:#8b949e">Timeframe</label><select class="edit-input" id="seditStratTF" data-config-field="timeframe"><option value="TICK">Tick</option><option value="SECOND">1s</option><option value="SECOND_2">2s</option><option value="SECOND_5">5s</option><option value="SECOND_10">10s</option><option value="SECOND_20">20s</option><option value="SECOND_30">30s</option><option value="SECOND_40">40s</option><option value="MINUTE">1m</option><option value="MINUTE_5">5m</option><option value="MINUTE_15">15m</option><option value="HOUR">1h</option><option value="HOUR_4">4h</option><option value="DAY">1D</option></select></div>
-            <div data-field-wrapper><label style="color:#8b949e">Size</label><input class="edit-input" id="seditStratSize" type="number" step="0.1" min="0.1" data-config-field="size"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Stop Distance</label><input class="edit-input" id="seditStratStop" type="number" step="1" min="0" data-config-field="stopDistance"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Limit Distance</label><input class="edit-input" id="seditStratLimit" type="number" step="1" min="0" data-config-field="limitDistance"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Min Momentum %</label><input class="edit-input" id="seditStratMom" type="number" step="0.01" min="0" data-config-field="minMomentumPct"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Cooldown (ms)</label><input class="edit-input" id="seditCooldown" type="number" step="1000" data-config-field="cooldownMs"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Tick Window</label><input class="edit-input" id="seditTicks" type="number" step="1" data-config-field="tickWindow"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Max Open Pos</label><input class="edit-input" id="seditMaxPos" type="number" step="1" data-config-field="maxOpenPositions"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Min Size</label><input class="edit-input" id="seditMinSize" type="number" step="0.1" min="0.1" data-config-field="minSize"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Max Size</label><input class="edit-input" id="seditMaxSize" type="number" step="0.5" min="0.1" data-config-field="maxSize"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Profit Target ($)</label><input class="edit-input" id="seditProfitTarget" type="number" step="5" min="0" data-config-field="profitTarget"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Trailing Stop (pts)</label><input class="edit-input" id="seditTrailingStop" type="number" step="1" min="0" data-config-field="trailingStop"></div>
-            <div data-field-wrapper><label style="color:#8b949e">Warmup (sec)</label><input class="edit-input" id="seditWarmup" type="number" step="10" min="0" max="600" data-config-field="warmupMs"></div>
+            <div data-field-wrapper><label style="color:#8b949e">Trade Size</label><input class="edit-input" id="seditStratSize" type="number" step="0.1" min="0.1" data-config-field="size"></div>
+            <div data-field-wrapper><label style="color:#8b949e">IG Stop Distance</label><input class="edit-input" id="seditStratStop" type="number" step="1" min="0" data-config-field="stopDistance"></div>
+            <div data-field-wrapper><label style="color:#8b949e">IG Limit Distance</label><input class="edit-input" id="seditStratLimit" type="number" step="1" min="0" data-config-field="limitDistance"></div>
           </div>
-          <h4 style="font-size:11px;color:#c9d1d9;margin:10px 0 6px 0;border-top:1px solid #30363d;padding-top:8px">Indicator Filters</h4>
+          <h4 style="font-size:11px;color:#c9d1d9;margin:10px 0 6px 0;border-top:1px solid #30363d;padding-top:8px">Strategy Parameters <span style="color:#484f58;font-weight:400">(loaded from strategy code)</span></h4>
           <div id="dynamicIndicatorFilters" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px">
             <div style="padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px" data-indicator-section="rsi">
               <label style="display:flex;align-items:center;gap:4px;color:#c9d1d9;font-weight:600">
@@ -2701,22 +2692,13 @@ function populateStrategyFields(s) {
   document.getElementById('seditStratName').value = s.name || '';
   var typeDropdown = document.getElementById('seditStratTypeContainer');
   if (typeDropdown && typeof buildStrategyTypeDropdown === 'function') {
-    typeDropdown.innerHTML = buildStrategyTypeDropdown(s.strategyType || 'claw-trader');
+    typeDropdown.innerHTML = buildStrategyTypeDropdown(s.strategyType || 'scalper');
   }
   document.getElementById('seditStratDir').value = s.direction || 'BOTH';
   document.getElementById('seditStratTF').value = s.timeframe || 'MINUTE';
   document.getElementById('seditStratSize').value = s.size != null ? s.size : '';
   document.getElementById('seditStratStop').value = s.stopDistance != null ? s.stopDistance : '';
   document.getElementById('seditStratLimit').value = s.limitDistance != null ? s.limitDistance : '';
-  document.getElementById('seditStratMom').value = s.minMomentumPct != null ? s.minMomentumPct : 0.03;
-  document.getElementById('seditCooldown').value = s.cooldownMs != null ? s.cooldownMs : 6000;
-  document.getElementById('seditTicks').value = s.tickWindow != null ? s.tickWindow : 15;
-  document.getElementById('seditMaxPos').value = s.maxOpenPositions != null ? s.maxOpenPositions : 2;
-  document.getElementById('seditMinSize').value = s.minSize != null ? s.minSize : 0.5;
-  document.getElementById('seditMaxSize').value = s.maxSize != null ? s.maxSize : 10;
-  document.getElementById('seditProfitTarget').value = s.profitTarget != null ? s.profitTarget : 0;
-  document.getElementById('seditTrailingStop').value = s.trailingStop != null ? s.trailingStop : 0;
-  document.getElementById('seditWarmup').value = Math.round((s.warmupMs != null ? s.warmupMs : 60000) / 1000);
   renderDynamicIndicators(s);
 }
 
@@ -2871,47 +2853,34 @@ async function saveStrategySettings() {
   var stratTypeEl = document.getElementById('seditStratType');
   var body = {
     name: document.getElementById('seditStratName').value,
-    strategyType: stratTypeEl ? stratTypeEl.value : undefined,
+    strategyType: stratTypeEl ? stratTypeEl.value : 'scalper',
     direction: document.getElementById('seditStratDir').value,
     timeframe: document.getElementById('seditStratTF').value || 'MINUTE',
     size: parseFloat(document.getElementById('seditStratSize').value) || undefined,
     stopDistance: parseFloat(document.getElementById('seditStratStop').value) || undefined,
-    limitDistance: parseFloat(document.getElementById('seditStratLimit').value) || undefined,
-    minMomentumPct: parseFloat(document.getElementById('seditStratMom').value) || 0.03,
-    cooldownMs: parseInt(document.getElementById('seditCooldown').value, 10) || 6000,
-    tickWindow: parseInt(document.getElementById('seditTicks').value, 10) || 15,
-    maxOpenPositions: parseInt(document.getElementById('seditMaxPos').value, 10) || 2,
-    minSize: parseFloat(document.getElementById('seditMinSize').value) || 0.5,
-    maxSize: parseFloat(document.getElementById('seditMaxSize').value) || 10,
-    profitTarget: parseFloat(document.getElementById('seditProfitTarget').value) || 0,
-    trailingStop: parseFloat(document.getElementById('seditTrailingStop').value) || 0,
-    warmupMs: (parseInt(document.getElementById('seditWarmup').value, 10) || 60) * 1000
+    limitDistance: parseFloat(document.getElementById('seditStratLimit').value) || undefined
   };
-  var dynFields = document.querySelectorAll('.dynamic-indicator-field');
-  if (dynFields.length > 0) {
-    var dynVals = collectDynamicIndicatorValues();
-    for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
-  } else {
-    var rsiOn = document.getElementById('seditRsiOn');
-    if (rsiOn) {
-      body.rsiEnabled = rsiOn.checked;
-      body.rsiPeriod = parseInt((document.getElementById('seditRsiPeriod') || {}).value, 10) || 14;
-      body.rsiOverbought = parseInt((document.getElementById('seditRsiOB') || {}).value, 10) || 70;
-      body.rsiOversold = parseInt((document.getElementById('seditRsiOS') || {}).value, 10) || 30;
-    }
-    var emaOn = document.getElementById('seditEmaOn');
-    if (emaOn) {
-      body.emaEnabled = emaOn.checked;
-      body.emaShort = parseInt((document.getElementById('seditEmaShort') || {}).value, 10) || 9;
-      body.emaLong = parseInt((document.getElementById('seditEmaLong') || {}).value, 10) || 21;
-    }
-    var macdOn = document.getElementById('seditMacdOn');
-    if (macdOn) {
-      body.macdEnabled = macdOn.checked;
-      body.macdFast = parseInt((document.getElementById('seditMacdFast') || {}).value, 10) || 12;
-      body.macdSlow = parseInt((document.getElementById('seditMacdSlow') || {}).value, 10) || 26;
-      body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
-    }
+  var dynVals = typeof collectDynamicIndicatorValues === 'function' ? collectDynamicIndicatorValues() : {};
+  for (var dk in dynVals) { if (dynVals.hasOwnProperty(dk)) body[dk] = dynVals[dk]; }
+  var rsiOn = document.getElementById('seditRsiOn');
+  if (rsiOn && !dynVals.hasOwnProperty('rsiEnabled')) {
+    body.rsiEnabled = rsiOn.checked;
+    body.rsiPeriod = parseInt((document.getElementById('seditRsiPeriod') || {}).value, 10) || 14;
+    body.rsiOverbought = parseInt((document.getElementById('seditRsiOB') || {}).value, 10) || 70;
+    body.rsiOversold = parseInt((document.getElementById('seditRsiOS') || {}).value, 10) || 30;
+  }
+  var emaOn = document.getElementById('seditEmaOn');
+  if (emaOn && !dynVals.hasOwnProperty('emaEnabled')) {
+    body.emaEnabled = emaOn.checked;
+    body.emaShort = parseInt((document.getElementById('seditEmaShort') || {}).value, 10) || 9;
+    body.emaLong = parseInt((document.getElementById('seditEmaLong') || {}).value, 10) || 21;
+  }
+  var macdOn = document.getElementById('seditMacdOn');
+  if (macdOn && !dynVals.hasOwnProperty('macdEnabled')) {
+    body.macdEnabled = macdOn.checked;
+    body.macdFast = parseInt((document.getElementById('seditMacdFast') || {}).value, 10) || 12;
+    body.macdSlow = parseInt((document.getElementById('seditMacdSlow') || {}).value, 10) || 26;
+    body.macdSignal = parseInt((document.getElementById('seditMacdSignal') || {}).value, 10) || 9;
   }
   if (typeof collectClawScriptFieldValues === 'function') {
     var csVals = collectClawScriptFieldValues();
