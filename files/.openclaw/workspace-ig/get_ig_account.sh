@@ -1,29 +1,29 @@
 #!/bin/bash
 set -euo pipefail
-BASE=&quot;https://demo-api.ig.com/gateway/deal&quot;
-KEY=&quot;20849c0791ed15479752204f9632c949f742ddc5&quot;
-USER=&quot;Hoerbinator2&quot;
-PASS=&quot;Riacrepe88!&quot;
+BASE="${IG_BASE_URL:-https://demo-api.ig.com/gateway/deal}"
+KEY="${IG_API_KEY:?Set IG_API_KEY}"
+USER="${IG_IDENTIFIER:?Set IG_IDENTIFIER}"
+PASS="${IG_PASSWORD:?Set IG_PASSWORD}"
 
-TMP=&quot;/tmp/ig$$&quot;
-mkdir -p &quot;$TMP&quot;
-COOKIES=&quot;$TMP/cookies.txt&quot;
-HEADERS=&quot;$TMP/headers.txt&quot;
+TMP="/tmp/ig$$"
+mkdir -p "$TMP"
+COOKIES="$TMP/cookies.txt"
+HEADERS="$TMP/headers.txt"
 
-curl -s -c &quot;$COOKIES&quot; -D &quot;$HEADERS&quot; -H &quot;Content-Type: application/json&quot; -H &quot;X-IG-API-KEY: $KEY&quot; -H &quot;Version: 1&quot; -d &quot;{\&quot;identifier\&quot;:\&quot;$USER\&quot;,\&quot;password\&quot;:\&quot;$PASS\&quot;}&quot; &quot;$BASE/session&quot; &gt; &quot;$TMP/login.json&quot;
+curl -s -c "$COOKIES" -D "$HEADERS" -H "Content-Type: application/json" -H "X-IG-API-KEY: $KEY" -H "Version: 1" -d "{\"identifier\":\"$USER\",\"password\":\"$PASS\"}" "$BASE/session" > "$TMP/login.json"
 
-TOKEN=$(grep -i '^x-security-token:' &quot;$HEADERS&quot; | sed 's/.*: //' | tr -d '\r\n ')
-CST=$(grep 'cst' &quot;$COOKIES&quot; | awk '{print $7}' | head -1 | tr -d '\r\n')
+TOKEN=$(grep -i '^x-security-token:' "$HEADERS" | sed 's/.*: //' | tr -d '\r\n ')
+CST=$(grep 'cst' "$COOKIES" | awk '{print $7}' | head -1 | tr -d '\r\n')
 
-if [ -z &quot;$TOKEN&quot; ] || [ -z &quot;$CST&quot; ]; then
-  echo &quot;Login failed&quot;
+if [ -z "$TOKEN" ] || [ -z "$CST" ]; then
+  echo "Login failed"
   exit 1
 fi
 
-echo &quot;Logged in. Fetching account/positions...&quot;
+echo "Logged in. Fetching account/positions..."
 
-curl -s -b &quot;$COOKIES&quot; -H &quot;X-IG-API-KEY: $KEY&quot; -H &quot;X-SECURITY-TOKEN: $TOKEN&quot; -H &quot;CST: $CST&quot; -H &quot;Version: 3&quot; &quot;$BASE/accounts&quot;
+curl -s -b "$COOKIES" -H "X-IG-API-KEY: $KEY" -H "X-SECURITY-TOKEN: $TOKEN" -H "CST: $CST" -H "Version: 3" "$BASE/accounts"
 
-curl -s -b &quot;$COOKIES&quot; -H &quot;X-IG-API-KEY: $KEY&quot; -H &quot;X-SECURITY-TOKEN: $TOKEN&quot; -H &quot;CST: $CST&quot; -H &quot;Version: 2&quot; &quot;$BASE/positions&quot;
+curl -s -b "$COOKIES" -H "X-IG-API-KEY: $KEY" -H "X-SECURITY-TOKEN: $TOKEN" -H "CST: $CST" -H "Version: 2" "$BASE/positions"
 
-rm -rf &quot;$TMP&quot;
+rm -rf "$TMP"

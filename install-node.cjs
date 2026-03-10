@@ -217,11 +217,19 @@ async function main() {
     }
   }
 
+  var envExample = path.join(appRoot, ".env.example");
+  var envFile = path.join(appRoot, ".env");
+  if (fs.existsSync(envExample) && !fs.existsSync(envFile)) {
+    fs.copyFileSync(envExample, envFile);
+    console.log("[+] Created .env from .env.example — EDIT THIS FILE WITH YOUR CREDENTIALS");
+  }
+
   console.log("");
   console.log("  HOW TO START:");
-  console.log("    cd \"" + appRoot + "\"");
-  console.log("    .\\start-mechanicus.ps1");
-  console.log("    Then open: http://localhost:5000");
+  console.log("    1. Edit your credentials in: " + path.join(appRoot, ".env"));
+  console.log("    2. cd \"" + appRoot + "\"");
+  console.log("    3. .\\start-mechanicus.ps1");
+  console.log("    4. Open: http://localhost:5000");
   console.log("");
 }
 

@@ -9,7 +9,7 @@
 | **API Key (demo)** | stored in `.openclaw/ig-config.json` |
 | **Username** | stored in `.openclaw/ig-config.json` |
 | **Password** | stored in `.openclaw/ig-config.json` |
-| **Account ID** | `Z3MJKY` (CFD, AUD) |
+| **Account ID** | `YOUR_ACCOUNT_ID` (CFD, AUD) |
 | **Demo Balance** | A$98,780.63 |
 | **Status** | Verified working 2026-02-27 |
 

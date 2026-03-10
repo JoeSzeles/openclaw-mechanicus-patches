@@ -2,7 +2,7 @@
   "timestamp": "2026-03-10T05:43:49.154Z",
   "account": {
     "profile": "demo",
-    "accountId": "Z3MJKY",
+    "accountId": "YOUR_ACCOUNT_ID",
     "accountType": "CFD",
     "currency": "AUD",
     "balance": 107436.77,

@@ -75,7 +75,7 @@ Agents: Read before pitches, update post-trade. Omnissiah approval for live.
 ## Silver Sniper v2.1 LIVE (2026-02-27)
 - **EPIC:** CS.D.CFASILVER.CFA.IP
 - **Logic:** 5min tick LONG bull hold &gt;9350 trail. Close &lt;trail/RSI&lt;40/ATR/2 high.
-- **Live Demo Z3MJKY:** 1 trade size5 @9288.8 → CLOSE 9302 | **P&L +66pts £330** | WR100% Sharpe inf (1tick).
+- **Live Demo YOUR_ACCOUNT_ID:** 1 trade size5 @9288.8 → CLOSE 9302 | **P&L +66pts £330** | WR100% Sharpe inf (1tick).
 - **Self-Improve:** Log rolling20; loss triggers → MACD v2.2 etc.
 - **Lessons:** Trail success EOD bull (+1.4%R). Ready scale.
 
