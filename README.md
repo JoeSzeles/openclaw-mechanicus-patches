@@ -1,241 +1,260 @@
 # OpenClaw Mechanicus Patch
 
-  **A comprehensive trading extension for [OpenClaw](https://github.com/nicholasgriffintn/OpenClaw) — adds IG Trading integration, 23 automated strategies, ClawScript DSL, real-time dashboards, batch backtesting with genetic optimization, and AI-powered calibration.**
+IG Trading system for OpenClaw. Adds 23 strategies, batch backtesting with optimization memory, AI calibration, equity curve visualization, live signal monitoring, and the IG Trading Dashboard.
 
-  ![IG Dashboard](files/docs/images/ig-dashboard.png)
+## Install
 
-  ---
+**Cross-platform (Node.js — recommended):**
+```bash
+git clone https://github.com/JoeSzeles/openclaw-mechanicus-patches.git
+cd openclaw-mechanicus-patches
+node install-node.cjs
+```
 
-  ## What's Included
+The Node installer auto-detects your OpenClaw install location and works on Windows, Mac, and Linux. It patches the gateway to load `ig-local-api.mjs` at startup, enabling all IG endpoints on the raw gateway without requiring the CEO proxy.
 
-  ### IG Trading Dashboard
-  A full-featured HTML5 trading dashboard served inside OpenClaw's canvas system. Live account overview, open positions, trade history, equity curve chart (via Lightweight Charts), and real-time price streaming via Lightstreamer WebSocket. Includes one-click session management for both demo and live IG accounts.
+**Linux / Mac (shell):**
+```bash
+bash install.sh /path/to/openclaw
+```
 
-  ![Dashboard](files/docs/images/ig-bot-status.png)
+**Windows (PowerShell):**
+```powershell
+.\install.ps1 C:\path\to\openclaw
+```
 
-  ### ClawScript — Domain-Specific Trading Language
-  ClawScript is a human-readable DSL for writing automated trading strategies without JavaScript. It compiles to executable JS and runs inside the Trade Claw engine.
+The installer backs up any existing files before overwriting them.
 
-  **Key features:**
-  - Natural-language syntax: `IF RSI(prices, 14) < 30 THEN BUY AT MARKET`
-  - 90+ built-in commands across 26 categories (trading, AI, data, agents, indicators, PRT compatibility)
-  - Full flow editor with drag-and-drop strategy building
-  - AI-assisted script generation via `AI_GENERATE_SCRIPT`
-  - ProRealTime indicator compatibility (`PRT_RSI`, `PRT_MACD`, `PRT_BOLLINGER`, etc.)
-  - Template library: RSI, EMA Crossover, Mean Reversion, Multi-Indicator, BTC Scalper, Sentiment Scan
+## Uninstall
 
-  ### 23 Pre-Built Trading Strategies
-  Each strategy has its own configurable schema, risk parameters, and ClawScript source:
+Restores all original files from the backup created during install.
 
-  | Strategy | Type | Description |
-  |---|---|---|
-  | Scalper | Momentum | Fast in/out with RSI + EMA signals |
-  | Momentum Scalper | Momentum | Multi-timeframe momentum detection |
-  | Breakout | Trend | Donchian/Bollinger breakout entries |
-  | Trend Following | Trend | EMA crossover trend riding |
-  | Donchian Trend | Trend | Channel-based trend system |
-  | Mean Reversion | Mean Reversion | Bollinger Band snap-back trades |
-  | Swing Trading | Swing | Multi-day hold with ATR stops |
-  | Position Trading | Long-term | Macro trend + fundamental overlay |
-  | Grid Trader | Grid | Auto grid placement with position sizing |
-  | Market Making | Market Making | Bid/ask spread capture |
-  | Pairs Trading | Statistical | Correlated pair spread trading |
-  | Arbitrage Scalper | Arbitrage | Cross-market price discrepancy |
-  | Volatility Breakout | Volatility | ATR-based volatility expansion entries |
-  | Carry Trade | Carry | Interest rate differential capture |
-  | News Spike | Event | News-driven spike trading |
-  | Sentiment Trader | Sentiment | AI sentiment analysis trades |
-  | Hybrid ML | Machine Learning | ML-assisted signal generation |
-  | Portfolio Optimizer | Portfolio | MPT-based allocation optimizer |
-  | Seasonal Trader | Seasonal | Calendar-based pattern trading |
-  | Options Linked | Options | Options-informed spot trading |
-  | Value Investing | Value | Fundamental value screen |
-  | Custom BTC Test | Custom | Bitcoin-specific strategy template |
-  | Bourse Index Trackers | Index | Index tracking with rebalancing |
+```bash
+bash uninstall.sh /path/to/openclaw
+```
 
-  ### Batch Backtesting with Genetic Optimization
-  - Run single or batch backtests against IG historical price data
-  - Optimization agent with genetic algorithm parameter search
-  - Multi-cycle optimization with memory (`optimization_memory` DB table)
-  - Sharpe ratio, win rate, profit factor, max drawdown tracking
-  - Equity curve visualization with interactive charts
+```powershell
+.\uninstall.ps1 C:\path\to\openclaw
+```
 
-  ![Backtest Chart](files/docs/images/backtest-chart.png)
+## Environment Variables
 
-  ### AI Calibration
-  - Groq-powered strategy parameter tuning
-  - Automatic indicator threshold optimization
-  - AI-generated trading signals with confidence scoring
-  - Self-improving strategy loop via `AI_QUERY` and `ANALYZE_LOG`
+Copy `.env.example` to `.env` in your OpenClaw directory and fill in your values:
 
-  ### Live Signal Monitor
-  - Real-time price streaming for configured instruments
-  - Configurable alerts: price drops, spikes, breakouts, custom thresholds
-  - Multi-instrument monitoring (Gold, Silver, Bitcoin, and more)
-  - Automatic position proof-reading with duplicate/risk checks
+```bash
+cp .env.example .env
+```
 
-  ### CEO Proxy with Web UI
-  - Secure proxy layer with login authentication
-  - Web-based Config, Workers, and Processes management pages
-  - API key management for external worker connections
-  - Agent workspace browser with file upload/download
-  - Real-time bot registry with start/stop/remove controls
+| Variable | Required | Description |
+|---|---|---|
+| `IG_API_KEY` | Yes | IG Trading API key |
+| `IG_USERNAME` | Yes | IG account username |
+| `IG_PASSWORD` | Yes | IG account password |
+| `IG_ACCOUNT_ID` | No | IG account ID (auto-detected if omitted) |
+| `IG_ACCOUNT_TYPE` | No | `demo` (default) or `live` |
+| `DATABASE_URL` | No | PostgreSQL connection string (see Database Setup below) |
+| `GROQ_API_KEY` | No | Groq API key for AI calibration |
+| `OPENCLAW_LOGIN_USER` | No | Username for dashboard login protection |
+| `OPENCLAW_LOGIN_PASSWORD` | No | Password for dashboard login protection |
 
-  ![Processes](files/docs/images/processes-bots.png)
+## What's Included
 
-  ### Lightstreamer Integration
-  - Real-time L1 price streaming via WebSocket
-  - Automatic live/demo account detection
-  - Candle aggregation from tick data (1s to 1h)
-  - Hybrid polling fallback for CFD accounts
-  - Dual streaming: demo for trading, live for market data
+- **IG Trading Dashboard** — backtest, optimize, monitor, and trade from one UI
+- **23 strategies** — scalper, trend-following, mean-reversion, breakout, Donchian, grid, pairs, and more
+- **Batch backtester** — run multiple instruments/strategies/timeframes with optimization memory
+- **AI calibration agent** — Groq-powered multi-cycle parameter tuning
+- **ClawScript** — custom strategy language with editor, parser, and flow builder
+- **Signal monitor** — real-time alerts from strategy signals
+- **Trade Claw engine** — live trade execution via IG REST API
 
-  ### ProRealTime Compatibility
-  - PRT indicator functions (`PRT_RSI`, `PRT_MACD`, `PRT_ATR`, `PRT_ICHIMOKU`, etc.)
-  - PRT drawing commands (`PRT_DRAWLINE`, `PRT_DRAWARROW`)
-  - Convert PRT strategies to ClawScript
+## Local API (ig-local-api.mjs)
 
-  ### Agent Workspace System
-  - Pre-configured IG trading agent with full documentation
-  - Strategy rulebooks, trade verification protocols, skill references
-  - Self-contained workspace with `AGENTS.md`, `TOOLS.md`, `IDENTITY.md`, `SOUL.md`
-  - ClawScript rules and syntax reference included
+The patch injects a standalone ESM module (`ig-local-api.mjs`) into the OpenClaw gateway at startup. This provides a full IG trading API layer that works on the raw gateway (port 18789) without requiring the CEO proxy.
 
-  ---
+### Supported Endpoints (43 total)
 
-  ## Quick Install (Windows PowerShell)
+**IG Session & Config:**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/ig/config` | GET | Get IG config (credentials masked) |
+| `/api/ig/config` | POST | Update config (accepts `{profiles:{...}}` or `{profile,profileName}`) |
+| `/api/ig/config/test` | POST | Test connection for a specific profile |
+| `/api/ig/session` | GET | Get session status |
+| `/api/ig/session/refresh` | POST | Force session token refresh |
 
-  One-liner that downloads and installs everything:
+**Trading (proxied to IG REST API):**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/ig/positions` | GET | List open positions with snapshots |
+| `/api/ig/positions/open` | POST | Open a new position (BUY or SELL) |
+| `/api/ig/positions/close` | POST | Close a position by dealId |
+| `/api/ig/positions/update` | PUT | Update stop/limit on a position |
+| `/api/ig/account` | GET | Account balance and details |
+| `/api/ig/markets` | GET | Search markets by term |
+| `/api/ig/markets/:epic` | GET | Get market details for an epic |
+| `/api/ig/marketnavigation` | GET | Market navigation tree |
+| `/api/ig/pricehistory/:epic` | GET | Historical price data |
+| `/api/ig/workingorders` | GET | List working orders |
+| `/api/ig/workingorders/create` | POST | Create a working order |
+| `/api/ig/workingorders/update` | PUT | Update a working order |
+| `/api/ig/workingorders/delete` | DELETE | Delete a working order |
+| `/api/ig/activity` | GET | Account activity (requires `?from=` param) |
+| `/api/ig/history` | GET | Transaction history |
+| `/api/ig/watchlists` | GET | IG account watchlists |
+| `/api/ig/refresh-snapshots` | POST | Refresh market snapshots for positions |
 
-  ```powershell
-  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/JoeSzeles/openclaw-mechanicus-patches/main/install-node.cjs" -OutFile "$env:TEMP\mechanicus-install.cjs"; node "$env:TEMP\mechanicus-install.cjs"
-  ```
+**Streaming (local-mode stubs — requires CEO proxy for live data):**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/ig/stream/prices` | GET | Price stream status |
+| `/api/ig/stream/status` | GET | Stream connection status |
+| `/api/ig/stream/candles` | GET | Candle data (REST polling fallback) |
+| `/api/ig/stream/candle-stats` | GET | Candle statistics |
 
-  The installer:
-  - Detects your OpenClaw npm installation automatically
-  - Downloads ~220 files (strategies, skills, dashboard, ClawScript editor, agent workspace)
-  - Creates a `.env` file from the included template
-  - Patches navigation into the control UI
-  - Shows setup instructions on completion
+**Strategies & Scalper (local JSON file CRUD):**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/ig/strategies` | GET | List all strategies |
+| `/api/ig/strategies/global` | POST | Update global strategy toggle |
+| `/api/ig/strategy-templates` | GET | List strategy templates |
+| `/api/ig/watchedlist` | GET | Watched instruments list |
+| `/api/ig/proofread` | GET/PUT | Proofread configuration |
+| `/api/ig/scalper` | GET | Scalper configuration |
+| `/api/ig/scalper/status` | GET | Scalper engine status |
+| `/api/ig/scalper/strategies` | GET | Scalper strategies |
+| `/api/ig/scalper/strategy-schemas` | GET | Strategy parameter schemas |
+| `/api/ig/scalper/backtests` | GET | Backtest results |
+| `/api/ig/scalper/optimization-memory` | GET | Optimization memory |
+| `/api/ig/scalper/batch-backtest` | GET | Batch backtest results |
+| `/api/ig/logs/scalper-trades` | GET | Scalper trade logs |
 
-  ## Manual Install
+**ClawScript:**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/clawscript/strategies` | GET | ClawScript strategies |
+| `/api/clawscript/results` | GET | ClawScript results |
+| `/api/clawscript/scripts` | GET | ClawScript scripts |
+| `/api/clawscript/templates` | GET | ClawScript templates |
+| `/api/clawscript/ai/config` | GET | ClawScript AI configuration |
+| `/api/clawscript/logbook` | GET/POST | ClawScript logbook entries |
 
-  **Linux / Mac:**
-  ```bash
-  git clone https://github.com/JoeSzeles/openclaw-mechanicus-patches.git
-  cd openclaw-mechanicus-patches
-  bash install.sh /path/to/openclaw
-  ```
+**Bots & Processes:**
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/bots` | GET | Registered bots |
+| `/api/processes` | GET | Running processes |
 
-  **Windows (PowerShell):**
-  ```powershell
-  git clone https://github.com/JoeSzeles/openclaw-mechanicus-patches.git
-  cd openclaw-mechanicus-patches
-  .\install.ps1
-  ```
+### Trade Execution Test Results
 
-  ## Post-Install
+All trade types verified on IG demo account (Silver CFD — CS.D.CFASILVER.CFA.IP):
 
-  Install required dependencies in your OpenClaw folder:
+- **BUY to open** — `dealStatus: ACCEPTED`, position opened at market price
+- **SELL to close** — `dealStatus: ACCEPTED`, position fully closed with P&L
+- **SELL to open (short)** — `dealStatus: ACCEPTED`, short position opened
+- **BUY to close (cover short)** — `dealStatus: ACCEPTED`, short position fully closed
 
-  ```bash
-  npm install pg lightstreamer-client-node
-  ```
+### Known Limitations
 
-  ## Configuration
+- **Price history** may return `exceeded-account-historical-data-allowance` on demo accounts (IG rate limit)
+- **Market navigation** returns 500 from IG API on some demo accounts
+- **Activity endpoint** requires `?from=` date parameter (e.g., `?from=2026-03-01T00:00:00`)
+- **Streaming** (Lightstreamer live prices) requires the CEO proxy — local mode returns status stubs
+- **ClawScript compile/run/AI** execution requires the CEO proxy — local mode returns helpful stubs
+- **Scalper engine start/stop** requires the CEO proxy — local mode returns status info
 
-  Edit the `.env` file created by the installer:
+### Config API Compatibility
 
-  | Variable | Required | Description |
-  |---|---|---|
-  | `IG_API_KEY` | Yes | IG Trading API key ([Get one here](https://labs.ig.com)) |
-  | `IG_USERNAME` | Yes | IG account username |
-  | `IG_PASSWORD` | Yes | IG account password |
-  | `IG_ACCOUNT_ID` | Yes | IG account ID |
-  | `IG_ACCOUNT_TYPE` | No | `demo` (default) or `live` |
-  | `DATABASE_URL` | Recommended | PostgreSQL connection string (enables optimization memory) |
-  | `GROQ_API_KEY` | No | Groq API key for AI calibration features |
-  | `OPENCLAW_LOGIN_USER` | No | Web UI login username |
-  | `OPENCLAW_LOGIN_PASSWORD` | No | Web UI login password |
+The `POST /api/ig/config` endpoint accepts two formats for backward compatibility:
 
-  ## Starting
+**UI format (from model-config.js):**
+```json
+{ "profiles": { "demo": { "apiKey": "...", "username": "..." } } }
+```
 
-  ```powershell
-  cd "C:\Users\YourName\AppData\Roaming\npm\node_modules\openclaw"
-  .\start-mechanicus.ps1
-  ```
+**Direct format:**
+```json
+{ "profileName": "demo", "profile": { "apiKey": "...", "username": "..." } }
+```
 
-  Then open: **http://localhost:5000**
+Masked values (`••••••••` or `****`) are automatically detected and skipped to prevent overwriting real credentials when the UI sends back masked fields.
 
-  ## Architecture
+## Database Setup (PostgreSQL)
 
-  ```
-  Port 5000 — CEO Proxy (auth, IG API, bot management, WebSocket relay)
-  Port 5001 — OpenClaw Gateway (agents, chat, canvas, workspace)
-  ```
+The system uses **PostgreSQL** for storing strategies, backtest results, optimization memory, trade history, and candle data.
 
-  The CEO proxy handles IG authentication, live streaming, bot lifecycle, and serves the web UI. The gateway handles agent sessions, canvas pages, and the ClawScript runtime.
+**No database? No problem.** When `DATABASE_URL` is not set, the system automatically falls back to **CSV files** stored in `~/.openclaw/db/`. Everything works — strategies, backtests, trades, optimization memory, candle caching — just using local CSV files instead of PostgreSQL. This means you can run the full system without any database setup at all.
 
-  ## File Structure
+PostgreSQL is recommended for production use (better performance with large datasets, concurrent access, proper indexing), but CSV mode is fully functional for development, testing, and personal use.
 
-  ```
-  files/
-  ├── ceo-proxy.cjs              # Main proxy server
-  ├── start-mechanicus.ps1/.bat   # Startup scripts
-  ├── .env.example                # Environment template
-  ├── openclaw.json               # Gateway configuration
-  ├── skills/
-  │   ├── bots/                   # Trading engine + strategies
-  │   │   ├── trade-claw-engine.cjs
-  │   │   ├── ig-scalper-engine.cjs
-  │   │   ├── ig-optimization-agent.cjs
-  │   │   ├── ig-scalper-backtest.cjs
-  │   │   └── strategies/         # 23 strategy modules
-  │   ├── ig-trading/             # IG API skill
-  │   ├── ig-backtest/            # Backtesting skill
-  │   ├── ig-signal-monitor/      # Signal monitoring skill
-  │   ├── ig-trading-bot/         # Bot management skill
-  │   └── clawscript/             # ClawScript documentation
-  ├── ui/public/                  # Web UI pages
-  │   ├── model-config.html/js    # IG configuration page
-  │   ├── processes.html/js       # Bot/process manager
-  │   ├── workers.html/js         # Worker management
-  │   └── nav-inject.js           # Navigation bar
-  ├── clawscript-installer/       # ClawScript editor + templates
-  │   ├── editor/                 # Flow editor UI
-  │   ├── lib/                    # Parser, compiler, runtime
-  │   ├── templates/              # Strategy templates (.cs)
-  │   └── strategies/             # Compiled strategy modules
-  ├── .openclaw/
-  │   ├── canvas/                 # Dashboard HTML + JS
-  │   │   ├── ig-dashboard.html   # Main IG dashboard
-  │   │   ├── ig-scalper-ui.js    # Dashboard logic
-  │   │   └── ig-backtest-ui.js   # Backtest visualization
-  │   └── workspace-ig/           # IG agent workspace
-  │       ├── AGENTS.md           # Agent system access guide
-  │       ├── CLAWSCRIPT-RULES.md # ClawScript syntax reference
-  │       ├── SKILLS-IG.md        # IG skills reference
-  │       ├── STRATEGIES.md       # Strategy log
-  │       └── TOOLS.md            # Tools & canvas publishing
-  └── docs/
-      └── IG_TRADING_SETUP.md     # Setup guide
-  ```
+All tables are created automatically on first startup — no manual SQL required.
 
-  ## Tech Stack
+### Option 1: Neon (Free Cloud PostgreSQL)
 
-  - **Runtime**: Node.js (CommonJS)
-  - **Trading API**: IG REST API v3 + Lightstreamer WebSocket
-  - **Database**: PostgreSQL (optional, for optimization memory)
-  - **AI**: Groq API (optional, for calibration)
-  - **Charts**: Lightweight Charts (TradingView)
-  - **DSL**: ClawScript (custom parser + compiler)
-  - **Streaming**: Lightstreamer client for real-time market data
+[Neon](https://neon.tech) offers a free tier with 512 MB storage — more than enough for trading data.
 
-  ## License
+1. Go to [https://neon.tech](https://neon.tech) and sign up (GitHub/Google login works)
+2. Click **New Project** — give it a name like `openclaw-trading`
+3. Select the region closest to you and click **Create Project**
+4. On the dashboard, find the **Connection string** — it looks like:
+   ```
+   postgresql://username:password@ep-cool-name-123456.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+5. Copy the full connection string
+6. Open your `.env` file and set:
+   ```
+   DATABASE_URL=postgresql://username:password@ep-cool-name-123456.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+7. Start (or restart) OpenClaw Mechanicus — tables are created automatically
 
-  MIT
+### Option 2: Supabase (Free Cloud PostgreSQL)
 
-  ---
+[Supabase](https://supabase.com) offers a free tier with 500 MB and a full Postgres database.
 
-  **Built for [OpenClaw](https://github.com/nicholasgriffintn/OpenClaw)** — the open-source AI agent framework.
-  
+1. Go to [https://supabase.com](https://supabase.com) and sign up
+2. Click **New Project**, pick an org, set a database password, and choose a region
+3. After the project is created, go to **Project Settings** > **Database**
+4. Under **Connection string** > **URI**, copy the connection string
+5. Replace `[YOUR-PASSWORD]` in the string with the password you set
+6. Add to your `.env`:
+   ```
+   DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+   ```
+
+### Option 3: Local PostgreSQL
+
+If you have PostgreSQL installed locally:
+
+```
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/openclaw
+```
+
+Create the database first:
+```bash
+createdb openclaw
+```
+
+### Verifying the Connection
+
+After setting `DATABASE_URL`, start the system with `start-mechanicus.ps1` (Windows) or `start-mechanicus.sh` (Linux/Mac). Look for these log messages:
+
+```
+[startup] Database: configured
+[startup] price_candles table ready
+```
+
+If you see `Database: not configured (file-only mode)`, check that your `.env` file has the correct `DATABASE_URL` value.
+
+### What the Database Stores
+
+| Table | Purpose |
+|---|---|
+| `scalper_config` | Global scalper settings (budget, drawdown limits) |
+| `scalper_strategies` | Strategy configurations (instruments, indicators, parameters) |
+| `scalper_trades` | Trade execution history with P&L |
+| `scalper_backtests` | Individual backtest results |
+| `optimization_memory` | Best parameters found per instrument/strategy/timeframe |
+| `price_candles` | Historical OHLCV candle data cached from IG API |
+| `agent_backups` | Agent state snapshots |
+| `agent_memory` | Agent long-term memory |
+| `agent_daily_memory` | Agent daily journals |
+| `agent_subconscious` | Agent pattern recognition data |
