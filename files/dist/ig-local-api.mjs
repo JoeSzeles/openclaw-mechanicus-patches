@@ -301,16 +301,30 @@ async function routeRequest(req, res, p, m, url) {
       if (body.profile.accountId !== undefined) pr.accountId = body.profile.accountId;
       if (body.profile.baseUrl !== undefined) pr.baseUrl = body.profile.baseUrl;
     }
+    if (body.profiles) {
+      for (const k of Object.keys(body.profiles)) {
+        if (!config.profiles[k]) continue;
+        const s = body.profiles[k];
+        if (s.apiKey !== undefined && !String(s.apiKey).includes('••••') && !String(s.apiKey).includes('****')) config.profiles[k].apiKey = s.apiKey;
+        if (s.username !== undefined && !String(s.username).includes('••••') && !String(s.username).includes('****')) config.profiles[k].username = s.username;
+        if (s.password !== undefined && !String(s.password).includes('••••') && !String(s.password).includes('****')) config.profiles[k].password = s.password;
+        if (s.accountId !== undefined) config.profiles[k].accountId = s.accountId;
+        if (s.baseUrl !== undefined) config.profiles[k].baseUrl = s.baseUrl;
+      }
+    }
     saveIgConfig(config);
     igSession = { cst: null, xst: null, ts: 0, lightstreamerEndpoint: igSession.lightstreamerEndpoint };
-    return json(res, 200, { ok: true }), true;
+    return json(res, 200, { ok: true, activeProfile: config.activeProfile }), true;
   }
 
   if (m === 'POST' && p === '/api/ig/config/test') {
+    const body = JSON.parse((await readBody(req)).toString() || '{}');
     const config = ensureIgConfig();
-    const profile = getActiveIgProfile();
+    const profName = body.profile || config.activeProfile || 'demo';
+    const prof = config.profiles[profName];
+    const profile = prof ? { ...prof, profileName: profName } : getActiveIgProfile();
     if (!profile || !profile.apiKey || !profile.username || !profile.password) {
-      return json(res, 200, { ok: false, error: 'No credentials configured', errorType: 'not_configured' }), true;
+      return json(res, 200, { ok: false, error: 'No credentials configured for ' + (profName || 'active') + ' profile', errorType: 'not_configured' }), true;
     }
     try {
       const loginRes = await igRequest('POST', '/session', {
@@ -318,7 +332,7 @@ async function routeRequest(req, res, p, m, url) {
         'Accept': 'application/json; charset=UTF-8',
         'X-IG-API-KEY': profile.apiKey,
         'Version': '2',
-      }, JSON.stringify({ identifier: profile.username, password: profile.password }));
+      }, JSON.stringify({ identifier: profile.username, password: profile.password }), profile.baseUrl);
       if (loginRes.status !== 200) {
         let errDetail = loginRes.body;
         let errorType = 'auth_rejected';
@@ -336,7 +350,7 @@ async function routeRequest(req, res, p, m, url) {
           const accRes = await igRequest('GET', '/accounts', {
             'X-IG-API-KEY': profile.apiKey, 'CST': cst, 'X-SECURITY-TOKEN': xst,
             'Accept': 'application/json; charset=UTF-8',
-          });
+          }, undefined, profile.baseUrl);
           if (accRes.status === 200) accountInfo = safeParseIgBody(accRes.body);
         } catch (_) {}
       }
@@ -344,7 +358,7 @@ async function routeRequest(req, res, p, m, url) {
       igSessionStatus = 'connected';
       igSessionError = null;
       igSessionLastRefresh = Date.now();
-      return json(res, 200, { ok: true, profile: profile.profileName, accountInfo, lightstreamerEndpoint: loginBody.lightstreamerEndpoint }), true;
+      return json(res, 200, { ok: true, profile: profName, accountInfo, lightstreamerEndpoint: loginBody.lightstreamerEndpoint }), true;
     } catch (err) {
       return json(res, 200, { ok: false, error: err.message, errorType: 'connection_error' }), true;
     }
