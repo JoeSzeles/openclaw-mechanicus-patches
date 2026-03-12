@@ -1092,7 +1092,9 @@ function switchDashTab(tab) {
     loadBatchBacktestList();
   }
   if (tab === 'neuralTrading') {
-    initNeuralTradingTab();
+    if (typeof initNeuralTradingTab === 'function') initNeuralTradingTab();
+  } else {
+    if (typeof stopNeuralTickPolling === 'function') stopNeuralTickPolling();
   }
 }
 (function() {

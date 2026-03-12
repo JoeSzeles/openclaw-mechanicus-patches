@@ -1,3 +1,4 @@
+function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 var BRAIN_API = 'http://127.0.0.1:8000';
 var brainjarConfig = null;
 var neuralCurrentEpic = 'CS.D.CFASILVER.CFA.IP';
@@ -146,8 +147,8 @@ function neuralSelectInstrument(inst) {
   var el = document.getElementById('neural-instrument-selected');
   if (el) {
     el.innerHTML = '<div style="color:#8b949e;font-size:11px">Selected</div>' +
-      '<div style="color:#2dc653;font-weight:bold">' + inst.name + ' (' + inst.epic + ')</div>' +
-      '<div style="font-size:10px;color:#8b949e;margin-top:2px">Pip: ' + (inst.pip_value || 'N/A') + ' | Min: ' + (inst.min_size || 'N/A') + '</div>';
+      '<div style="color:#2dc653;font-weight:bold">' + escHtml(inst.name) + ' (' + escHtml(inst.epic) + ')</div>' +
+      '<div style="font-size:10px;color:#8b949e;margin-top:2px">Pip: ' + escHtml(String(inst.pip_value || 'N/A')) + ' | Min: ' + escHtml(String(inst.min_size || 'N/A')) + '</div>';
   }
   var dd = document.getElementById('neural-instrument-results');
   if (dd) dd.style.display = 'none';
@@ -571,13 +572,18 @@ function applyNeuralGoals() {
   showToast('Trading goals applied', true);
 }
 
+var neuralTabInitialized = false;
 function initNeuralTradingTab() {
+  if (neuralTabInitialized) return;
+  neuralTabInitialized = true;
   loadBrainjarConfig().then(function() {
     initNeuralCharts();
     checkBrainProcessStatus();
+    if (brainStatusInterval) clearInterval(brainStatusInterval);
     brainStatusInterval = setInterval(checkBrainProcessStatus, 30000);
     var si = document.getElementById('neural-instrument-search');
-    if (si) {
+    if (si && !si._neuralBound) {
+      si._neuralBound = true;
       var st;
       si.addEventListener('input', function(e) {
         clearTimeout(st);
@@ -595,7 +601,7 @@ function initNeuralTradingTab() {
             instruments.slice(0, 10).forEach(function(inst) {
               var item = document.createElement('div');
               item.style.cssText = 'padding:6px 8px;cursor:pointer;border-bottom:1px solid #30363d;font-size:12px;color:#c9d1d9';
-              item.innerHTML = '<span style="font-weight:600">' + inst.name + '</span> <span style="color:#8b949e;font-size:10px">' + inst.epic + '</span>';
+              item.innerHTML = '<span style="font-weight:600">' + escHtml(inst.name) + '</span> <span style="color:#8b949e;font-size:10px">' + escHtml(inst.epic) + '</span>';
               item.onmouseenter = function() { this.style.background = 'rgba(88,166,255,0.08)'; };
               item.onmouseleave = function() { this.style.background = ''; };
               item.onclick = function() { neuralSelectInstrument(inst); };

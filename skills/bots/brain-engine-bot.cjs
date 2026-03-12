@@ -15,6 +15,7 @@ let lastStartedAt = null;
 let lastStoppedAt = null;
 let logs = [];
 let statusCheckTimer = null;
+const MAX_RESTARTS = 10;
 
 function log(level, msg) {
   const ts = new Date().toISOString();
@@ -95,10 +96,13 @@ function start(scriptPath) {
       running = false;
       lastStoppedAt = new Date().toISOString();
       log("INFO", "Brain engine exited (code=" + code + ", signal=" + signal + ")");
-      if (autoRestart && code !== 0) {
+      if (autoRestart && code !== 0 && restartCount < MAX_RESTARTS) {
         restartCount++;
-        log("INFO", "Auto-restarting (attempt " + restartCount + ")...");
+        log("INFO", "Auto-restarting (attempt " + restartCount + "/" + MAX_RESTARTS + ")...");
         setTimeout(() => start(resolvedPath), 3000);
+      } else if (autoRestart && restartCount >= MAX_RESTARTS) {
+        log("ERROR", "Max restarts (" + MAX_RESTARTS + ") reached. Auto-restart disabled.");
+        autoRestart = false;
       }
     });
 
@@ -122,12 +126,14 @@ function stop() {
   }
 
   log("INFO", "Stopping brain engine (PID " + brainProcess.pid + ")...");
+  const proc = brainProcess;
   brainProcess.kill("SIGTERM");
   setTimeout(() => {
-    if (brainProcess && !brainProcess.killed) {
+    try {
+      process.kill(proc.pid, 0);
       log("WARN", "Force killing brain engine...");
-      brainProcess.kill("SIGKILL");
-    }
+      proc.kill("SIGKILL");
+    } catch (_) {}
   }, 5000);
 
   running = false;
@@ -181,5 +187,17 @@ function getStatus() {
 function getLogs(limit) {
   return logs.slice(0, limit || 100);
 }
+
+function cleanup() {
+  if (isRunning()) {
+    log("INFO", "Parent exiting, stopping brain engine...");
+    try { brainProcess.kill("SIGTERM"); } catch (_) {}
+  }
+  stopStatusCheck();
+}
+
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
+process.on("exit", cleanup);
 
 module.exports = { start, stop, restart, setAutoRestart, getStatus, getLogs, isRunning, checkHealth, log, findBrainScript };
