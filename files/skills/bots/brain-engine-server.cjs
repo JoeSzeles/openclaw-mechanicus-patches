@@ -1240,9 +1240,9 @@ async function handleRequest(req, res) {
   if (m === 'POST' && p === '/cortex-state') {
     const body = await parseBody(req);
     const state = {
-      tradeLog: (body.tradeLog || []).slice(-500),
+      tradeLog: Array.isArray(body.tradeLog) ? body.tradeLog.slice(-500) : [],
       openPosition: body.openPosition || null,
-      decisionLog: (body.decisionLog || []).slice(-100),
+      decisionLog: Array.isArray(body.decisionLog) ? body.decisionLog.slice(-100) : [],
       savedAt: new Date().toISOString(),
     };
     try {

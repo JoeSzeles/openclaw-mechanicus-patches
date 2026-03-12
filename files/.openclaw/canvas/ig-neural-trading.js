@@ -2617,12 +2617,12 @@ async function cortexSaveState() {
 async function cortexLoadState() {
   try {
     var state = await brainFetch('/cortex-state');
-    if (state && state.tradeLog && state.tradeLog.length > 0) {
+    if (state && Array.isArray(state.tradeLog) && state.tradeLog.length > 0 && cortexTradeLog.length === 0) {
       cortexTradeLog = state.tradeLog;
       addBrainLog('CORTEX', 'Restored ' + cortexTradeLog.length + ' trades from persistent storage (saved ' + (state.savedAt || 'unknown') + ')');
       renderCortexTradeLog(true);
     }
-    if (state && state.openPosition) {
+    if (state && state.openPosition && !cortexOpenPosition) {
       cortexOpenPosition = state.openPosition;
       addBrainLog('CORTEX', 'Restored open position: ' + cortexOpenPosition.direction + ' @ ' + (cortexOpenPosition.entry || 0).toFixed(2) + ' dealId=' + (cortexOpenPosition.dealId || 'none'));
     }
@@ -2643,12 +2643,13 @@ async function cortexLoadState() {
 
 async function cortexClearHistory() {
   if (!confirm('Clear all cortex auto-trade history? This cannot be undone.')) return;
+  clearTimeout(cortexSaveTimer);
   cortexTradeLog = [];
   cortexDecisionLog = [];
   cortexOpenPosition = null;
   var monEl = document.getElementById('cortex-decision-monitor');
   if (monEl) monEl.innerHTML = '';
-  renderCortexTradeLog();
+  renderCortexTradeLog(true);
   try {
     await brainFetch('/cortex-state', { method: 'DELETE' });
     addBrainLog('CORTEX', 'Trade history cleared (memory + disk)');
