@@ -2155,9 +2155,11 @@ async function cortexClosePosition(pos) {
   }
 }
 
-function cortexAddDecision(entry) {
-  cortexDecisionLog.push(entry);
-  if (cortexDecisionLog.length > 200) cortexDecisionLog = cortexDecisionLog.slice(-150);
+function cortexAddDecision(entry, skipPush) {
+  if (!skipPush) {
+    cortexDecisionLog.push(entry);
+    if (cortexDecisionLog.length > 200) cortexDecisionLog = cortexDecisionLog.slice(-150);
+  }
   var monEl = document.getElementById('cortex-decision-monitor');
   var countEl = document.getElementById('cortex-monitor-count');
   if (!monEl) return;
@@ -2600,7 +2602,65 @@ async function cortexAutoSelectTimeframe() {
   return bestTf;
 }
 
-function renderCortexTradeLog() {
+async function cortexSaveState() {
+  try {
+    await brainFetch('/cortex-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tradeLog: cortexTradeLog, openPosition: cortexOpenPosition, decisionLog: cortexDecisionLog })
+    });
+  } catch (e) {
+    addBrainLog('WARN', 'Failed to persist cortex state: ' + e.message);
+  }
+}
+
+async function cortexLoadState() {
+  try {
+    var state = await brainFetch('/cortex-state');
+    if (state && state.tradeLog && state.tradeLog.length > 0) {
+      cortexTradeLog = state.tradeLog;
+      addBrainLog('CORTEX', 'Restored ' + cortexTradeLog.length + ' trades from persistent storage (saved ' + (state.savedAt || 'unknown') + ')');
+      renderCortexTradeLog(true);
+    }
+    if (state && state.openPosition) {
+      cortexOpenPosition = state.openPosition;
+      addBrainLog('CORTEX', 'Restored open position: ' + cortexOpenPosition.direction + ' @ ' + (cortexOpenPosition.entry || 0).toFixed(2) + ' dealId=' + (cortexOpenPosition.dealId || 'none'));
+    }
+    if (state && state.decisionLog && state.decisionLog.length > 0) {
+      cortexDecisionLog = state.decisionLog;
+      var monEl = document.getElementById('cortex-decision-monitor');
+      if (monEl) {
+        cortexDecisionLog.slice(-10).forEach(function(d) {
+          cortexAddDecision(d, true);
+        });
+      }
+      addBrainLog('CORTEX', 'Restored ' + cortexDecisionLog.length + ' decision log entries');
+    }
+  } catch (e) {
+    addBrainLog('INFO', 'No persisted cortex state found (first run or brain not ready)');
+  }
+}
+
+async function cortexClearHistory() {
+  if (!confirm('Clear all cortex auto-trade history? This cannot be undone.')) return;
+  cortexTradeLog = [];
+  cortexDecisionLog = [];
+  cortexOpenPosition = null;
+  var monEl = document.getElementById('cortex-decision-monitor');
+  if (monEl) monEl.innerHTML = '';
+  renderCortexTradeLog();
+  try {
+    await brainFetch('/cortex-state', { method: 'DELETE' });
+    addBrainLog('CORTEX', 'Trade history cleared (memory + disk)');
+    showToast('Trade history cleared', true);
+  } catch (e) {
+    addBrainLog('WARN', 'Cleared memory but failed to clear disk: ' + e.message);
+    showToast('History cleared from memory', true);
+  }
+}
+
+var cortexSaveTimer = null;
+function renderCortexTradeLog(skipSave) {
   var logEl = document.getElementById('cortex-trade-log');
   if (!logEl) return;
   if (cortexTradeLog.length === 0) {
@@ -2609,16 +2669,24 @@ function renderCortexTradeLog() {
   }
   var html = '';
   cortexTradeLog.slice(-20).reverse().forEach(function(t) {
-    var color = t.dir === 'BUY' ? '#2dc653' : '#f85149';
+    var color = (t.dir && t.dir.indexOf('BUY') >= 0) ? '#2dc653' : '#f85149';
+    if (t.dir && (t.dir.indexOf('TP') >= 0 || t.dir.indexOf('CLOSE') >= 0)) color = '#bc8cff';
+    if (t.dir && t.dir.indexOf('EMRG') >= 0) color = '#d29922';
     var time = new Date(t.ts).toLocaleTimeString();
+    var pnlStr = t.pnl !== undefined && t.pnl !== null && t.pnl !== '' ? (t.pnl >= 0 ? '+' : '') + parseFloat(t.pnl).toFixed(1) + 'p' : '';
+    var pnlColor = t.pnl >= 0 ? '#2dc653' : '#f85149';
     html += '<div style="display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px solid #161b22;font-size:10px">' +
       '<span style="color:#8b949e">' + time + '</span>' +
       '<span style="font-weight:700;color:' + color + '">' + t.dir + '</span>' +
       '<span style="color:#bc8cff">' + (t.tf || 'tick') + '</span>' +
-      '<span style="color:#d29922">' + (t.price ? t.price.toFixed(2) : '--') + '</span>' +
-      '<span style="color:#8b949e">B:' + t.buy.toFixed(1) + ' S:' + t.sell.toFixed(1) + '</span></div>';
+      '<span style="color:#d29922">' + (t.price ? parseFloat(t.price).toFixed(2) : '--') + '</span>' +
+      (pnlStr ? '<span style="color:' + pnlColor + ';font-weight:600">' + pnlStr + '</span>' : '<span style="color:#8b949e">B:' + (t.buy || 0).toFixed(1) + ' S:' + (t.sell || 0).toFixed(1) + '</span>') + '</div>';
   });
   logEl.innerHTML = html;
+  if (!skipSave) {
+    clearTimeout(cortexSaveTimer);
+    cortexSaveTimer = setTimeout(function() { cortexSaveState(); }, 2000);
+  }
 }
 
 var neuralTabInitialized = false;
@@ -2633,6 +2701,7 @@ function initNeuralTradingTab() {
       if (r) {
         addBrainLog('INFO', 'Brain auto-booted on tab init');
       }
+      cortexLoadState();
     });
     checkBrainProcessStatus();
     if (brainStatusInterval) clearInterval(brainStatusInterval);
