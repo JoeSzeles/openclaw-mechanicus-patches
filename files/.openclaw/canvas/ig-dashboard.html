@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>IG Trading Dashboard</title>
 <script src="lightweight-charts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; padding-top: 64px; }
@@ -203,6 +204,7 @@ tr:hover { background: rgba(88,166,255,0.04); }
     <button class="dash-tab" onclick="switchDashTab('bots')">Bots</button>
     <button class="dash-tab" onclick="switchDashTab('backtest')">Backtest</button>
     <button class="dash-tab" onclick="switchDashTab('agents')">Agents</button>
+    <button class="dash-tab" onclick="switchDashTab('neuralTrading')" style="color:#bc8cff">Neural Trading</button>
   </div>
 
   <div id="dashboardTab" class="dash-tab-content active">
@@ -786,6 +788,620 @@ tr:hover { background: rgba(88,166,255,0.04); }
     </div>
   </div>
 
+  <div id="neuralTradingTab" class="dash-tab-content">
+    <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #21262d">
+      <button class="neural-sub-tab active" data-ntab="dashboard" onclick="switchNeuralSubTab('dashboard')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#bc8cff;border-bottom:2px solid #bc8cff;margin-bottom:-2px">Neural Dashboard</button>
+      <button class="neural-sub-tab" data-ntab="brain" onclick="switchNeuralSubTab('brain')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Brain</button>
+      <button class="neural-sub-tab" data-ntab="config" onclick="switchNeuralSubTab('config')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Brain Config</button>
+      <button class="neural-sub-tab" data-ntab="console" onclick="switchNeuralSubTab('console')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Dev Console</button>
+      <a href="/__openclaw__/canvas/neural-trading.html" target="_blank" style="padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #30363d;background:#161b22;color:#58a6ff;border-radius:4px;text-decoration:none;margin-left:8px" title="Open Neural Trading documentation">&#128214; Docs</a>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px;padding-right:8px">
+        <span id="neural-ig-indicator" class="badge badge-off">IG</span>
+        <span id="neural-ig-status" style="font-size:11px;color:#8b949e">IG Disconnected</span>
+        <span id="neural-brain-indicator" class="badge badge-off">Brain</span>
+        <span id="neural-brain-status" style="font-size:11px;color:#8b949e">Brain Offline</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:12px;padding:10px;background:#161b22;border:1px solid #21262d;border-radius:6px;align-items:stretch">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:600;color:#8b949e">INSTRUMENT</span>
+          <button class="btn-sm" onclick="refreshStreamInstruments()" style="font-size:9px;padding:1px 6px">Refresh</button>
+          <div id="neural-instrument-selected" style="flex:1;padding:4px 8px;background:rgba(45,198,83,0.1);border-left:3px solid #2dc653;border-radius:3px">
+            <span style="color:#2dc653;font-weight:bold;font-size:12px" id="neural-selected-label">No instrument selected</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <div id="neural-stream-list" style="flex:1;max-height:120px;overflow-y:auto;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:4px">
+            <div style="color:#484f58;font-size:11px;padding:6px;text-align:center">Loading active streams...</div>
+          </div>
+          <div style="flex:1;position:relative">
+            <input type="text" id="neural-instrument-search" placeholder="Search IG markets (e.g. silver, gbp...)" class="deal-input" style="width:100%;font-size:11px">
+            <div id="neural-instrument-results" style="position:absolute;top:100%;left:0;z-index:1000;width:100%;max-height:150px;overflow-y:auto;background:#161b22;border:1px solid #30363d;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.4);display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="neural-dashboard" class="neural-sub-content active">
+      <div class="grid">
+        <div class="card">
+          <h2>Account & Trading</h2>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">
+            <div class="stat"><div class="value" id="neural-balance" style="font-size:18px">--</div><div class="label">Balance</div></div>
+            <div class="stat"><div class="value" id="neural-pnl" style="font-size:18px">--</div><div class="label">P&L</div></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn-sm" id="neural-test-buy" onclick="neuralPlaceOrder('BUY')" disabled style="background:#1b4332;color:#2dc653;border-color:#2dc653">BUY</button>
+            <button class="btn-sm" id="neural-test-sell" onclick="neuralPlaceOrder('SELL')" disabled style="background:#3d1a1a;color:#f85149;border-color:#f85149">SELL</button>
+            <input type="number" id="neural-position-size" value="0.5" min="0.1" max="10" step="0.1" class="edit-input" style="width:60px" title="Position size">
+            <button class="btn-sm btn-danger" onclick="neuralCloseAllPositions()">Close All</button>
+            <button class="btn-sm" id="neural-backtest-btn" onclick="neuralBacktest()" disabled>Backtest</button>
+          </div>
+          <div id="neural-trade-status" style="font-size:11px;color:#8b949e;margin-top:6px">Ready</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Connection & Brain Signals</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Last Tick</div><div style="font-size:13px;color:#58a6ff" id="neural-last-tick">--:--:--</div></div>
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Ticks</div><div style="font-size:13px;color:#2dc653" id="neural-tick-count">0</div></div>
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Price</div><div style="font-size:13px;font-weight:700;color:#d29922" id="neural-price-current">--</div></div>
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Steps</div><div style="font-size:13px;color:#bc8cff" id="neural-step-count">0</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+            <div><div style="font-size:10px;color:#2dc653;text-transform:uppercase;font-weight:600">Buy Signal</div><div style="font-size:16px;font-weight:700;color:#2dc653" id="neural-signal-buy">--</div></div>
+            <div><div style="font-size:10px;color:#f85149;text-transform:uppercase;font-weight:600">Sell Signal</div><div style="font-size:16px;font-weight:700;color:#f85149" id="neural-signal-sell">--</div></div>
+            <div><div style="font-size:10px;color:#d29922;text-transform:uppercase;font-weight:600">Hold Signal</div><div style="font-size:16px;font-weight:700;color:#d29922" id="neural-signal-hold">--</div></div>
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Motor Rate</div><div style="font-size:13px;color:#79c0ff" id="neural-motor-rate">--</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Market Quality</h2>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Spread</div><div style="font-size:13px;color:#bc8cff" id="neural-spread-current">--</div></div>
+            <div><div style="font-size:10px;color:#8b949e;text-transform:uppercase">Volume</div><div style="font-size:13px;color:#79c0ff" id="neural-volume-current">--</div></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn-sm" id="neural-force-buy" onclick="neuralPlaceOrder('BUY')" disabled style="flex:1;background:#1b4332;color:#2dc653;border-color:#2dc653;padding:8px;font-weight:700">FORCE BUY</button>
+            <button class="btn-sm" id="neural-force-sell" onclick="neuralPlaceOrder('SELL')" disabled style="flex:1;background:#3d1a1a;color:#f85149;border-color:#f85149;padding:8px;font-weight:700">FORCE SELL</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Live Tick Feed</h2>
+        <div id="neural-tick-feed" style="max-height:200px;overflow-y:auto;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px">
+          <div class="empty">Waiting for ticks... (Select Neural Dashboard tab to start polling)</div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-bottom:16px">
+        <div class="card"><h2>Price Chart</h2><div style="position:relative;height:200px"><canvas id="neuralPriceChart"></canvas></div></div>
+        <div class="card"><h2>Volume Chart</h2><div style="position:relative;height:200px"><canvas id="neuralVolumeChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div id="neural-brain" class="neural-sub-content" style="display:none">
+
+      <div style="display:flex;gap:8px;margin-bottom:12px;padding:8px 0;border-bottom:1px solid #21262d">
+        <button class="btn-sm" onclick="refreshCortex()" style="background:#1c2541;color:#58a6ff;border-color:#58a6ff;padding:6px 14px;font-weight:600">Refresh Cortex</button>
+        <button class="btn-sm" onclick="exportPatternCSV()">Export CSV</button>
+        <span style="font-size:11px;color:#8b949e;line-height:28px">Instruments: <strong id="cortex-instrument-count" style="color:#bc8cff">0</strong></span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:#8b949e;line-height:28px">Active: <strong style="color:#58a6ff" id="cortex-active-epic">--</strong></span>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2 style="display:flex;align-items:center;gap:8px">Neural Cortex <span style="font-size:10px;padding:2px 8px;background:#bc8cff22;color:#bc8cff;border-radius:8px">Pattern Visualization</span></h2>
+        <div id="cortex-pattern-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:12px">
+          <div style="color:#484f58;text-align:center;padding:24px;font-size:12px;grid-column:1/-1">No patterns learned yet. Train the brain on live or backtest data first.</div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2 style="display:flex;align-items:center;gap:8px">Signal Summary <span style="font-size:10px;padding:2px 8px;background:#58a6ff22;color:#58a6ff;border-radius:8px">All Instruments</span></h2>
+        <div id="cortex-signal-summary" style="max-height:200px;overflow-y:auto;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px">
+          <div style="color:#484f58;text-align:center;padding:8px;font-size:11px">No data</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2 style="display:flex;align-items:center;gap:8px">Auto-Trade <span style="font-size:10px;padding:2px 8px;background:#d2992222;color:#d29922;border-radius:8px">Cortex Execution</span></h2>
+          <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+            <button class="btn-sm" id="cortex-auto-trade-btn" onclick="toggleCortexAutoTrade()" style="background:#3d1a1a;color:#f85149;border-color:#f85149;padding:8px 16px;font-weight:700;font-size:13px">AUTO-TRADE OFF</button>
+            <select id="cortex-timeframe" class="deal-input" style="width:140px;font-size:11px;padding:4px">
+              <option value="TICK">Tick (live)</option>
+              <option value="SECOND">1 Second</option>
+              <option value="SECOND_2">2 Seconds</option>
+              <option value="SECOND_5">5 Seconds</option>
+              <option value="SECOND_10">10 Seconds</option>
+              <option value="SECOND_30">30 Seconds</option>
+              <option value="MINUTE">1 Minute</option>
+              <option value="MINUTE_2">2 Minutes</option>
+              <option value="MINUTE_3">3 Minutes</option>
+              <option value="MINUTE_5" selected>5 Minutes</option>
+              <option value="MINUTE_15">15 Minutes</option>
+              <option value="MINUTE_30">30 Minutes</option>
+              <option value="HOUR">1 Hour</option>
+              <option value="HOUR_4">4 Hours</option>
+              <option value="DAY">Daily</option>
+              <option value="AUTO">Auto (Brain Selects)</option>
+            </select>
+            <span id="cortex-current-tf" style="font-size:10px;color:#bc8cff;font-weight:600">--</span>
+          </div>
+          <div id="cortex-auto-status" style="font-size:11px;color:#f85149;padding:6px;background:#0d1117;border-radius:3px;margin-bottom:10px">Disabled</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px">
+            <div><label style="color:#8b949e;font-size:10px">Buy Threshold</label><input type="number" id="cortex-buy-thresh" value="60" step="5" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Sell Threshold</label><input type="number" id="cortex-sell-thresh" value="60" step="5" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Cooldown (sec)</label><input type="number" id="cortex-cooldown" value="60" step="10" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Max Positions</label><input type="number" id="cortex-max-pos" value="3" min="1" max="10" step="1" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Min Size</label><input type="number" id="cortex-min-size" value="0.5" min="0.1" step="0.1" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Max Size</label><input type="number" id="cortex-max-size" value="2.0" min="0.1" step="0.1" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Stop Loss (pips)</label><input type="number" id="cortex-sl" value="50" class="edit-input" style="width:100%"></div>
+            <div><label style="color:#8b949e;font-size:10px">Take Profit (pips)</label><input type="number" id="cortex-tp" value="100" class="edit-input" style="width:100%"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:#8b949e;cursor:pointer"><input type="checkbox" id="cortex-auto-size" checked> Auto Size</label>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:11px;margin-top:8px">
+            <div><label style="color:#d29922;font-size:10px">Hold Zone</label><input type="number" id="cortex-hold-zone" value="2" min="0" max="100" step="1" class="edit-input" style="width:100%;border-color:#d29922" title="Signal spread required: buy must exceed sell by this amount (or vice versa) to trigger a trade. Lower = more trades."></div>
+            <div><label style="color:#d29922;font-size:10px">Min Hold (ticks)</label><input type="number" id="cortex-min-hold" value="5" min="0" max="500" step="1" class="edit-input" style="width:100%;border-color:#d29922" title="Minimum ticks/candles before a signal reversal can close the position"></div>
+            <div><label style="color:#d29922;font-size:10px">Signal Confirm</label><input type="number" id="cortex-confirm" value="3" min="1" max="50" step="1" class="edit-input" style="width:100%;border-color:#d29922" title="Consecutive same-direction signals needed before entering a trade"></div>
+            <div><label style="color:#d29922;font-size:10px">Exit Confirm</label><input type="number" id="cortex-exit-confirm" value="2" min="1" max="50" step="1" class="edit-input" style="width:100%;border-color:#d29922" title="Consecutive opposite signals needed before closing by signal"></div>
+          </div>
+          <div id="cortex-size-preview" style="font-size:10px;color:#bc8cff;padding:4px 6px;background:#0d1117;border-radius:3px;margin-top:4px">Auto: size scales 0.5 - 2.0 based on signal strength</div>
+          <div style="margin-top:10px;padding:8px;background:#0d1117;border:1px solid #bc8cff44;border-radius:6px">
+            <h3 style="margin:0 0 6px 0;font-size:12px;color:#bc8cff;display:flex;align-items:center;gap:6px">Volume Antenna <span style="font-size:9px;padding:1px 6px;background:#bc8cff22;border-radius:8px;color:#bc8cff">Pressure Sensing</span></h3>
+            <div id="antenna-pressure-panel" style="margin-bottom:8px;padding:4px;background:#161b22;border-radius:4px;min-height:40px">
+              <div style="color:#484f58;text-align:center;padding:6px;font-size:10px">Tick data accumulating...</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px;font-size:10px">
+              <div><label style="color:#bc8cff;font-size:9px">Flash Thresh</label><input type="number" id="antenna-flash-thresh" value="3.0" min="0.5" max="10" step="0.5" class="edit-input" style="width:100%;border-color:#bc8cff" title="Flash crash/breakout score threshold to trigger emergency actions"></div>
+              <div><label style="color:#bc8cff;font-size:9px">Dead Cat Sens</label><input type="number" id="antenna-deadcat-sens" value="0.5" min="0.1" max="3" step="0.1" class="edit-input" style="width:100%;border-color:#bc8cff" title="Dead cat bounce sensitivity — lower = more sensitive"></div>
+              <div style="display:flex;align-items:end;gap:4px"><input type="checkbox" id="antenna-emergency" checked style="accent-color:#bc8cff"><label style="color:#bc8cff;font-size:9px" for="antenna-emergency">Emergency Exit</label></div>
+              <div style="display:flex;align-items:end;gap:4px"><input type="checkbox" id="antenna-breakout" checked style="accent-color:#bc8cff"><label style="color:#bc8cff;font-size:9px" for="antenna-breakout">Breakout Rider</label></div>
+              <div style="display:flex;align-items:end;gap:4px"><input type="checkbox" id="antenna-knife" checked style="accent-color:#bc8cff"><label style="color:#bc8cff;font-size:9px" for="antenna-knife">Knife Block</label></div>
+            </div>
+          </div>
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <h3 style="margin:0;font-size:12px;color:#58a6ff">Cortex Decision Monitor</h3>
+              <span id="cortex-monitor-count" style="font-size:10px;color:#8b949e">0 decisions</span>
+            </div>
+            <div id="cortex-decision-monitor" style="max-height:200px;overflow-y:auto;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:4px;font-family:monospace;font-size:10px">
+              <div style="color:#484f58;text-align:center;padding:8px">Enable auto-trade to see live decisions</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 style="display:flex;align-items:center;gap:8px">Cortex Trade Log <span style="font-size:10px;padding:2px 8px;background:#2dc65322;color:#2dc653;border-radius:8px">Auto-Executed</span></h2>
+          <div id="cortex-trade-log" style="max-height:250px;overflow-y:auto;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px">
+            <div style="color:#484f58;text-align:center;padding:8px;font-size:11px">No auto-trades executed yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Training Controls</h2>
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+            <button class="btn-sm" id="neural-training-toggle" onclick="toggleTrainingMode()" style="background:#3d1a1a;color:#f85149;border-color:#f85149;padding:8px 16px;font-weight:700">Training OFF</button>
+            <span style="font-size:11px;color:#8b949e" id="neural-training-status">Inactive</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button class="btn-sm" onclick="sendTrainingFeedback('sugar')" style="flex:1;background:#1b4332;color:#2dc653;border-color:#2dc653;padding:10px;font-weight:700;font-size:13px">SUGAR</button>
+            <button class="btn-sm" onclick="sendTrainingFeedback('pain')" style="flex:1;background:#3d1a1a;color:#f85149;border-color:#f85149;padding:10px;font-weight:700;font-size:13px">PAIN</button>
+          </div>
+          <div style="font-size:10px;color:#8b949e;padding:4px;background:#0d1117;border-radius:3px">Sugar = reinforce current behavior. Pain = suppress current behavior.</div>
+        </div>
+        <div class="card">
+          <h2>Calibration</h2>
+          <div style="font-size:12px;margin-bottom:6px"><label style="color:#8b949e">Synaptic Weight: <span id="neural-wsyn-val">12.0</span>x</label><br><input type="range" id="neural-cal-wsyn" min="0.5" max="25.0" value="12.0" step="0.5" style="width:100%" oninput="document.getElementById('neural-wsyn-val').textContent=parseFloat(this.value).toFixed(1)"></div>
+          <div style="font-size:12px;margin-bottom:6px"><label style="color:#8b949e">Poisson Rate: <span id="neural-rpoi-val">150</span> Hz</label><br><input type="range" id="neural-cal-rpoi" min="0" max="500" value="150" step="10" style="width:100%" oninput="document.getElementById('neural-rpoi-val').textContent=this.value"></div>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn-sm" onclick="applyNeuralCalibrationSliders()">Apply</button>
+            <button class="btn-sm" onclick="brainObserve().then(function(r){if(r){updateBrainSignals(r);addBrainLog('INFO','Observe: buy='+r.buy_signal.toFixed(1)+' sell='+r.sell_signal.toFixed(1)+' hold='+r.hold_signal.toFixed(1));}else addBrainLog('ERROR','Observe failed')})">Observe</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2 style="display:flex;align-items:center;gap:8px">Auto-Calibration <span style="font-size:10px;padding:2px 8px;background:#1a1028;color:#bc8cff;border-radius:8px">Automated Signal Tuning</span></h2>
+        <div style="font-size:11px;color:#8b949e;margin-bottom:10px">Automatically observes baseline motor rates, calculates signal thresholds, then executes test trades to calibrate the brain. Phase 1: Observe baseline (10-20 observations). Phase 2: Execute calibration trades when motor rate exceeds threshold.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Mode</div>
+            <select id="neural-calibration-mode" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px">
+              <option value="live" selected>Live (10 observations)</option>
+              <option value="backdata">Back Data (20 observations)</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Baseline Rate</div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:13px;font-weight:600;color:#58a6ff;text-align:center" id="neural-calib-baseline">--</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Threshold</div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:13px;font-weight:600;color:#d29922;text-align:center" id="neural-calib-threshold">--</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Calibration Trades</div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:13px;font-weight:600;color:#2dc653;text-align:center" id="neural-calib-trades">0</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Status</div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px;color:#8b949e;text-align:center" id="neural-calibration-status">Not started</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-sm" id="neural-calibration-start" onclick="startCalibration()" style="background:#1a1028;color:#bc8cff;border-color:#bc8cff;padding:6px 16px;font-weight:600">Start Auto-Calibration</button>
+          <button class="btn-sm" id="neural-calibration-stop" onclick="stopCalibration()" style="display:none;background:#3d1a1a;color:#f85149;border-color:#f85149;padding:6px 16px;font-weight:600">Stop</button>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Brain Activity Monitor</h2>
+        <div id="brain-activity-log" style="height:180px;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px;overflow-y:auto;font-size:11px;font-family:monospace">
+          <div style="color:#484f58">[Waiting for brain activity...]</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-sm" onclick="exportBrainTradeCSV()">Export Trade CSV</button>
+          <button class="btn-sm" onclick="brainTradeLog=[];addBrainLog('INFO','Logs cleared');showToast('Logs cleared',true)">Clear Logs</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="neural-config" class="neural-sub-content" style="display:none">
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Brain Engine Status</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:#8b949e;text-transform:uppercase;margin-bottom:4px">Engine Status</div>
+            <div style="padding:10px;background:#0d1117;border:1px solid #21262d;border-radius:4px">
+              <span id="brain-config-indicator" class="badge badge-off" style="margin-right:8px">Brain</span>
+              <span id="brain-process-status" style="font-size:13px;font-weight:600;color:#8b949e">Checking...</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#8b949e;text-transform:uppercase;margin-bottom:4px">Controls</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn-sm" onclick="brainBoot().then(function(r){if(r)showToast('Brain booted',true);else showToast('Boot failed',false)})" style="background:#1b4332;color:#2dc653;border-color:#2dc653">Boot Brain</button>
+              <button class="btn-sm" onclick="brainFetch('/restart',{method:'POST'}).then(function(r){addBrainLog('INFO','Brain restarted');brainBoot()})">Restart Brain</button>
+              <button class="btn-sm" onclick="checkBrainProcessStatus()">Refresh Status</button>
+              <button class="btn-sm" onclick="brainFetch('/save',{method:'POST'}).then(function(r){if(r)showToast('Brain state saved',true)})">Save State</button>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#8b949e;padding:8px;background:#0d1117;border-radius:4px;border-left:3px solid #58a6ff;margin-bottom:12px">
+          Brain engine runs as an internal Node.js LIF (Leaky Integrate-and-Fire) spiking neural network with <b>dynamic architecture</b>. Configure neuron counts per region, use timeframe presets, or set custom sizes. Mushroom body cluster provides memory consolidation. Pattern memory persists across restarts. Use Network Architecture below to resize and benchmark.
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2 style="display:flex;align-items:center;gap:8px">Network Architecture <span id="arch-total-badge" style="font-size:11px;font-weight:400;color:#bc8cff;background:#1a1028;padding:2px 8px;border-radius:10px">-- neurons</span></h2>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:#8b949e;text-transform:uppercase;margin-bottom:4px">Timeframe Presets</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap" id="arch-presets">
+              <button class="btn-sm" onclick="applyArchPreset('1s')" style="font-size:10px">1s Scalp</button>
+              <button class="btn-sm" onclick="applyArchPreset('5s')" style="font-size:10px">5s Quick</button>
+              <button class="btn-sm" onclick="applyArchPreset('30s')" style="font-size:10px">30s Med</button>
+              <button class="btn-sm" onclick="applyArchPreset('1min')" style="font-size:10px">1min Full</button>
+              <button class="btn-sm" onclick="applyArchPreset('5min')" style="font-size:10px">5min Deep</button>
+              <button class="btn-sm" onclick="applyArchPreset('15min')" style="font-size:10px">15min Ultra</button>
+              <button class="btn-sm" onclick="applyArchPreset('custom')" style="font-size:10px;background:#1a1028;color:#bc8cff;border-color:#bc8cff">Custom</button>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#8b949e;text-transform:uppercase;margin-bottom:4px">Quick Info</div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px;font-family:monospace">
+              <div style="display:flex;justify-content:space-between"><span style="color:#8b949e">Synapses:</span><span id="arch-synapse-count" style="color:#d29922">--</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#8b949e">Est. tick time:</span><span id="arch-est-tick" style="color:#58a6ff">--</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#8b949e">Max tick rate:</span><span id="arch-max-rate" style="color:#2dc653">--</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:#f85149;text-transform:uppercase;font-weight:600;margin-bottom:4px">Sensory Neurons</div>
+            <input id="arch-sensory" type="number" min="10" max="50000" value="100" style="width:100%;padding:6px;background:#0d1117;border:1px solid #f85149;border-radius:4px;color:#c9d1d9;font-size:14px;font-weight:600;text-align:center" oninput="archRecalc()">
+            <div style="font-size:10px;color:#8b949e;margin-top:2px">Input layer (price, volume, spread)</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#2dc653;text-transform:uppercase;font-weight:600;margin-bottom:4px">Interneurons</div>
+            <input id="arch-inter" type="number" min="20" max="200000" value="200" style="width:100%;padding:6px;background:#0d1117;border:1px solid #2dc653;border-radius:4px;color:#c9d1d9;font-size:14px;font-weight:600;text-align:center" oninput="archRecalc()">
+            <div style="font-size:10px;color:#8b949e;margin-top:2px">Processing (inc. mushroom body)</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#58a6ff;text-transform:uppercase;font-weight:600;margin-bottom:4px">Motor Neurons</div>
+            <input id="arch-motor" type="number" min="6" max="30000" value="50" style="width:100%;padding:6px;background:#0d1117;border:1px solid #58a6ff;border-radius:4px;color:#c9d1d9;font-size:14px;font-weight:600;text-align:center" oninput="archRecalc()">
+            <div style="font-size:10px;color:#8b949e;margin-top:2px">Output (buy/sell/hold)</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn-sm" onclick="applyArchitecture()" style="background:#1b4332;color:#2dc653;border-color:#2dc653;padding:6px 16px">Apply & Reboot Brain</button>
+          <button class="btn-sm" onclick="runArchBenchmark()" id="arch-benchmark-btn" style="background:#1a1028;color:#bc8cff;border-color:#bc8cff;padding:6px 16px">Test Fire (Benchmark)</button>
+          <button class="btn-sm" onclick="loadArchitecture()" style="padding:6px 16px">Refresh from Brain</button>
+        </div>
+
+        <div id="arch-benchmark-result" style="display:none;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:4px;margin-bottom:12px;font-size:11px;font-family:monospace">
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Sensory Assignments</h2>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:8px">Assign sensory neuron groups to input tasks</div>
+          <div id="arch-sensory-assignments" style="font-size:12px">
+            <div style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #21262d;font-weight:600;color:#8b949e;font-size:10px"><span>Task</span><span>Start</span><span>Count</span><span>Description</span></div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#f85149;font-weight:600;font-size:11px">Price Up</span>
+              <span id="sa-price_up-start" style="color:#c9d1d9;font-size:11px">0</span>
+              <span id="sa-price_up-count" style="color:#c9d1d9;font-size:11px">20</span>
+              <span style="color:#8b949e;font-size:10px">Price increase detection</span>
+            </div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#2dc653;font-weight:600;font-size:11px">Price Down</span>
+              <span id="sa-price_down-start" style="color:#c9d1d9;font-size:11px">20</span>
+              <span id="sa-price_down-count" style="color:#c9d1d9;font-size:11px">20</span>
+              <span style="color:#8b949e;font-size:10px">Price decrease detection</span>
+            </div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#79c0ff;font-weight:600;font-size:11px">Volume</span>
+              <span id="sa-volume-start" style="color:#c9d1d9;font-size:11px">40</span>
+              <span id="sa-volume-count" style="color:#c9d1d9;font-size:11px">20</span>
+              <span style="color:#8b949e;font-size:10px">Volume / trade activity</span>
+            </div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#d29922;font-weight:600;font-size:11px">Spread</span>
+              <span id="sa-spread-start" style="color:#c9d1d9;font-size:11px">60</span>
+              <span id="sa-spread-count" style="color:#c9d1d9;font-size:11px">20</span>
+              <span style="color:#8b949e;font-size:10px">Spread width / liquidity</span>
+            </div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#bc8cff;font-weight:600;font-size:11px">Momentum</span>
+              <span id="sa-momentum-start" style="color:#c9d1d9;font-size:11px">80</span>
+              <span id="sa-momentum-count" style="color:#c9d1d9;font-size:11px">10</span>
+              <span style="color:#8b949e;font-size:10px">Price acceleration</span>
+            </div>
+            <div class="sensory-row" style="display:grid;grid-template-columns:90px 50px 50px 1fr;gap:4px;margin-bottom:3px;align-items:center">
+              <span style="color:#ff7b72;font-weight:600;font-size:11px">Antenna</span>
+              <span id="sa-antenna-start" style="color:#c9d1d9;font-size:11px">90</span>
+              <span id="sa-antenna-count" style="color:#c9d1d9;font-size:11px">10</span>
+              <span style="color:#8b949e;font-size:10px">Pressure (vol spikes, rapid moves)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Mushroom Body</h2>
+          <div style="font-size:11px;color:#8b949e;margin-bottom:8px">Memory consolidation cluster within interneurons</div>
+          <div style="font-size:12px">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;color:#c9d1d9">
+              <input type="checkbox" id="arch-mb-enabled" checked onchange="archRecalc()"> Enabled
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Size (% of interneurons)</div>
+                <input id="arch-mb-pct" type="number" min="5" max="50" value="20" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center" oninput="archRecalc()">
+              </div>
+              <div>
+                <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Internal connectivity</div>
+                <input id="arch-mb-conn" type="number" min="0.05" max="0.8" step="0.05" value="0.3" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center" oninput="archRecalc()">
+              </div>
+            </div>
+            <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px">
+              <div style="display:flex;justify-content:space-between"><span style="color:#8b949e">MB neurons:</span><span id="arch-mb-count" style="color:#bc8cff">40</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:#8b949e">MB range:</span><span id="arch-mb-range" style="color:#bc8cff">inter[0..39]</span></div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#484f58;margin-top:8px">Stronger internal connections = better pattern retention. Higher connectivity = slower but more accurate recall.</div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Motor Region Layout</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div style="padding:8px;background:#0d1117;border:1px solid #2dc653;border-radius:4px;text-align:center">
+            <div style="color:#2dc653;font-weight:600;font-size:13px">BUY</div>
+            <div id="arch-motor-buy" style="color:#8b949e;font-size:11px">motor[0..16]</div>
+            <div id="arch-motor-buy-count" style="color:#c9d1d9;font-size:12px;font-weight:600">17 neurons</div>
+          </div>
+          <div style="padding:8px;background:#0d1117;border:1px solid #f85149;border-radius:4px;text-align:center">
+            <div style="color:#f85149;font-weight:600;font-size:13px">SELL</div>
+            <div id="arch-motor-sell" style="color:#8b949e;font-size:11px">motor[17..33]</div>
+            <div id="arch-motor-sell-count" style="color:#c9d1d9;font-size:12px;font-weight:600">17 neurons</div>
+          </div>
+          <div style="padding:8px;background:#0d1117;border:1px solid #d29922;border-radius:4px;text-align:center">
+            <div style="color:#d29922;font-weight:600;font-size:13px">HOLD</div>
+            <div id="arch-motor-hold" style="color:#8b949e;font-size:11px">motor[34..49]</div>
+            <div id="arch-motor-hold-count" style="color:#c9d1d9;font-size:12px;font-weight:600">16 neurons</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Timeframe Budget Calculator</h2>
+        <div style="font-size:11px;color:#8b949e;margin-bottom:8px">How many simulation steps you can run per candle at the current network size</div>
+        <div id="arch-timeframe-table" style="font-size:11px">
+          <div style="display:grid;grid-template-columns:80px 90px 90px 80px 60px;gap:4px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #21262d;font-weight:600;color:#8b949e;font-size:10px">
+            <span>Timeframe</span><span>Budget (ms)</span><span>Steps possible</span><span>Utilization</span><span>Fits?</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2 style="display:flex;align-items:center;gap:8px">Neural Training <span id="nt-mode-badge" style="font-size:11px;font-weight:400;color:#8b949e;background:#161b22;padding:2px 8px;border-radius:10px">Backtest</span></h2>
+        <div style="font-size:11px;color:#8b949e;margin-bottom:8px">Train the brain on historical data (backtest) or live incoming ticks. Auto-test mode runs autonomous cycles with calibration.</div>
+
+        <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid #21262d;padding-bottom:8px">
+          <button class="btn-sm nt-mode-btn" id="nt-mode-backtest" onclick="switchTrainMode('backtest')" style="background:#1b4332;color:#2dc653;border-color:#2dc653;font-size:11px;padding:4px 12px">Backtest Training</button>
+          <button class="btn-sm nt-mode-btn" id="nt-mode-live" onclick="switchTrainMode('live')" style="font-size:11px;padding:4px 12px">Live Training</button>
+          <button class="btn-sm nt-mode-btn" id="nt-mode-auto" onclick="switchTrainMode('auto')" style="font-size:11px;padding:4px 12px">Auto Test</button>
+        </div>
+
+        <div id="nt-backtest-panel">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Instrument</div>
+              <div style="font-size:12px;color:#58a6ff;font-weight:600" id="bt-train-epic">--</div>
+              <div style="font-size:10px;color:#484f58">Select above ↑</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Timeframe</div>
+              <select id="bt-train-tf" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px">
+                <option value="SECOND">Tick/1s</option><option value="SECOND_2">2s</option><option value="SECOND_5">5s</option><option value="SECOND_10">10s</option><option value="SECOND_30">30s</option><option value="MINUTE" selected>1min</option><option value="MINUTE_2">2min</option><option value="MINUTE_3">3min</option><option value="MINUTE_5">5min</option><option value="MINUTE_15">15min</option><option value="MINUTE_30">30min</option><option value="HOUR">1h</option><option value="HOUR_4">4h</option><option value="DAY">1D</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Candles</div>
+              <input id="bt-train-candles" type="number" min="50" max="5000" value="500" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+            </div>
+          </div>
+        </div>
+
+        <div id="nt-live-panel" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Instrument</div>
+              <div style="font-size:12px;color:#58a6ff;font-weight:600" id="lt-train-epic">--</div>
+              <div style="font-size:10px;color:#484f58">Select above ↑</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Candle Timeframe</div>
+              <select id="lt-train-tf" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px">
+                <option value="0">Tick</option><option value="1" selected>1s</option><option value="2">2s</option><option value="5">5s</option><option value="10">10s</option><option value="30">30s</option><option value="60">1min</option><option value="120">2min</option><option value="180">3min</option><option value="300">5min</option><option value="900">15min</option><option value="1800">30min</option><option value="3600">1h</option><option value="14400">4h</option><option value="86400">1D</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Tick Source</div>
+              <div id="lt-tick-source" style="font-size:11px;color:#d29922;padding:4px;background:#0d1117;border:1px solid #21262d;border-radius:4px;text-align:center">Waiting...</div>
+            </div>
+          </div>
+          <div style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px;margin-bottom:12px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+              <div><span style="color:#8b949e">Ticks collected:</span> <span id="lt-ticks-collected" style="color:#58a6ff">0</span></div>
+              <div><span style="color:#8b949e">Candles built:</span> <span id="lt-candles-built" style="color:#2dc653">0</span></div>
+              <div><span style="color:#8b949e">Trades:</span> <span id="lt-trades-count" style="color:#d29922">0</span></div>
+              <div><span style="color:#8b949e">P&L:</span> <span id="lt-train-pnl" style="color:#c9d1d9">0.00</span></div>
+            </div>
+            <div id="lt-candle-hint" style="color:#484f58;margin-top:4px;display:none"></div>
+          </div>
+        </div>
+
+        <div id="nt-auto-panel" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Cycles</div>
+              <input id="at-cycles" type="number" min="1" max="100" value="5" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Candles/Cycle</div>
+              <input id="at-candles" type="number" min="50" max="2000" value="250" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Auto-tune every N cycles</div>
+              <input id="at-tune-interval" type="number" min="1" max="50" value="2" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+            </div>
+            <div>
+              <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Target win rate %</div>
+              <input id="at-target-wr" type="number" min="40" max="90" value="55" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+            </div>
+          </div>
+          <div id="at-status" style="padding:6px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px;font-family:monospace;margin-bottom:12px">
+            <div style="color:#484f58">Auto-test not started. Will run backtest cycles, auto-tune w_syn/r_poi after each interval, and report best settings.</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:8px">
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Stop Loss %</div>
+            <input id="bt-train-sl" type="number" min="0.1" max="10" step="0.1" value="1.0" style="width:100%;padding:4px;background:#0d1117;border:1px solid #f85149;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Take Profit %</div>
+            <input id="bt-train-tp" type="number" min="0.1" max="20" step="0.1" value="2.0" style="width:100%;padding:4px;background:#0d1117;border:1px solid #2dc653;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">Trade Size</div>
+            <input id="bt-train-size" type="number" min="0.1" max="100" step="0.1" value="1" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#8b949e;margin-bottom:2px">P&L Multiplier</div>
+            <input id="bt-train-plm" type="number" min="0.01" max="100000" step="0.01" value="1" style="width:100%;padding:4px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-size:10px;color:#d29922;margin-bottom:2px">Min Hold (candles)</div>
+            <input id="bt-train-hold" type="number" min="0" max="500" step="1" value="5" style="width:100%;padding:4px;background:#0d1117;border:1px solid #d29922;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center" title="Minimum candles to hold before a signal can close the trade. SL/TP still fire immediately.">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#d29922;margin-bottom:2px">Signal Threshold</div>
+            <input id="bt-train-thresh" type="number" min="1" max="100" step="1" value="10" style="width:100%;padding:4px;background:#0d1117;border:1px solid #d29922;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center" title="Minimum signal strength needed to open a trade (higher = fewer trades, more selective)">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#d29922;margin-bottom:2px">Confirm (candles)</div>
+            <input id="bt-train-confirm" type="number" min="1" max="50" step="1" value="3" style="width:100%;padding:4px;background:#0d1117;border:1px solid #d29922;border-radius:4px;color:#c9d1d9;font-size:12px;text-align:center" title="Consecutive candles with the same signal required before entering a trade">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn-sm" id="bt-train-start" onclick="startTraining()" style="background:#1b4332;color:#2dc653;border-color:#2dc653;padding:6px 16px">Start Training</button>
+          <button class="btn-sm" id="bt-train-stop" onclick="stopTraining()" style="display:none;background:#3d1a1a;color:#f85149;border-color:#f85149;padding:6px 16px">Stop</button>
+          <button class="btn-sm" id="bt-proof-test" onclick="runProofTest()" style="background:#1a1028;color:#bc8cff;border-color:#bc8cff;padding:6px 16px">Proof Test (Buy/Sell)</button>
+        </div>
+        <div id="bt-train-progress" style="display:none;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:4px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="color:#8b949e;font-size:11px">Progress:</span>
+            <span id="bt-train-pct" style="color:#58a6ff;font-size:11px">0%</span>
+          </div>
+          <div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden"><div id="bt-train-bar" style="height:100%;width:0%;background:#58a6ff;transition:width 0.3s"></div></div>
+        </div>
+        <div id="bt-train-results" style="display:none;padding:8px;background:#0d1117;border:1px solid #21262d;border-radius:4px;font-size:11px;font-family:monospace">
+        </div>
+        <div id="lt-trade-history" style="display:none;padding:8px;background:#0d1117;border:1px solid #d29922;border-radius:4px;font-size:11px;font-family:monospace;margin-top:12px;max-height:400px;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="color:#d29922;font-weight:600;font-size:12px">Trade History (Live Training)</div>
+            <div id="lt-trade-summary" style="font-size:10px;color:#8b949e"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:40px 50px 90px 90px 70px 60px;gap:4px;padding-bottom:4px;border-bottom:1px solid #21262d;font-weight:600;color:#8b949e;font-size:9px"><span>#</span><span>Dir</span><span>Entry</span><span>Exit</span><span>P&L</span><span>Reason</span></div>
+          <div id="lt-trade-rows"></div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Brain Activity Logs</h2>
+        <div id="brain-config-log" style="height:250px;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px;overflow-y:auto;font-size:11px;font-family:monospace">
+          <div style="color:#484f58">[Brain logs will appear here...]</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="neural-console" class="neural-sub-content" style="display:none">
+      <div class="card full" style="margin-bottom:16px">
+        <h2>Developer Console <span style="font-size:11px;color:#8b949e;font-weight:400">(all neural trading logs)</span></h2>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn-sm" onclick="document.getElementById('neural-dev-console').innerHTML='';devLog('INFO','Console cleared')">Clear</button>
+          <button class="btn-sm" onclick="checkBrainProcessStatus();loadAccountInfo();loadPatternMemory(neuralCurrentEpic);devLog('INFO','Refreshed all')">Refresh All</button>
+          <button class="btn-sm" onclick="brainGetHistory().then(function(h){if(h){devLog('DATA','Spike history: '+h.spike_history.length+' entries');devLog('DATA','Feedback log: '+h.feedback_log.length+' entries');h.spike_history.slice(-5).forEach(function(s){devLog('DATA','Step '+s.step+': '+s.count+' spikes')})}})">Brain History</button>
+        </div>
+        <div id="neural-dev-console" style="height:500px;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px;overflow-y:auto;font-size:11px;font-family:'SFMono-Regular',Consolas,monospace;line-height:1.5">
+          <div style="color:#484f58">Neural Trading Developer Console initialized</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="search-overlay" id="searchOverlay">
@@ -819,18 +1435,23 @@ function switchDashTab(tab) {
     populateBatchInstrumentList();
     loadBatchBacktestList();
   }
+  if (tab === 'neuralTrading') {
+    if (typeof initNeuralTradingTab === 'function') initNeuralTradingTab();
+  } else {
+    if (typeof stopNeuralTickPolling === 'function') stopNeuralTickPolling();
+  }
 }
-(function() {
+window.addEventListener('load', function() {
   var params = new URLSearchParams(window.location.search);
   var tab = params.get('tab');
   if (tab) {
-    var tabMap = { clawscript: 'clawscriptEditor', logs: 'logsSettings', bots: 'bots', backtest: 'backtest', agents: 'agents', dashboard: 'dashboard' };
+    var tabMap = { clawscript: 'clawscriptEditor', logs: 'logsSettings', bots: 'bots', backtest: 'backtest', agents: 'agents', dashboard: 'dashboard', neural: 'neuralTrading' };
     var mapped = tabMap[tab] || tab;
     if (document.getElementById(mapped + 'Tab')) {
       switchDashTab(mapped);
     }
   }
-})();
+});
 
 var priceChart = null;
 var candleSeries = null;
@@ -4437,6 +5058,7 @@ if (!chartOnlyMode) {
 <script src="/__openclaw__/canvas/ig-scalper-ui.js"></script>
 <script src="/__openclaw__/canvas/ig-clawscript-flow.js"></script>
 <script src="/__openclaw__/canvas/ig-clawscript-ui.js"></script>
+<script src="/__openclaw__/canvas/ig-neural-trading.js"></script>
 <script>
 loadStrategySchemas().then(function(s) { strategySchemas = s || {}; });
 loadClawScriptStrategyTypes();
