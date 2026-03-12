@@ -78,17 +78,35 @@ var antenna = {
   emergencyExitEnabled: true,
   breakoutRiderEnabled: true,
   fallingKnifeBlock: true,
-  lastPressure: null
+  lastPressure: null,
+  useSpreadMode: false,
+  baselineSpread: 0,
+  spreadHistory: []
 };
 
 function antennaPushTick(price, bid, ask, volume) {
   var now = Date.now();
   var prevTick = antenna.ticks.length > 0 ? antenna.ticks[antenna.ticks.length - 1] : null;
   var direction = prevTick ? (price > prevTick.price ? 1 : price < prevTick.price ? -1 : 0) : 0;
-  antenna.ticks.push({ ts: now, price: price, bid: bid, ask: ask, vol: volume || 0, dir: direction });
+  var spread = (ask > 0 && bid > 0) ? (ask - bid) : 0;
+  antenna.ticks.push({ ts: now, price: price, bid: bid, ask: ask, vol: volume || 0, spread: spread, dir: direction });
   while (antenna.ticks.length > 0 && now - antenna.ticks[0].ts > antenna.windowMs * 2) {
     antenna.ticks.shift();
   }
+  antenna.spreadHistory.push({ ts: now, spread: spread });
+  while (antenna.spreadHistory.length > 200) antenna.spreadHistory.shift();
+  if (antenna.spreadHistory.length >= 10 && antenna.baselineSpread === 0) {
+    var sum = 0;
+    for (var s = 0; s < antenna.spreadHistory.length; s++) sum += antenna.spreadHistory[s].spread;
+    antenna.baselineSpread = sum / antenna.spreadHistory.length;
+  } else if (antenna.spreadHistory.length >= 10) {
+    antenna.baselineSpread = antenna.baselineSpread * 0.99 + spread * 0.01;
+  }
+  var hasVolume = false;
+  for (var vi = Math.max(0, antenna.ticks.length - 10); vi < antenna.ticks.length; vi++) {
+    if (antenna.ticks[vi].vol > 0) { hasVolume = true; break; }
+  }
+  antenna.useSpreadMode = !hasVolume;
   if (price > antenna.recentHigh || now - antenna.recentHighTs > 120000) {
     antenna.recentHigh = price;
     antenna.recentHighTs = now;
@@ -107,15 +125,32 @@ function antennaComputePressure() {
   var prevRate = prevTicks.length > 0 ? prevTicks.length / (antenna.windowMs / 1000) : tickVelocity;
   var velocityAccel = prevRate > 0 ? (tickVelocity - prevRate) / prevRate : 0;
   var totalVol = 0; var upTicks = 0; var downTicks = 0;
+  var totalSpread = 0; var prevTotalSpread = 0;
+  var spreadDelta = 0; var avgSpread = 0; var prevAvgSpread = 0;
+  var maxSpread = 0; var minSpread = Infinity;
   for (var i = 0; i < windowTicks.length; i++) {
     totalVol += windowTicks[i].vol;
     if (windowTicks[i].dir > 0) upTicks++;
     if (windowTicks[i].dir < 0) downTicks++;
+    var tSpread = windowTicks[i].spread || 0;
+    totalSpread += tSpread;
+    if (tSpread > maxSpread) maxSpread = tSpread;
+    if (tSpread < minSpread) minSpread = tSpread;
   }
+  avgSpread = tickCount > 0 ? totalSpread / tickCount : 0;
+  for (var psi = 0; psi < prevTicks.length; psi++) {
+    prevTotalSpread += (prevTicks[psi].spread || 0);
+  }
+  prevAvgSpread = prevTicks.length > 0 ? prevTotalSpread / prevTicks.length : avgSpread;
+  spreadDelta = tickCount >= 2 ? (windowTicks[tickCount - 1].spread || 0) - (windowTicks[0].spread || 0) : 0;
+  var spreadAccel = prevAvgSpread > 0.001 ? (avgSpread - prevAvgSpread) / prevAvgSpread : 0;
+  var spreadSpikeRatio = antenna.baselineSpread > 0.001 ? avgSpread / antenna.baselineSpread : 1;
   var buySellRatio = (upTicks + downTicks) > 0 ? upTicks / (upTicks + downTicks) : 0.5;
   var prevTotalVol = 0;
   for (var j = 0; j < prevTicks.length; j++) prevTotalVol += prevTicks[j].vol;
   var volumeAccel = prevTotalVol > 0 ? (totalVol - prevTotalVol) / prevTotalVol : 0;
+  var useSpread = antenna.useSpreadMode;
+  var effectiveAccel = useSpread ? spreadAccel : volumeAccel;
   var priceDelta = 0; var priceRange = 0;
   if (windowTicks.length >= 2) {
     priceDelta = windowTicks[windowTicks.length - 1].price - windowTicks[0].price;
@@ -127,17 +162,29 @@ function antennaComputePressure() {
     priceRange = hi - lo;
   }
   var absorptionScore = 0;
-  if (totalVol > 0 && priceRange > 0) {
-    var volPerMove = totalVol / (priceRange + 0.001);
-    absorptionScore = Math.min(volPerMove / 50, 3.0);
-  } else if (tickCount > 5 && priceRange < 0.5) {
-    absorptionScore = Math.min(tickCount / 10, 2.0);
+  if (useSpread) {
+    if (spreadSpikeRatio > 1.5 && priceRange > 0 && priceRange < avgSpread * 2) {
+      absorptionScore = Math.min((spreadSpikeRatio - 1) * 2, 3.0);
+    } else if (tickCount > 5 && priceRange < avgSpread * 0.5) {
+      absorptionScore = Math.min(tickCount / 10, 2.0);
+    }
+  } else {
+    if (totalVol > 0 && priceRange > 0) {
+      var volPerMove = totalVol / (priceRange + 0.001);
+      absorptionScore = Math.min(volPerMove / 50, 3.0);
+    } else if (tickCount > 5 && priceRange < 0.5) {
+      absorptionScore = Math.min(tickCount / 10, 2.0);
+    }
   }
   var priceVelocity = elapsed > 0 ? Math.abs(priceDelta) / elapsed : 0;
   var flashCrashScore = 0;
   if (tickVelocity > 1 && priceVelocity > 0) {
     flashCrashScore = (tickVelocity * priceVelocity) / 10;
-    if (volumeAccel > 1) flashCrashScore *= (1 + volumeAccel);
+    if (useSpread) {
+      if (spreadSpikeRatio > 2.0) flashCrashScore *= spreadSpikeRatio;
+    } else {
+      if (volumeAccel > 1) flashCrashScore *= (1 + volumeAccel);
+    }
     flashCrashScore = Math.min(flashCrashScore, 5.0);
   }
   var deadCatScore = 0;
@@ -148,38 +195,72 @@ function antennaComputePressure() {
     if (dropFromHigh > 0 && bounceFromLow > 0) {
       var bounceRatio = bounceFromLow / dropFromHigh;
       if (bounceRatio > 0.1 && bounceRatio < 0.5) {
-        var recentVol = 0;
-        var dropVol = 0;
-        var midTs = now - antenna.windowMs / 2;
-        for (var m = 0; m < windowTicks.length; m++) {
-          if (windowTicks[m].ts > midTs) recentVol += windowTicks[m].vol || 1;
-          else dropVol += windowTicks[m].vol || 1;
-        }
-        var volRatio = dropVol > 0 ? recentVol / dropVol : 1;
-        if (volRatio < 0.7) {
-          deadCatScore = (1 - volRatio) * (1 - bounceRatio) * 3;
-          deadCatScore = Math.min(deadCatScore, 3.0);
+        if (useSpread) {
+          var midTs = now - antenna.windowMs / 2;
+          var recentSprdAvg = 0; var dropSprdAvg = 0; var rCnt = 0; var dCnt = 0;
+          for (var ms = 0; ms < windowTicks.length; ms++) {
+            if (windowTicks[ms].ts > midTs) { recentSprdAvg += (windowTicks[ms].spread || 0); rCnt++; }
+            else { dropSprdAvg += (windowTicks[ms].spread || 0); dCnt++; }
+          }
+          recentSprdAvg = rCnt > 0 ? recentSprdAvg / rCnt : 0;
+          dropSprdAvg = dCnt > 0 ? dropSprdAvg / dCnt : recentSprdAvg;
+          var spreadContracting = dropSprdAvg > 0 ? recentSprdAvg / dropSprdAvg : 1;
+          if (spreadContracting < 0.7) {
+            deadCatScore = (1 - spreadContracting) * (1 - bounceRatio) * 3;
+            deadCatScore = Math.min(deadCatScore, 3.0);
+          }
+        } else {
+          var recentVol = 0;
+          var dropVol = 0;
+          var midTs2 = now - antenna.windowMs / 2;
+          for (var m = 0; m < windowTicks.length; m++) {
+            if (windowTicks[m].ts > midTs2) recentVol += windowTicks[m].vol || 1;
+            else dropVol += windowTicks[m].vol || 1;
+          }
+          var volRatio = dropVol > 0 ? recentVol / dropVol : 1;
+          if (volRatio < 0.7) {
+            deadCatScore = (1 - volRatio) * (1 - bounceRatio) * 3;
+            deadCatScore = Math.min(deadCatScore, 3.0);
+          }
         }
       }
     }
   }
   var fallingKnifeScore = 0;
-  if (priceDelta < 0 && volumeAccel > 0.3) {
-    fallingKnifeScore = Math.min(Math.abs(priceDelta) * volumeAccel / 5, 3.0);
+  if (useSpread) {
+    if (priceDelta < 0 && spreadSpikeRatio > 1.5) {
+      fallingKnifeScore = Math.min(Math.abs(priceDelta) * (spreadSpikeRatio - 1) / 3, 3.0);
+    }
+  } else {
+    if (priceDelta < 0 && volumeAccel > 0.3) {
+      fallingKnifeScore = Math.min(Math.abs(priceDelta) * volumeAccel / 5, 3.0);
+    }
   }
   var divergenceScore = 0;
   if (windowTicks.length >= 3) {
     var lastP = windowTicks[windowTicks.length - 1].price;
     var isNewHigh = lastP >= antenna.recentHigh * 0.999;
     var isNewLow = lastP <= antenna.recentLow * 1.001;
-    if ((isNewHigh || isNewLow) && volumeAccel < -0.2) {
-      divergenceScore = Math.min(Math.abs(volumeAccel) * 2, 3.0);
+    if (useSpread) {
+      if ((isNewHigh || isNewLow) && spreadSpikeRatio > 1.8) {
+        divergenceScore = Math.min((spreadSpikeRatio - 1) * 1.5, 3.0);
+      }
+    } else {
+      if ((isNewHigh || isNewLow) && volumeAccel < -0.2) {
+        divergenceScore = Math.min(Math.abs(volumeAccel) * 2, 3.0);
+      }
     }
   }
   var pressure = {
     tickVelocity: tickVelocity,
     velocityAccel: velocityAccel,
     volumeAccel: volumeAccel,
+    spreadAccel: spreadAccel,
+    spreadDelta: spreadDelta,
+    avgSpread: avgSpread,
+    spreadSpikeRatio: spreadSpikeRatio,
+    useSpreadMode: useSpread,
+    effectiveAccel: effectiveAccel,
     buySellRatio: buySellRatio,
     absorptionScore: absorptionScore,
     flashCrashScore: flashCrashScore,
@@ -240,12 +321,14 @@ function antennaShouldBlockEntry(pressure, signal) {
       return 'Falling knife (score=' + pressure.fallingKnifeScore.toFixed(1) + ') — blocking BUY';
     }
     if (pressure.divergenceScore >= 1.5 && pressure.buySellRatio < 0.45) {
-      return 'Volume divergence at high (div=' + pressure.divergenceScore.toFixed(1) + ') — blocking BUY';
+      var divType = pressure.useSpreadMode ? 'Spread' : 'Volume';
+      return divType + ' divergence at high (div=' + pressure.divergenceScore.toFixed(1) + ') — blocking BUY';
     }
   }
   if (signal === 'SELL') {
     if (pressure.divergenceScore >= 1.5 && pressure.buySellRatio > 0.55) {
-      return 'Volume divergence at low (div=' + pressure.divergenceScore.toFixed(1) + ') — blocking SELL';
+      var divType2 = pressure.useSpreadMode ? 'Spread' : 'Volume';
+      return divType2 + ' divergence at low (div=' + pressure.divergenceScore.toFixed(1) + ') — blocking SELL';
     }
   }
   return null;
@@ -256,12 +339,19 @@ function renderAntennaPressure(pressure) {
   if (!panel) return;
   var tvBar = Math.min(pressure.tickVelocity / 5 * 100, 100);
   var tvColor = pressure.tickVelocity > 3 ? '#f85149' : pressure.tickVelocity > 1.5 ? '#d29922' : '#2dc653';
-  var vaBar = Math.min(Math.abs(pressure.volumeAccel) * 50, 100);
-  var vaColor = pressure.volumeAccel > 0.5 ? '#f85149' : pressure.volumeAccel > 0 ? '#d29922' : '#58a6ff';
+  var useSpread = pressure.useSpreadMode;
+  var accelVal = useSpread ? pressure.spreadAccel : pressure.volumeAccel;
+  var vaBar = Math.min(Math.abs(accelVal) * 50, 100);
+  var vaColor = accelVal > 0.5 ? '#f85149' : accelVal > 0 ? '#d29922' : '#58a6ff';
+  var vaLabel = useSpread ? 'Spread Accel' : 'Vol Accel';
+  var vaDetail = useSpread
+    ? (pressure.avgSpread || 0).toFixed(2) + ' (' + (pressure.spreadSpikeRatio || 1).toFixed(1) + 'x)'
+    : (accelVal >= 0 ? '+' : '') + (accelVal * 100).toFixed(0) + '%';
   var bsBar = Math.abs(pressure.buySellRatio - 0.5) * 200;
   var bsColor = pressure.buySellRatio > 0.6 ? '#2dc653' : pressure.buySellRatio < 0.4 ? '#f85149' : '#8b949e';
   var bsLabel = pressure.buySellRatio > 0.55 ? 'BUY' : pressure.buySellRatio < 0.45 ? 'SELL' : 'NEUTRAL';
   var alerts = [];
+  if (useSpread) alerts.push('<span style="color:#bc8cff;font-size:9px">SPREAD MODE</span>');
   if (pressure.flashCrashScore >= antenna.flashThreshold) alerts.push('<span style="color:#f85149;font-weight:bold">FLASH ' + pressure.flashCrashScore.toFixed(1) + '</span>');
   if (pressure.deadCatScore >= 1.0) alerts.push('<span style="color:#d29922;font-weight:bold">DEAD CAT ' + pressure.deadCatScore.toFixed(1) + '</span>');
   if (pressure.fallingKnifeScore >= 1.0) alerts.push('<span style="color:#f85149">KNIFE ' + pressure.fallingKnifeScore.toFixed(1) + '</span>');
@@ -273,9 +363,9 @@ function renderAntennaPressure(pressure) {
       '<div><div style="color:#8b949e;font-size:10px;margin-bottom:2px">Tick Speed</div>' +
         '<div style="background:#21262d;border-radius:3px;height:14px;overflow:hidden"><div style="background:' + tvColor + ';height:100%;width:' + tvBar + '%;transition:width 0.3s"></div></div>' +
         '<div style="color:' + tvColor + ';font-size:10px;margin-top:1px">' + pressure.tickVelocity.toFixed(2) + '/s</div></div>' +
-      '<div><div style="color:#8b949e;font-size:10px;margin-bottom:2px">Vol Accel</div>' +
+      '<div><div style="color:' + (useSpread ? '#bc8cff' : '#8b949e') + ';font-size:10px;margin-bottom:2px">' + vaLabel + '</div>' +
         '<div style="background:#21262d;border-radius:3px;height:14px;overflow:hidden"><div style="background:' + vaColor + ';height:100%;width:' + vaBar + '%;transition:width 0.3s"></div></div>' +
-        '<div style="color:' + vaColor + ';font-size:10px;margin-top:1px">' + (pressure.volumeAccel >= 0 ? '+' : '') + (pressure.volumeAccel * 100).toFixed(0) + '%</div></div>' +
+        '<div style="color:' + vaColor + ';font-size:10px;margin-top:1px">' + vaDetail + '</div></div>' +
       '<div><div style="color:#8b949e;font-size:10px;margin-bottom:2px">Pressure</div>' +
         '<div style="background:#21262d;border-radius:3px;height:14px;overflow:hidden"><div style="background:' + bsColor + ';height:100%;width:' + bsBar + '%;transition:width 0.3s;margin-left:' + (pressure.buySellRatio >= 0.5 ? '50' : (50 - bsBar)) + '%"></div></div>' +
         '<div style="color:' + bsColor + ';font-size:10px;margin-top:1px">' + bsLabel + ' ' + (pressure.buySellRatio * 100).toFixed(0) + '%</div></div>' +
@@ -2747,6 +2837,14 @@ function initNeuralTradingTab() {
       var dd = document.getElementById('neural-instrument-results');
       var si2 = document.getElementById('neural-instrument-search');
       if (dd && si2 && !si2.contains(e.target) && !dd.contains(e.target)) dd.style.display = 'none';
+    });
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && neuralCurrentEpic && (liveTrainRunning || cortexAutoTradeEnabled)) {
+        if (!neuralTickPollInterval) {
+          addBrainLog('INFO', 'Tab visible again — resuming tick polling');
+          startNeuralTickPolling();
+        }
+      }
     });
   });
 }

@@ -1440,7 +1440,9 @@ function switchDashTab(tab) {
   if (tab === 'neuralTrading') {
     if (typeof initNeuralTradingTab === 'function') initNeuralTradingTab();
   } else {
-    if (typeof stopNeuralTickPolling === 'function') stopNeuralTickPolling();
+    var keepPolling = (typeof liveTrainRunning !== 'undefined' && liveTrainRunning) ||
+                      (typeof cortexAutoTradeEnabled !== 'undefined' && cortexAutoTradeEnabled);
+    if (!keepPolling && typeof stopNeuralTickPolling === 'function') stopNeuralTickPolling();
   }
 }
 window.addEventListener('load', function() {
