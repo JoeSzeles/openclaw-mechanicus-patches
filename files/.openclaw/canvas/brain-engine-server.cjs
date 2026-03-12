@@ -513,7 +513,16 @@ const BACKUP_INTERVAL_MS = 5 * 60 * 1000;
 let lastBackupTime = 0;
 
 function sanitizeEpic(epic) {
-  return epic.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return encodeURIComponent(epic).replace(/%/g, '_');
+}
+
+function atomicWrite(fpath, data) {
+  const tmp = fpath + '.tmp';
+  const fd = fs.openSync(tmp, 'w');
+  fs.writeSync(fd, data);
+  fs.fsyncSync(fd);
+  fs.closeSync(fd);
+  fs.renameSync(tmp, fpath);
 }
 
 function saveInstrumentPatterns(epic) {
@@ -532,7 +541,7 @@ function saveInstrumentPatterns(epic) {
       signals: mem.signals || [],
       savedAt: new Date().toISOString(),
     };
-    fs.writeFileSync(fpath, JSON.stringify(data));
+    atomicWrite(fpath, JSON.stringify(data));
   } catch (e) { console.error('[brain-engine] Failed to save patterns for ' + epic + ':', e.message); }
 }
 
@@ -608,7 +617,7 @@ function saveSynapseWeights() {
     if (!synapses || !synapses.length) return;
     const compact = synapses.map(s => [s.pre, s.post, +s.w.toFixed(6), +s.base_w.toFixed(6)]);
     const wpath = path.join(DATA_DIR, 'brain-weights.json');
-    fs.writeFileSync(wpath, JSON.stringify({
+    atomicWrite(wpath, JSON.stringify({
       architecture: { sensory: N_SENSORY, inter: N_INTER, motor: N_MOTOR },
       count: compact.length,
       weights: compact,
@@ -628,6 +637,16 @@ function loadSynapseWeights() {
         data.architecture.sensory + '/' + data.architecture.inter + '/' + data.architecture.motor +
         ' -> ' + N_SENSORY + '/' + N_INTER + '/' + N_MOTOR + '), weights discarded');
       return false;
+    }
+    for (var vi = 0; vi < data.weights.length; vi++) {
+      var row = data.weights[vi];
+      if (!Array.isArray(row) || row.length !== 4 ||
+          !Number.isFinite(row[0]) || !Number.isFinite(row[1]) ||
+          !Number.isFinite(row[2]) || !Number.isFinite(row[3]) ||
+          row[0] < 0 || row[0] >= N_TOTAL || row[1] < 0 || row[1] >= N_TOTAL) {
+        console.error('[brain-engine] Corrupt weight at index ' + vi + ', discarding all weights');
+        return false;
+      }
     }
     synapses = data.weights.map(w => ({ pre: w[0], post: w[1], w: w[2], base_w: w[3] }));
     console.log('[brain-engine] Restored ' + synapses.length + ' synapse weights from disk (saved ' + data.savedAt + ')');
@@ -650,7 +669,7 @@ function saveState() {
       instrumentList: Object.keys(patternMemory),
       savedAt: new Date().toISOString(),
     };
-    fs.writeFileSync(BRAIN_STATE_FILE, JSON.stringify(state));
+    atomicWrite(BRAIN_STATE_FILE, JSON.stringify(state));
     saveSynapseWeights();
     for (const epic of Object.keys(patternMemory)) {
       saveInstrumentPatterns(epic);
