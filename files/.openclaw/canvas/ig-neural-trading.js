@@ -2524,19 +2524,19 @@ async function _cortexAutoTradeCheckInner() {
       }
     }
 
-    try {
-      var posData = await apiFetch('/api/ig/positions');
-      var openCount = ((posData && posData.positions) || []).filter(function(p) { var e = (p.market && p.market.epic) || ''; return e === neuralCurrentEpic; }).length;
-      if (openCount >= cortexMaxOpenPositions) {
-        if (statusEl) { statusEl.textContent = 'Max positions (' + openCount + '/' + cortexMaxOpenPositions + ') | ' + currentSig; statusEl.style.color = '#d29922'; }
-        cortexAddDecision({ time: timeStr, action: 'MAX_POS', detail: openCount + '/' + cortexMaxOpenPositions + ' positions open | B=' + buy.toFixed(0) + ' S=' + sell.toFixed(0) });
-        return;
-      }
-    } catch (posErr) {}
-
     var signalConfirmed = cortexConsecutiveCount >= cortexConfirmCandles;
 
     if (rawSignal !== 'HOLD' && signalConfirmed) {
+      try {
+        var posData = await apiFetch('/api/ig/positions');
+        var openCount = ((posData && posData.positions) || []).filter(function(p) { var e = (p.market && p.market.epic) || ''; return e === neuralCurrentEpic; }).length;
+        if (openCount >= cortexMaxOpenPositions) {
+          if (statusEl) { statusEl.textContent = 'Max positions (' + openCount + '/' + cortexMaxOpenPositions + ') | ' + currentSig; statusEl.style.color = '#d29922'; }
+          cortexAddDecision({ time: timeStr, action: 'MAX_POS', detail: openCount + '/' + cortexMaxOpenPositions + ' positions open | B=' + buy.toFixed(0) + ' S=' + sell.toFixed(0) });
+          cortexConsecutiveCount = 0;
+          return;
+        }
+      } catch (posErr) {}
       var blockReason = antennaShouldBlockEntry(pressure, rawSignal);
       if (blockReason) {
         addBrainLog('ANTENNA', 'BLOCKED ' + rawSignal + ': ' + blockReason);
