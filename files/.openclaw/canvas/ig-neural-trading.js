@@ -32,8 +32,8 @@ var trainingModeActive = false;
 var patternMemoryCache = {};
 var cortexAutoTradeEnabled = false;
 var cortexAutoTradeInterval = null;
-var cortexBuyThreshold = 60;
-var cortexSellThreshold = 60;
+var cortexBuyThreshold = 10;
+var cortexSellThreshold = 10;
 var cortexHoldZone = 2;
 var cortexCooldownMs = 30000;
 var cortexLastTradeTs = 0;
@@ -598,6 +598,7 @@ async function loadAccountInfo() {
   }
 }
 
+
 function neuralProcessTick(tick) {
   neuralTickCount++;
   var el = document.getElementById('neural-tick-count');
@@ -606,9 +607,9 @@ function neuralProcessTick(tick) {
   var ask = parseFloat(tick.offer || tick.ask) || 0;
   var price = (bid + ask) / 2;
   if (price <= 0 && neuralLastPrice) price = neuralLastPrice;
-  if (price > 0) neuralLastPrice = price;
-  var volume = parseInt(tick.volume) || 0;
   var spread = (ask - bid).toFixed(5);
+  var volume = parseInt(tick.volume) || 0;
+  if (price > 0) neuralLastPrice = price;
   if (price > 0) antennaPushTick(price, bid, ask, volume);
   var now = new Date();
   var timeStr = now.toLocaleTimeString();
@@ -829,7 +830,8 @@ async function neuralBacktest() {
       var price = c.closePrice ? c.closePrice.bid : (c.bid || 0);
       var prevPrice = cp.closePrice ? cp.closePrice.bid : (cp.bid || 0);
       if (price > 0 && prevPrice > 0) {
-        var result = await brainStimulatePrice({ epic: neuralCurrentEpic, price: price, prevPrice: prevPrice, volume: c.lastTradedVolume || 0, spread: 0, pressure: antennaComputePressure() });
+        var candleVol = c.lastTradedVolume || 0;
+        var result = await brainStimulatePrice({ epic: neuralCurrentEpic, price: price, prevPrice: prevPrice, volume: candleVol, spread: Math.abs(price - prevPrice), pressure: antennaComputePressure() });
         if (result) {
           var action = result.buy_signal > result.sell_signal ? 'BUY' : 'SELL';
           var nextPrice = i + 1 < candles.length ? (candles[i + 1].closePrice ? candles[i + 1].closePrice.bid : candles[i + 1].bid) : price;
@@ -2195,8 +2197,8 @@ function toggleCortexAutoTrade() {
       cortexAutoTradeEnabled = false;
       return;
     }
-    cortexBuyThreshold = parseFloat((document.getElementById('cortex-buy-thresh') || {}).value) || 60;
-    cortexSellThreshold = parseFloat((document.getElementById('cortex-sell-thresh') || {}).value) || 60;
+    cortexBuyThreshold = parseFloat((document.getElementById('cortex-buy-thresh') || {}).value) || 10;
+    cortexSellThreshold = parseFloat((document.getElementById('cortex-sell-thresh') || {}).value) || 10;
     cortexCooldownMs = (parseFloat((document.getElementById('cortex-cooldown') || {}).value) || 60) * 1000;
     cortexMaxOpenPositions = parseInt((document.getElementById('cortex-max-pos') || {}).value) || 3;
     cortexMinPositionSize = parseFloat((document.getElementById('cortex-min-size') || {}).value) || 0.5;
@@ -2370,10 +2372,11 @@ async function _cortexAutoTradeCheckInner() {
     renderAntennaPressure(pressure);
 
     var prevP = cortexPrevPrice || openPrice || closePrice;
+    var cortexSpread = (highPrice && lowPrice) ? Math.abs(highPrice - lowPrice) : Math.abs(closePrice - (prevP || closePrice));
     var result = await brainFetch('/stimulate-price', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ epic: neuralCurrentEpic, price: closePrice, prevPrice: prevP, pressure: pressure })
+      body: JSON.stringify({ epic: neuralCurrentEpic, price: closePrice, prevPrice: prevP, volume: 0, spread: cortexSpread, pressure: pressure })
     });
     cortexPrevPrice = closePrice;
     if (!result) {
@@ -2588,7 +2591,7 @@ async function cortexAutoSelectTimeframe() {
       var result = await brainFetch('/stimulate-price', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ epic: neuralCurrentEpic, price: closeP, prevPrice: prev2 })
+        body: JSON.stringify({ epic: neuralCurrentEpic, price: closeP, prevPrice: prev2, volume: 0, spread: Math.abs(closeP - prev2), pressure: antennaComputePressure() })
       });
       if (result) {
         var spread = Math.abs((result.buy_signal || 0) - (result.sell_signal || 0));
