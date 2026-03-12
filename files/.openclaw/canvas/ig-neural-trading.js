@@ -84,11 +84,22 @@ var antenna = {
   spreadHistory: []
 };
 
+function resetAntennaState() {
+  antenna.ticks = [];
+  antenna.spreadHistory = [];
+  antenna.baselineSpread = 0;
+  antenna.useSpreadMode = false;
+  antenna.recentHigh = 0;
+  antenna.recentLow = Infinity;
+  antenna.recentHighTs = 0;
+  antenna.lastPressure = null;
+}
+
 function antennaPushTick(price, bid, ask, volume) {
   var now = Date.now();
   var prevTick = antenna.ticks.length > 0 ? antenna.ticks[antenna.ticks.length - 1] : null;
   var direction = prevTick ? (price > prevTick.price ? 1 : price < prevTick.price ? -1 : 0) : 0;
-  var spread = (ask > 0 && bid > 0) ? (ask - bid) : 0;
+  var spread = (ask > 0 && bid > 0) ? Math.max(0, ask - bid) : 0;
   antenna.ticks.push({ ts: now, price: price, bid: bid, ask: ask, vol: volume || 0, spread: spread, dir: direction });
   while (antenna.ticks.length > 0 && now - antenna.ticks[0].ts > antenna.windowMs * 2) {
     antenna.ticks.shift();
@@ -606,6 +617,7 @@ function neuralSelectInstrument(inst) {
   neuralTimeLabels = [];
   neuralTickCount = 0;
   neuralLastPrice = null;
+  resetAntennaState();
   stopNeuralTickPolling();
   startNeuralTickPolling();
   loadPatternMemory(inst.epic);
@@ -1808,6 +1820,7 @@ function startLiveTraining() {
   liveTrainCurrentTicks = [];
   liveTrainTickTimestamps = [];
   liveTrainTradeHistory = [];
+  resetAntennaState();
   var ltHistEl = document.getElementById('lt-trade-history');
   if (ltHistEl) ltHistEl.style.display = 'none';
   var ltRowsEl = document.getElementById('lt-trade-rows');
