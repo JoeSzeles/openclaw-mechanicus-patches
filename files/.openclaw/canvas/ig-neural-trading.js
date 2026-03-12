@@ -51,7 +51,7 @@ var cortexAutoLearn = true;
 var cortexCheckRunning = false;
 var cortexTimeframe = 'MINUTE_5';
 var cortexMinHoldCandles = 5;
-var cortexConfirmCandles = 3;
+var cortexConfirmCandles = 1;
 var cortexExitConfirmCandles = 2;
 var cortexConsecutiveSignal = null;
 var cortexConsecutiveCount = 0;
@@ -2211,7 +2211,7 @@ function toggleCortexAutoTrade() {
     cortexAutoLearn = (document.getElementById('cortex-auto-learn') || {}).checked !== false;
     cortexHoldZone = parseFloat((document.getElementById('cortex-hold-zone') || {}).value) || 2;
     cortexMinHoldCandles = parseInt((document.getElementById('cortex-min-hold') || {}).value) || 5;
-    cortexConfirmCandles = parseInt((document.getElementById('cortex-confirm') || {}).value) || 3;
+    cortexConfirmCandles = parseInt((document.getElementById('cortex-confirm') || {}).value) || 1;
     cortexExitConfirmCandles = parseInt((document.getElementById('cortex-exit-confirm') || {}).value) || 2;
     antenna.flashThreshold = parseFloat((document.getElementById('antenna-flash-thresh') || {}).value) || 3.0;
     antenna.deadCatSensitivity = parseFloat((document.getElementById('antenna-deadcat-sens') || {}).value) || 0.5;
