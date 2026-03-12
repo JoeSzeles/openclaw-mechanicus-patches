@@ -46,6 +46,8 @@ var cortexPositionSize = 0.5;
 var cortexAutoSize = true;
 var cortexStopLossPips = 50;
 var cortexTakeProfitPips = 100;
+var cortexPriceExitsEnabled = false;
+var cortexAutoLearn = true;
 var cortexCheckRunning = false;
 var cortexTimeframe = 'MINUTE_5';
 var cortexMinHoldCandles = 5;
@@ -2201,6 +2203,8 @@ function toggleCortexAutoTrade() {
     cortexPositionSize = cortexMinPositionSize;
     cortexStopLossPips = parseFloat((document.getElementById('cortex-sl') || {}).value) || 50;
     cortexTakeProfitPips = parseFloat((document.getElementById('cortex-tp') || {}).value) || 100;
+    cortexPriceExitsEnabled = (document.getElementById('cortex-price-exits') || {}).checked === true;
+    cortexAutoLearn = (document.getElementById('cortex-auto-learn') || {}).checked !== false;
     cortexHoldZone = parseFloat((document.getElementById('cortex-hold-zone') || {}).value) || 2;
     cortexMinHoldCandles = parseInt((document.getElementById('cortex-min-hold') || {}).value) || 5;
     cortexConfirmCandles = parseInt((document.getElementById('cortex-confirm') || {}).value) || 3;
@@ -2220,7 +2224,7 @@ function toggleCortexAutoTrade() {
     cortexDecisionLog = [];
     var monEl = document.getElementById('cortex-decision-monitor');
     if (monEl) monEl.innerHTML = '';
-    cortexAddDecision({ time: new Date().toLocaleTimeString(), action: 'START', detail: 'hold=' + cortexHoldZone + ' minHold=' + cortexMinHoldCandles + ' confirm=' + cortexConfirmCandles + ' exitConfirm=' + cortexExitConfirmCandles + ' | ANTENNA flash=' + antenna.flashThreshold + ' emrg=' + antenna.emergencyExitEnabled + ' breakout=' + antenna.breakoutRiderEnabled + ' knife=' + antenna.fallingKnifeBlock });
+    cortexAddDecision({ time: new Date().toLocaleTimeString(), action: 'START', detail: 'hold=' + cortexHoldZone + ' minHold=' + cortexMinHoldCandles + ' confirm=' + cortexConfirmCandles + ' exitConfirm=' + cortexExitConfirmCandles + ' | PriceTP/SL=' + cortexPriceExitsEnabled + ' AutoLearn=' + cortexAutoLearn + ' | ANTENNA flash=' + antenna.flashThreshold + ' emrg=' + antenna.emergencyExitEnabled + ' breakout=' + antenna.breakoutRiderEnabled + ' knife=' + antenna.fallingKnifeBlock });
     if (btn) { btn.textContent = 'AUTO-TRADE ON'; btn.style.background = '#1b4332'; btn.style.color = '#2dc653'; btn.style.borderColor = '#2dc653'; }
     if (statusEl) { statusEl.textContent = 'Active - monitoring ' + neuralCurrentEpic; statusEl.style.color = '#2dc653'; }
     cortexTimeframe = (document.getElementById('cortex-timeframe') || {}).value || 'MINUTE_5';
@@ -2401,8 +2405,10 @@ async function _cortexAutoTradeCheckInner() {
         var emergClosed = await cortexClosePosition(cortexOpenPosition);
         cortexAddDecision({ time: timeStr, action: 'EMERGENCY', detail: emergencyAction.reason + (emergClosed ? ' CLOSED OK' : ' CLOSE FAILED') });
         if (emergClosed) {
-          cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'EMRG CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel });
+          var emergPnl = cortexOpenPosition.direction === 'BUY' ? (closePrice - (cortexOpenPosition.entry || 0)) : ((cortexOpenPosition.entry || 0) - closePrice);
+          cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'EMRG CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel, pnl: emergPnl });
           renderCortexTradeLog();
+          if (cortexAutoLearn) { brainFeedback('pain'); addBrainLog('BRAIN', 'Auto-learn: PAIN for emergency close (' + emergPnl.toFixed(1) + ' pips)'); }
         }
         cortexOpenPosition = null;
         cortexExitConsecutiveCount = 0;
@@ -2447,6 +2453,40 @@ async function _cortexAutoTradeCheckInner() {
 
     if (cortexOpenPosition) {
       cortexOpenPosition.candlesHeld = (cortexOpenPosition.candlesHeld || 0) + 1;
+      var entryPrice = cortexOpenPosition.entry || 0;
+      var pnlPips = cortexOpenPosition.direction === 'BUY' ? (closePrice - entryPrice) : (entryPrice - closePrice);
+
+      if (cortexPriceExitsEnabled && entryPrice > 0) {
+        if (pnlPips >= cortexTakeProfitPips) {
+          addBrainLog('CORTEX', 'TAKE PROFIT hit: ' + pnlPips.toFixed(1) + ' pips >= ' + cortexTakeProfitPips + ' | ' + currentSig);
+          var tpClosed = await cortexClosePosition(cortexOpenPosition);
+          cortexAddDecision({ time: timeStr, action: 'TP CLOSE', detail: cortexOpenPosition.direction + ' +' + pnlPips.toFixed(1) + ' pips (TP=' + cortexTakeProfitPips + ') @ ' + closePrice.toFixed(2) + (tpClosed ? ' OK' : ' FAILED') });
+          if (tpClosed) {
+            cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'TP CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel, pnl: pnlPips });
+            renderCortexTradeLog();
+            if (cortexAutoLearn) { brainFeedback('sugar'); addBrainLog('BRAIN', 'Auto-learn: SUGAR for profitable TP close (+' + pnlPips.toFixed(1) + ' pips)'); }
+          }
+          cortexOpenPosition = null;
+          cortexExitConsecutiveCount = 0;
+          cortexLastTradeTs = Date.now();
+          return;
+        }
+        if (pnlPips <= -cortexStopLossPips) {
+          addBrainLog('CORTEX', 'STOP LOSS hit: ' + pnlPips.toFixed(1) + ' pips <= -' + cortexStopLossPips + ' | ' + currentSig);
+          var slClosed = await cortexClosePosition(cortexOpenPosition);
+          cortexAddDecision({ time: timeStr, action: 'SL CLOSE', detail: cortexOpenPosition.direction + ' ' + pnlPips.toFixed(1) + ' pips (SL=' + cortexStopLossPips + ') @ ' + closePrice.toFixed(2) + (slClosed ? ' OK' : ' FAILED') });
+          if (slClosed) {
+            cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'SL CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel, pnl: pnlPips });
+            renderCortexTradeLog();
+            if (cortexAutoLearn) { brainFeedback('pain'); addBrainLog('BRAIN', 'Auto-learn: PAIN for stop loss (' + pnlPips.toFixed(1) + ' pips)'); }
+          }
+          cortexOpenPosition = null;
+          cortexExitConsecutiveCount = 0;
+          cortexLastTradeTs = Date.now();
+          return;
+        }
+      }
+
       var oppSignal = cortexOpenPosition.direction === 'BUY' ? 'SELL' : 'BUY';
       if (rawSignal === oppSignal) {
         cortexExitConsecutiveCount++;
@@ -2457,10 +2497,14 @@ async function _cortexAutoTradeCheckInner() {
       if (canExitBySignal) {
         addBrainLog('CORTEX', 'CLOSING ' + cortexOpenPosition.direction + ' (signal reversal after ' + cortexOpenPosition.candlesHeld + ' candles) | ' + currentSig);
         var closedOk = await cortexClosePosition(cortexOpenPosition);
-        cortexAddDecision({ time: timeStr, action: 'CLOSED', detail: cortexOpenPosition.direction + ' after ' + cortexOpenPosition.candlesHeld + ' candles, exit=' + cortexExitConsecutiveCount + 'x ' + oppSignal + ' @ ' + closePrice.toFixed(2) + (closedOk ? ' OK' : ' FAILED') });
+        cortexAddDecision({ time: timeStr, action: 'CLOSED', detail: cortexOpenPosition.direction + ' after ' + cortexOpenPosition.candlesHeld + ' candles, exit=' + cortexExitConsecutiveCount + 'x ' + oppSignal + ' pnl=' + pnlPips.toFixed(1) + ' @ ' + closePrice.toFixed(2) + (closedOk ? ' OK' : ' FAILED') });
         if (closedOk) {
-          cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel });
+          cortexTradeLog.push({ ts: Date.now(), epic: neuralCurrentEpic, dir: 'CLOSE ' + cortexOpenPosition.direction, buy: buy, sell: sell, price: closePrice, size: cortexOpenPosition.size || cortexPositionSize, tf: tfLabel, pnl: pnlPips });
           renderCortexTradeLog();
+          if (cortexAutoLearn) {
+            if (pnlPips > 0) { brainFeedback('sugar'); addBrainLog('BRAIN', 'Auto-learn: SUGAR for profitable signal close (+' + pnlPips.toFixed(1) + ' pips)'); }
+            else { brainFeedback('pain'); addBrainLog('BRAIN', 'Auto-learn: PAIN for losing signal close (' + pnlPips.toFixed(1) + ' pips)'); }
+          }
         }
         cortexOpenPosition = null;
         cortexExitConsecutiveCount = 0;
@@ -2468,8 +2512,9 @@ async function _cortexAutoTradeCheckInner() {
         var holdReason = cortexOpenPosition.candlesHeld < cortexMinHoldCandles
           ? 'held ' + cortexOpenPosition.candlesHeld + '/' + cortexMinHoldCandles
           : 'exitConfirm ' + cortexExitConsecutiveCount + '/' + cortexExitConfirmCandles;
-        if (statusEl) { statusEl.textContent = 'HOLDING ' + cortexOpenPosition.direction + ' (' + holdReason + ') | ' + currentSig; statusEl.style.color = '#d29922'; }
-        cortexAddDecision({ time: timeStr, action: 'HOLDING', detail: cortexOpenPosition.direction + ' ' + holdReason + ' | B=' + buy.toFixed(0) + ' S=' + sell.toFixed(0) + ' raw=' + rawSignal + ' @ ' + closePrice.toFixed(2) });
+        var pnlLabel = entryPrice > 0 ? ' pnl=' + pnlPips.toFixed(1) : '';
+        if (statusEl) { statusEl.textContent = 'HOLDING ' + cortexOpenPosition.direction + ' (' + holdReason + pnlLabel + ') | ' + currentSig; statusEl.style.color = '#d29922'; }
+        cortexAddDecision({ time: timeStr, action: 'HOLDING', detail: cortexOpenPosition.direction + ' ' + holdReason + pnlLabel + ' | B=' + buy.toFixed(0) + ' S=' + sell.toFixed(0) + ' raw=' + rawSignal + ' @ ' + closePrice.toFixed(2) });
         return;
       }
     }
