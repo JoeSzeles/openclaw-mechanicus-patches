@@ -1252,6 +1252,66 @@ window.loadTradingProbe = function() {
     });
 };
 
+function parseBrainContext(raw) {
+  var result = { dimensions: [], companion: [], work: [], subconscious: '', directive: '' };
+  if (!raw) return result;
+  var lines = raw.split('\n');
+  var section = '';
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line.indexOf('[Dimension Affinities') >= 0) { section = 'dim'; continue; }
+    if (line.indexOf('[Neural Pattern') >= 0 || line.indexOf('Companion patterns:') >= 0) { section = 'neural'; continue; }
+    if (line.indexOf('Work patterns:') >= 0) { section = 'work'; continue; }
+    if (line.indexOf('[Subconscious') >= 0) { section = 'sub'; continue; }
+    if (line.indexOf('Apply these') >= 0) continue;
+    if (section === 'dim' && line.indexOf('- ') === 0) {
+      result.dimensions.push(line.substring(2));
+    }
+    if (section === 'neural') {
+      var matches = line.match(/(\w[\w\s&]+)=(\d+\.\d+)\s*\((\w+)\)/g);
+      if (matches) {
+        for (var m = 0; m < matches.length; m++) {
+          var parts = matches[m].match(/(.+?)=(\d+\.\d+)\s*\((\w+)\)/);
+          if (parts) result.companion.push({ name: parts[1].trim(), score: parseFloat(parts[2]), level: parts[3] });
+        }
+      }
+    }
+    if (section === 'work') {
+      var wmatches = line.match(/(\w[\w\s&]+)=(\d+\.\d+)\s*\((\w+)\)/g);
+      if (wmatches) {
+        for (var wm = 0; wm < wmatches.length; wm++) {
+          var wparts = wmatches[wm].match(/(.+?)=(\d+\.\d+)\s*\((\w+)\)/);
+          if (wparts) result.work.push({ name: wparts[1].trim(), score: parseFloat(wparts[2]), level: wparts[3] });
+        }
+      }
+    }
+    if (section === 'sub') {
+      if (line.indexOf('Lord Mechanicus') >= 0 || line.indexOf('directive:') >= 0) {
+        var dMatch = line.match(/directive:\s*"([^"]+)"/);
+        if (dMatch) result.directive = dMatch[1];
+      }
+      if (line.indexOf('dreams:') >= 0 || line.indexOf('Etched') >= 0 || line.indexOf('likes:') >= 0) {
+        result.subconscious += (result.subconscious ? ' ' : '') + line;
+      }
+    }
+  }
+  return result;
+}
+
+function renderPatternBar(name, score, level) {
+  var pct = Math.round(score * 100);
+  var color = level === 'strong' ? '#3fb950' : level === 'moderate' ? '#58a6ff' : level === 'weak' ? '#d29922' : '#8b949e';
+  var bgColor = level === 'strong' ? 'rgba(63,185,80,0.15)' : level === 'moderate' ? 'rgba(88,166,255,0.15)' : level === 'weak' ? 'rgba(210,153,34,0.15)' : 'rgba(139,148,158,0.1)';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+    '<span style="min-width:160px;font-size:11px;color:#c9d1d9;">' + escHtml(name) + '</span>' +
+    '<div style="flex:1;height:16px;background:#161b22;border-radius:3px;overflow:hidden;position:relative;">' +
+    '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px;transition:width 0.3s;"></div>' +
+    '</div>' +
+    '<span style="min-width:32px;text-align:right;font-size:10px;font-weight:600;color:' + color + ';">' + score.toFixed(2) + '</span>' +
+    '<span style="min-width:60px;font-size:9px;padding:2px 5px;border-radius:3px;background:' + bgColor + ';color:' + color + ';text-align:center;">' + level + '</span>' +
+    '</div>';
+}
+
 function refreshBrainLog() {
   var logEl = document.getElementById('brainActivityLog');
   var statusEl = document.getElementById('brainActivityStatus');
@@ -1262,31 +1322,76 @@ function refreshBrainLog() {
     statusEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
       '<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:' + gateColor + ';color:#fff;">GATE: ' + gateLabel + '</span>' + carryover +
       '<span style="color:#999;font-size:12px;">Stimulations: ' + data.stimulationCount + '/' + data.gateThreshold + '</span>' +
-      '<span style="color:#999;font-size:12px;">Injections logged: ' + data.count + '</span>' +
+      '<span style="color:#999;font-size:12px;">Injections: ' + data.count + '</span>' +
       '</div>';
     if (!data.log || data.log.length === 0) {
-      logEl.innerHTML = '<p class="empty">No injections logged yet. Chat with the agent after training to see injection data.</p>';
+      logEl.innerHTML = '<p class="empty">No brain activity yet. Chat with the agent to see the live brain fingerprint.</p>';
       return;
     }
-    var html = '';
-    for (var i = 0; i < data.log.length; i++) {
-      var entry = data.log[i];
-      var time = new Date(entry.ts).toLocaleTimeString();
-      var date = new Date(entry.ts).toLocaleDateString();
-      html += '<div style="border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:10px;background:#1a1a2e;">';
-      html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;">';
-      html += '<span style="color:#8be9fd;font-size:12px;font-weight:600;">' + date + ' ' + time + '</span>';
-      html += '<span style="color:#999;font-size:11px;">' + entry.contextLength + ' chars</span>';
-      html += '</div>';
-      if (entry.userMessage) {
-        html += '<div style="color:#bd93f9;font-size:11px;margin-bottom:6px;">User: "' + escHtml(entry.userMessage) + '"</div>';
+    var latest = data.log[0];
+    var parsed = parseBrainContext(latest.rawContext);
+    var time = new Date(latest.ts).toLocaleTimeString();
+    var date = new Date(latest.ts).toLocaleDateString();
+    var html = '<div style="border:1px solid #333;border-radius:8px;padding:16px;background:#0d1117;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">';
+    html += '<span style="color:#8be9fd;font-size:13px;font-weight:700;">Live Brain Fingerprint</span>';
+    html += '<span style="color:#8b949e;font-size:11px;">' + date + ' ' + time + ' | ' + latest.contextLength + ' chars attached</span>';
+    html += '</div>';
+    if (parsed.dimensions.length > 0) {
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="color:#bd93f9;font-size:11px;font-weight:600;margin-bottom:6px;">Dimension Affinities</div>';
+      for (var d = 0; d < parsed.dimensions.length; d++) {
+        var dim = parsed.dimensions[d];
+        var dimColor = dim.indexOf('preferred') >= 0 ? '#3fb950' : dim.indexOf('disliked') >= 0 ? '#f85149' : '#8b949e';
+        html += '<div style="font-size:11px;color:' + dimColor + ';margin-bottom:2px;padding-left:8px;">' + escHtml(dim) + '</div>';
       }
-      html += '<pre style="background:#111;padding:10px;border-radius:4px;font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;color:#f8f8f2;max-height:300px;overflow-y:auto;margin:0;">' + escHtml(entry.rawContext) + '</pre>';
       html += '</div>';
+    }
+    if (parsed.companion.length > 0) {
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="color:#ff79c6;font-size:11px;font-weight:600;margin-bottom:6px;">Companion Patterns</div>';
+      for (var c = 0; c < parsed.companion.length; c++) {
+        html += renderPatternBar(parsed.companion[c].name, parsed.companion[c].score, parsed.companion[c].level);
+      }
+      html += '</div>';
+    }
+    if (parsed.work.length > 0) {
+      html += '<div style="margin-bottom:14px;">';
+      html += '<div style="color:#79c0ff;font-size:11px;font-weight:600;margin-bottom:6px;">Work Patterns</div>';
+      for (var w = 0; w < parsed.work.length; w++) {
+        html += renderPatternBar(parsed.work[w].name, parsed.work[w].score, parsed.work[w].level);
+      }
+      html += '</div>';
+    }
+    if (parsed.directive) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="color:#d2a8ff;font-size:11px;font-weight:600;margin-bottom:4px;">Subconscious Directive</div>';
+      html += '<div style="font-size:11px;color:#c9d1d9;font-style:italic;padding-left:8px;">"' + escHtml(parsed.directive) + '"</div>';
+      html += '</div>';
+    }
+    if (parsed.subconscious) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="color:#d2a8ff;font-size:11px;font-weight:600;margin-bottom:4px;">Subconscious Memory</div>';
+      html += '<div style="font-size:11px;color:#8b949e;padding-left:8px;line-height:1.5;">' + escHtml(parsed.subconscious) + '</div>';
+      html += '</div>';
+    }
+    html += '<div style="border-top:1px solid #21262d;padding-top:8px;margin-top:8px;font-size:10px;color:#484f58;">Scale: 0=untrained, 0.5=baseline, 1.0=heavily trained | Patterns update after each interaction</div>';
+    html += '</div>';
+    if (data.log.length > 1) {
+      html += '<details style="margin-top:10px;"><summary style="color:#8b949e;font-size:11px;cursor:pointer;">Previous injections (' + (data.log.length - 1) + ')</summary>';
+      for (var i = 1; i < data.log.length; i++) {
+        var entry = data.log[i];
+        var etime = new Date(entry.ts).toLocaleTimeString();
+        var edate = new Date(entry.ts).toLocaleDateString();
+        html += '<div style="border:1px solid #21262d;border-radius:4px;padding:8px;margin-top:6px;background:#161b22;">';
+        html += '<span style="color:#8b949e;font-size:10px;">' + edate + ' ' + etime + ' | ' + entry.contextLength + ' chars</span>';
+        html += '</div>';
+      }
+      html += '</details>';
     }
     logEl.innerHTML = html;
   }).catch(function(e) {
-    logEl.innerHTML = '<p class="empty">Error loading injection log: ' + escHtml(e.message) + '</p>';
+    logEl.innerHTML = '<p class="empty">Error loading brain activity: ' + escHtml(e.message) + '</p>';
   });
 }
 
