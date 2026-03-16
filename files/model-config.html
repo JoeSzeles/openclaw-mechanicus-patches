@@ -109,17 +109,6 @@ tr:hover{background:#1c2128}
     <p class="info-text">Direct view of the agents section from openclaw.json</p>
     <div id="rawConfig"><p class="empty">Loading...</p></div>
   </div>
-  <div class="section">
-    <div class="section-title"><span class="section-icon">&#129504;</span> Brain Activity Log</div>
-    <p class="info-text">Shows what neural context gets injected into agent requests. Gate requires 3+ brain stimulations per session.</p>
-    <div id="brainActivityStatus" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <button onclick="refreshBrainLog()" class="btn" style="font-size:12px;">Refresh</button>
-      <button onclick="previewInjection()" class="btn" style="font-size:12px;background:#2d6a4f;">Preview Current Injection</button>
-    </div>
-    <div id="brainInjectionPreview" style="display:none;margin-bottom:16px;"></div>
-    <div id="brainActivityLog"><p class="empty">Loading...</p></div>
-  </div>
 </div>
 
 <div id="tab-ig-trading" class="tab-content">
@@ -208,7 +197,6 @@ tr:hover{background:#1c2128}
     <button class="nl-sub-tab" data-nltab="dimensions" onclick="switchNlSubTab('dimensions')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Dimensions</button>
     <button class="nl-sub-tab" data-nltab="engrams" onclick="switchNlSubTab('engrams')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Engrams</button>
     <button class="nl-sub-tab" data-nltab="training" onclick="switchNlSubTab('training')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Base Training</button>
-    <button class="nl-sub-tab" data-nltab="brain-probes" onclick="switchNlSubTab('brain-probes')" style="padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8b949e;border-bottom:2px solid transparent;margin-bottom:-2px">Brain Probes</button>
   </div>
 
   <div id="nl-overview" class="nl-sub-content">
@@ -366,31 +354,6 @@ tr:hover{background:#1c2128}
           <button class="btn btn-secondary" id="btnEngramRefresh">Refresh List</button>
         </div>
         <div id="engramList"><p class="empty">Loading...</p></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="nl-brain-probes" class="nl-sub-content" style="display:none">
-    <div style="font-size:13px;color:#bc8cff;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #bc8cff">Neural Fingerprint Probes</div>
-    <div class="card" style="margin-bottom:16px">
-      <div style="font-size:12px;color:#8b949e;margin-bottom:12px">
-        Probe both brains by firing template patterns through their spiking neural networks. The response strength reveals which patterns the brain has been trained on.
-      </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <div style="flex:1;min-width:320px">
-          <div style="font-size:13px;font-weight:700;color:#f97583;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #21262d">&#129504; Agent Brain (20K neurons)</div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <button onclick="loadBrainProbe()" class="btn btn-secondary" style="font-size:12px;">Probe Agent Brain</button>
-          </div>
-          <div id="brainProbeResults"><p class="empty">Click to probe agent brain patterns</p></div>
-        </div>
-        <div style="flex:1;min-width:320px">
-          <div style="font-size:13px;font-weight:700;color:#58a6ff;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #21262d">&#128200; Trading Brain (5K neurons)</div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <button onclick="loadTradingProbe()" class="btn btn-secondary" style="font-size:12px;">Probe Trading Brain</button>
-          </div>
-          <div id="tradingProbeResults"><p class="empty">Click to probe trading brain scenarios</p></div>
-        </div>
       </div>
     </div>
   </div>

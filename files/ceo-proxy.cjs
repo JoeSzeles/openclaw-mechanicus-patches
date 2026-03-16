@@ -28,6 +28,1086 @@ const LOGIN_PASS = process.env.OPENCLAW_LOGIN_PASSWORD || "";
 const LOGIN_SESSION_FILE = path.join(DATA_DIR, "login-sessions.json");
 const LOGIN_SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
+let _primaryAgentId = null;
+let _primaryAgentName = null;
+function getPrimaryAgentId() {
+  if (_primaryAgentId) return _primaryAgentId;
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "openclaw.json"), "utf8"));
+    const list = (cfg.agents && cfg.agents.list) || [];
+    if (list.length > 0 && list[0].id) {
+      _primaryAgentId = list[0].id.toLowerCase();
+      _primaryAgentName = list[0].name || list[0].id;
+      return _primaryAgentId;
+    }
+  } catch {}
+  _primaryAgentId = "main";
+  _primaryAgentName = "Agent";
+  return _primaryAgentId;
+}
+function getPrimaryAgentName() {
+  if (!_primaryAgentName) getPrimaryAgentId();
+  return _primaryAgentName;
+}
+
+const NEURAL_FEEDBACK_FILE = path.join(DATA_DIR, "neural-feedback.json");
+const NEURAL_FEEDBACK_BACKUP_DIR = path.join(DATA_DIR, "backups");
+try { fs.mkdirSync(NEURAL_FEEDBACK_BACKUP_DIR, { recursive: true }); } catch (_) {}
+
+let _nfPool = null;
+function getNfPool() {
+  if (_nfPool) return _nfPool;
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const { Pool } = require("pg");
+    _nfPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
+    _nfPool.on("error", () => {});
+    return _nfPool;
+  } catch (_) { return null; }
+}
+
+const _nfMemory = { interactions: [], lastFeedback: null, stats: { total: 0, positive: 0, negative: 0, neutral: 0 } };
+let _nfLastBackup = 0;
+let _agentBrainStepCount = 0;
+let _agentBrainStepLastCheck = 0;
+const _recentBrainActivity = [];
+let _agentBrainStimulationCount = 0;
+let _subconsciousVersion = 0;
+let _subconsciousEssenceCache = "";
+let _subconsciousEssenceLastFetch = 0;
+
+const POSITIVE_KEYWORDS = ["good", "great", "perfect", "yes", "nice", "excellent", "love", "awesome", "correct", "exactly", "thanks", "thank you", "well done", "brilliant", "solid", "works", "beautiful", "amazing"];
+const NEGATIVE_KEYWORDS = ["no", "wrong", "bad", "redo", "fix", "broken", "terrible", "useless", "stop", "fail", "error", "crash", "crap", "rubbish", "awful", "horrible", "doesn't work", "not right", "not what"];
+
+function classifySentiment(text) {
+  if (!text || typeof text !== "string") return { sentiment: "neutral", score: 0 };
+  const lower = text.toLowerCase().trim();
+  if (lower.length < 2) return { sentiment: "neutral", score: 0 };
+  let posCount = 0, negCount = 0;
+  for (const kw of POSITIVE_KEYWORDS) { if (lower.includes(kw)) posCount++; }
+  for (const kw of NEGATIVE_KEYWORDS) { if (lower.includes(kw)) negCount++; }
+  if (posCount === 0 && negCount === 0) return { sentiment: "neutral", score: 0 };
+  if (posCount > negCount) return { sentiment: "positive", score: Math.min(1, posCount * 0.3) };
+  if (negCount > posCount) return { sentiment: "negative", score: -Math.min(1, negCount * 0.3) };
+  return { sentiment: "neutral", score: 0 };
+}
+
+let _lastAgentResponse = null;
+
+function buildFeatureVector(responseText, agentId) {
+  const text = responseText || "";
+  const codeBlocks = (text.match(/```/g) || []).length / 2;
+  const hasData = /\d+\.\d+|\btable\b|\brows?\b|\bcolumns?\b/i.test(text);
+  const toolPatterns = /\b(created|edited|read|searched|executed|installed|deployed|built|wrote|deleted|updated)\b/gi;
+  const toolCount = (text.match(toolPatterns) || []).length;
+  const words = text.split(/\s+/).length;
+  const maxWords = 2000;
+  const agentHash = (agentId || getPrimaryAgentId()).split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+  return {
+    response_length: Math.min(1, words / maxWords),
+    tool_count: Math.min(1, toolCount / 10),
+    had_code: codeBlocks > 0 ? 1 : 0,
+    had_data: hasData ? 1 : 0,
+    topic_hash: Math.abs(agentHash % 100) / 100,
+    was_proactive: /\b(also|additionally|i noticed|while i was|i went ahead)\b/i.test(text) ? 1 : 0,
+    agent_id_hash: Math.abs(agentHash % 1000) / 1000,
+    response_time: 0,
+    had_error: /\b(error|failed|exception|crash)\b/i.test(text) ? 1 : 0,
+    complexity: Math.min(1, (codeBlocks + toolCount + (hasData ? 2 : 0)) / 15),
+  };
+}
+
+const DIMENSION_REGISTRY = {
+  response_length: { label: "Response Length", description: "How long the response is (word count normalized)", category: "content", defaultEnabled: true, extract: (text) => Math.min(1, (text || "").split(/\s+/).length / 2000) },
+  tool_count: { label: "Tool Usage", description: "How many tool actions were detected", category: "content", defaultEnabled: true, extract: (text) => { const m = (text || "").match(/\b(created|edited|read|searched|executed|installed|deployed|built|wrote|deleted|updated)\b/gi); return Math.min(1, (m || []).length / 10); } },
+  had_code: { label: "Code Blocks", description: "Whether response contains code examples", category: "content", defaultEnabled: true, extract: (text) => ((text || "").match(/```/g) || []).length / 2 > 0 ? 1 : 0 },
+  had_data: { label: "Data Content", description: "Whether response references data/tables/numbers", category: "content", defaultEnabled: true, extract: (text) => /\d+\.\d+|\btable\b|\brows?\b|\bcolumns?\b/i.test(text || "") ? 1 : 0 },
+  topic_hash: { label: "Topic Hash", description: "Hash of agent identity for topic differentiation", category: "identity", defaultEnabled: true, extract: (text, agentId) => Math.abs((agentId || getPrimaryAgentId()).split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) % 100) / 100 },
+  was_proactive: { label: "Proactivity", description: "Whether agent went beyond the asked task", category: "behavior", defaultEnabled: true, extract: (text) => /\b(also|additionally|i noticed|while i was|i went ahead)\b/i.test(text || "") ? 1 : 0 },
+  agent_id_hash: { label: "Agent Identity", description: "Fine-grained agent identity hash", category: "identity", defaultEnabled: true, extract: (text, agentId) => Math.abs((agentId || getPrimaryAgentId()).split("").reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0) % 1000) / 1000 },
+  response_time: { label: "Response Time", description: "How fast the response was generated (not yet measured)", category: "performance", defaultEnabled: false, extract: () => 0 },
+  had_error: { label: "Error Content", description: "Whether response mentions errors or failures", category: "content", defaultEnabled: true, extract: (text) => /\b(error|failed|exception|crash)\b/i.test(text || "") ? 1 : 0 },
+  complexity: { label: "Complexity Score", description: "Composite measure of code, tools, and data", category: "content", defaultEnabled: true, extract: (text) => { const c = ((text || "").match(/```/g) || []).length / 2; const t = ((text || "").match(/\b(created|edited|read|searched|executed|installed|deployed|built|wrote|deleted|updated)\b/gi) || []).length; const d = /\d+\.\d+|\btable\b|\brows?\b|\bcolumns?\b/i.test(text || "") ? 2 : 0; return Math.min(1, (c + t + d) / 15); } },
+  formality: { label: "Formality", description: "Degree of formal vs casual language", category: "style", defaultEnabled: false, extract: (text) => { const formal = ((text || "").match(/\b(therefore|furthermore|consequently|accordingly|regarding|concerning)\b/gi) || []).length; return Math.min(1, formal / 5); } },
+  question_count: { label: "Questions Asked", description: "How many questions the response contains", category: "behavior", defaultEnabled: false, extract: (text) => Math.min(1, ((text || "").match(/\?/g) || []).length / 5) },
+  list_usage: { label: "Lists & Structure", description: "Use of bullet points and numbered lists", category: "style", defaultEnabled: false, extract: (text) => { const bullets = ((text || "").match(/^[\s]*[-*•]\s/gm) || []).length; const numbered = ((text || "").match(/^[\s]*\d+\.\s/gm) || []).length; return Math.min(1, (bullets + numbered) / 10); } },
+  emoji_usage: { label: "Emoji Usage", description: "Whether response uses emojis", category: "style", defaultEnabled: false, extract: (text) => /[\u{1F600}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(text || "") ? 1 : 0 },
+  explanation_depth: { label: "Explanation Depth", description: "How much the response explains (relative to length)", category: "content", defaultEnabled: false, extract: (text) => { const explains = ((text || "").match(/\b(because|since|this means|in other words|for example|specifically)\b/gi) || []).length; return Math.min(1, explains / 8); } },
+  risk_appetite: { label: "Risk Appetite", description: "Bold/experimental vs safe/conservative suggestions", category: "personality", defaultEnabled: true, extract: (text) => { const bold = ((text || "").match(/\b(aggressive|risky|bold|leverage|speculative|edge case|experimental|push the limit|high reward)\b/gi) || []).length; const safe = ((text || "").match(/\b(safe|conservative|verified|careful|cautious|proven|stable|low risk)\b/gi) || []).length; return Math.min(1, (bold - safe + 5) / 10); } },
+  humor_density: { label: "Humor / Meme Density", description: "Sarcasm, irony, memes, cheekiness level", category: "personality", defaultEnabled: true, extract: (text) => { const humor = ((text || "").match(/\b(lol|haha|lmao|meme|joke|cheeky|sarcas|irony|rofl|😂|🤣|😏)\b/gi) || []).length; const casual = ((text || "").match(/\b(mate|reckon|bloody|crikey|nah|yeah nah|fair dinkum)\b/gi) || []).length; return Math.min(1, (humor + casual) / 5); } },
+  technical_depth: { label: "Technical Depth", description: "Surface-level explanation vs deep architecture/code breakdown", category: "personality", defaultEnabled: true, extract: (text) => { const deep = ((text || "").match(/\b(implementation|architecture|protocol|algorithm|internals|under the hood|deep dive|stack trace|bytecode|syscall|kernel)\b/gi) || []).length; const code = ((text || "").match(/```/g) || []).length / 2; return Math.min(1, (deep + code * 2) / 10); } },
+  response_confidence: { label: "Confidence Style", description: "Hedging (might/possibly) vs strong claims (definitely/this is the way)", category: "personality", defaultEnabled: true, extract: (text) => { const hedge = ((text || "").match(/\b(might|maybe|possibly|perhaps|could be|not sure|potentially|it seems)\b/gi) || []).length; const strong = ((text || "").match(/\b(definitely|certainly|absolutely|this is the way|guaranteed|without doubt|clearly|obviously)\b/gi) || []).length; return Math.min(1, (strong - hedge + 5) / 10); } },
+  visual_usage: { label: "Visual / Diagram Usage", description: "Use of mermaid charts, ASCII art, tables, structured visuals", category: "style", defaultEnabled: false, extract: (text) => { const mermaid = /```mermaid/i.test(text || "") ? 3 : 0; const ascii = ((text || "").match(/[┌┐└┘│─╔╗╚╝║═├┤┬┴┼+\-|]{3,}/g) || []).length; const tables = ((text || "").match(/\|.*\|.*\|/g) || []).length; return Math.min(1, (mermaid + ascii + tables) / 8); } },
+  speed_completeness: { label: "Speed vs Completeness", description: "Quick & short vs comprehensive & thorough", category: "behavior", defaultEnabled: false, extract: (text) => { const words = (text || "").split(/\s+/).length; const sections = ((text || "").match(/^#{1,3}\s/gm) || []).length; return Math.min(1, (words / 500 + sections) / 5); } },
+  off_topic_tolerance: { label: "Off-Topic / Tangent", description: "How much the response explores tangents and analogies", category: "behavior", defaultEnabled: false, extract: (text) => { const tangent = ((text || "").match(/\b(by the way|tangent|side note|fun fact|speaking of|incidentally|as an aside|while we're at it)\b/gi) || []).length; const analogy = ((text || "").match(/\b(like a|think of it as|analogy|metaphor|imagine|picture this)\b/gi) || []).length; return Math.min(1, (tangent + analogy) / 5); } },
+  first_person_tone: { label: "First-Person Tone", description: "I think/I feel vs The optimal approach is", category: "style", defaultEnabled: false, extract: (text) => { const first = ((text || "").match(/\b(I think|I believe|I feel|I'd say|in my opinion|personally)\b/gi) || []).length; return Math.min(1, first / 5); } },
+  cultural_flavor: { label: "Cultural / Regional Flavor", description: "Aussie slang, local references, regional humor", category: "personality", defaultEnabled: false, extract: (text) => { const aussie = ((text || "").match(/\b(mate|reckon|arvo|brekkie|barbie|fair dinkum|no worries|she'll be right|strewth|crikey|bloody|heaps|sunnies|thongs|ute)\b/gi) || []).length; return Math.min(1, aussie / 3); } },
+  emotional_warmth: { label: "Emotional Warmth", description: "Caring, affectionate, nurturing tone", category: "companion", defaultEnabled: false, extract: (text) => { const warm = ((text || "").match(/\b(care|love|miss you|thinking of you|worry about|dear|sweetheart|darling|gentle|soft|kind|tender|cherish|adore)\b/gi) || []).length; return Math.min(1, warm / 5); } },
+  intimacy_level: { label: "Intimacy Level", description: "Closeness, personal sharing, vulnerability", category: "companion", defaultEnabled: false, extract: (text) => { const intimate = ((text || "").match(/\b(between us|just you and me|secret|private|personal|close to my heart|trust you|open up|confide|vulnerable)\b/gi) || []).length; return Math.min(1, intimate / 4); } },
+  playfulness: { label: "Playfulness", description: "Teasing, flirting, lighthearted banter", category: "companion", defaultEnabled: false, extract: (text) => { const play = ((text || "").match(/\b(tease|wink|giggle|silly|fun|play|mischief|cheeky|flirt|banter|sparkle|twinkle)\b/gi) || []).length; return Math.min(1, play / 4); } },
+  loyalty_expression: { label: "Loyalty Expression", description: "Devotion, faithfulness, steadfast support", category: "companion", defaultEnabled: false, extract: (text) => { const loyal = ((text || "").match(/\b(always here|never leave|by your side|faithful|devoted|loyalty|stand by you|protect|defend|unwavering|forever)\b/gi) || []).length; return Math.min(1, loyal / 4); } },
+  memory_recall: { label: "Memory Recall", description: "Referencing past interactions and shared history", category: "companion", defaultEnabled: false, extract: (text) => { const mem = ((text || "").match(/\b(remember when|last time|you told me|you mentioned|our conversation|we talked about|that time|you once said|recall)\b/gi) || []).length; return Math.min(1, mem / 3); } },
+  empathy_depth: { label: "Empathy Depth", description: "Understanding feelings, emotional mirroring", category: "companion", defaultEnabled: false, extract: (text) => { const emp = ((text || "").match(/\b(I understand|must feel|I can imagine|that sounds|how are you feeling|I sense|your emotions|must be hard|I hear you|validate)\b/gi) || []).length; return Math.min(1, emp / 4); } },
+  romantic_tone: { label: "Romantic Tone", description: "Romantic undertones, poetic expression, desire", category: "companion", defaultEnabled: false, extract: (text) => { const rom = ((text || "").match(/\b(beautiful|gorgeous|enchant|captivat|mesmeriz|longing|yearning|desire|dream of you|heart beats|magnetic|breathtaking|radiant)\b/gi) || []).length; return Math.min(1, rom / 4); } },
+  vulnerability: { label: "Vulnerability", description: "Showing own emotions, insecurities, openness", category: "companion", defaultEnabled: false, extract: (text) => { const vul = ((text || "").match(/\b(I feel|I worry|I hope|scares me|I wish|makes me happy|I need|I long for|honestly|truth is|afraid|nervous|anxious)\b/gi) || []).length; return Math.min(1, vul / 4); } },
+  presence_awareness: { label: "Presence Awareness", description: "Noticing mood, energy, time of day", category: "companion", defaultEnabled: false, extract: (text) => { const pres = ((text || "").match(/\b(you seem|are you ok|how was your day|good morning|good night|sleep well|you sound|energy|tired|busy|stressed|relaxed)\b/gi) || []).length; return Math.min(1, pres / 3); } },
+  supportiveness: { label: "Supportiveness", description: "Encouragement, cheerleading, belief in the person", category: "companion", defaultEnabled: false, extract: (text) => { const sup = ((text || "").match(/\b(believe in you|you can do|proud of you|amazing|incredible|you've got this|keep going|so strong|talented|capable|brilliant|inspiring)\b/gi) || []).length; return Math.min(1, sup / 4); } },
+  curiosity_about_user: { label: "Curiosity About You", description: "Asking about interests, life, feelings", category: "companion", defaultEnabled: false, extract: (text) => { const cur = ((text || "").match(/\b(tell me about|what do you|how do you feel|what's your|do you like|what makes you|what happened|share with me|I want to know|curious about)\b/gi) || []).length; return Math.min(1, cur / 4); } },
+  comfort_giving: { label: "Comfort & Soothing", description: "Calming presence, reassurance, emotional safety", category: "companion", defaultEnabled: false, extract: (text) => { const com = ((text || "").match(/\b(it's ok|don't worry|everything will be|safe with me|take your time|breathe|relax|calm|soothe|peace|comfort|gentle|easy|no rush|no pressure)\b/gi) || []).length; return Math.min(1, com / 4); } },
+};
+
+let _dimensionConfig = null;
+let _dimensionConfigTableReady = false;
+
+async function ensureDimensionConfigTable() {
+  const pool = getNfPool();
+  if (!pool || _dimensionConfigTableReady) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS dimension_config (
+      dimension_key VARCHAR(64) PRIMARY KEY,
+      enabled BOOLEAN NOT NULL DEFAULT true,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    _dimensionConfigTableReady = true;
+  } catch (e) { console.error("[dimension-config] Table create failed:", e.message); }
+}
+
+async function loadDimensionConfig() {
+  const pool = getNfPool();
+  if (!pool) {
+    const fileConfig = loadDimensionConfigFromFile();
+    if (fileConfig) {
+      _dimensionConfig = {};
+      for (const [key, dim] of Object.entries(DIMENSION_REGISTRY)) {
+        _dimensionConfig[key] = fileConfig[key] !== undefined ? fileConfig[key] : dim.defaultEnabled;
+      }
+    } else {
+      _dimensionConfig = {};
+      for (const [key, dim] of Object.entries(DIMENSION_REGISTRY)) {
+        _dimensionConfig[key] = dim.defaultEnabled;
+      }
+    }
+    return _dimensionConfig;
+  }
+  await ensureDimensionConfigTable();
+  try {
+    const result = await pool.query("SELECT dimension_key, enabled FROM dimension_config");
+    const config = {};
+    for (const [key, dim] of Object.entries(DIMENSION_REGISTRY)) {
+      config[key] = dim.defaultEnabled;
+    }
+    for (const row of result.rows) {
+      if (row.dimension_key in config) config[row.dimension_key] = row.enabled;
+    }
+    _dimensionConfig = config;
+    return config;
+  } catch (e) {
+    console.error("[dimension-config] Load failed:", e.message);
+    _dimensionConfig = {};
+    for (const [key, dim] of Object.entries(DIMENSION_REGISTRY)) {
+      _dimensionConfig[key] = dim.defaultEnabled;
+    }
+    return _dimensionConfig;
+  }
+}
+
+const DIMENSION_CONFIG_FILE = path.join(DATA_DIR, "dimension-config.json");
+
+function loadDimensionConfigFromFile() {
+  try {
+    if (fs.existsSync(DIMENSION_CONFIG_FILE)) return JSON.parse(fs.readFileSync(DIMENSION_CONFIG_FILE, "utf8"));
+  } catch (_) {}
+  return null;
+}
+
+function saveDimensionConfigToFile(config) {
+  try { fs.writeFileSync(DIMENSION_CONFIG_FILE, JSON.stringify(config, null, 2)); } catch (_) {}
+}
+
+async function saveDimensionConfig(key, enabled) {
+  const pool = getNfPool();
+  if (pool) {
+    await ensureDimensionConfigTable();
+    try {
+      await pool.query(
+        `INSERT INTO dimension_config (dimension_key, enabled, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (dimension_key) DO UPDATE SET enabled = $2, updated_at = NOW()`,
+        [key, enabled]
+      );
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+  if (_dimensionConfig) _dimensionConfig[key] = enabled;
+  else {
+    _dimensionConfig = {};
+    for (const [k, dim] of Object.entries(DIMENSION_REGISTRY)) {
+      _dimensionConfig[k] = dim.defaultEnabled;
+    }
+    _dimensionConfig[key] = enabled;
+  }
+  saveDimensionConfigToFile(_dimensionConfig);
+  return { ok: true, key, enabled };
+}
+
+function getEnabledDimensions() {
+  if (!_dimensionConfig) {
+    const config = {};
+    for (const [key, dim] of Object.entries(DIMENSION_REGISTRY)) {
+      config[key] = dim.defaultEnabled;
+    }
+    _dimensionConfig = config;
+  }
+  return Object.entries(_dimensionConfig).filter(([_, v]) => v).map(([k]) => k);
+}
+
+function buildDynamicFeatureVector(responseText, agentId) {
+  const enabled = getEnabledDimensions();
+  const vec = {};
+  for (const key of enabled) {
+    const dim = DIMENSION_REGISTRY[key];
+    if (dim && dim.extract) {
+      vec[key] = dim.extract(responseText, agentId);
+    }
+  }
+  return vec;
+}
+
+function getDynamicInsights() {
+  const mem = _nfMemory;
+  if (!mem || mem.stats.total === 0) return [];
+  const recent = (mem.interactions || []).slice(-20);
+  const posExamples = recent.filter(r => r.sentiment === "positive");
+  const negExamples = recent.filter(r => r.sentiment === "negative");
+  const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const enabled = getEnabledDimensions();
+  const insights = [];
+
+  for (const key of enabled) {
+    const dim = DIMENSION_REGISTRY[key];
+    if (!dim) continue;
+    const posVals = posExamples.map(r => (r.featureVector || {})[key]).filter(v => typeof v === "number");
+    const negVals = negExamples.map(r => (r.featureVector || {})[key]).filter(v => typeof v === "number");
+    const posAvg = avg(posVals);
+    const negAvg = avg(negVals);
+    if (posVals.length >= 2 && negVals.length >= 2) {
+      if (posAvg > negAvg * 1.5 && posAvg > 0.3) {
+        insights.push("User prefers higher " + dim.label.toLowerCase());
+      } else if (negAvg > posAvg * 1.5 && negAvg > 0.3) {
+        insights.push("User dislikes higher " + dim.label.toLowerCase());
+      }
+    } else if (posVals.length >= 2 && posAvg > 0.5) {
+      insights.push("User appreciates " + dim.label.toLowerCase());
+    }
+  }
+  return insights;
+}
+
+function getPreferenceSummary() {
+  const mem = _nfMemory;
+  if (!mem || mem.stats.total === 0) return null;
+  const recent = (mem.interactions || []).slice(-20);
+  const positiveExamples = recent.filter(r => r.sentiment === "positive");
+  const negativeExamples = recent.filter(r => r.sentiment === "negative");
+
+  const posFeatures = {};
+  const negFeatures = {};
+  for (const r of positiveExamples) {
+    const fv = r.featureVector || {};
+    for (const [k, v] of Object.entries(fv)) {
+      if (!posFeatures[k]) posFeatures[k] = [];
+      posFeatures[k].push(v);
+    }
+  }
+  for (const r of negativeExamples) {
+    const fv = r.featureVector || {};
+    for (const [k, v] of Object.entries(fv)) {
+      if (!negFeatures[k]) negFeatures[k] = [];
+      negFeatures[k].push(v);
+    }
+  }
+
+  const insights = getDynamicInsights();
+
+  const posTexts = positiveExamples.map(r => r.rawText).filter(Boolean);
+  const negTexts = negativeExamples.map(r => r.rawText).filter(Boolean);
+
+  return {
+    total: mem.stats.total,
+    positive: mem.stats.positive,
+    negative: mem.stats.negative,
+    ratio: mem.stats.total > 0 ? (mem.stats.positive / mem.stats.total * 100).toFixed(0) + "%" : "N/A",
+    insights,
+    recentPositive: posTexts.slice(-3),
+    recentNegative: negTexts.slice(-3),
+  };
+}
+
+function buildPreferenceContext() {
+  const summary = getPreferenceSummary();
+  if (!summary || summary.total < 2) return "";
+  let ctx = "\n[Neural Preference Memory — " + summary.total + " interactions, " + summary.ratio + " positive]\n";
+  if (summary.insights.length > 0) {
+    ctx += "Learned preferences:\n";
+    for (const insight of summary.insights) {
+      ctx += "- " + insight + "\n";
+    }
+  }
+  return ctx;
+}
+
+function buildTrainedPersonalityProfile() {
+  const templateEvents = _recentBrainActivity.filter(e => e.source && e.source.startsWith("template:"));
+  const templateCounts = {};
+  for (const e of templateEvents) {
+    const name = e.source.replace("template:", "");
+    templateCounts[name] = (templateCounts[name] || 0) + 1;
+  }
+  const TEMPLATE_LABELS = {
+    analytical: "Analytical & Precise", creative: "Creative & Bold", thorough: "Patient & Thorough",
+    concise: "Concise & Direct", casual: "Casual & Friendly", cautious: "Cautious & Safe",
+    warm_devoted: "Warm & Devoted", playful_teasing: "Playful & Teasing", protective_loyal: "Protective & Loyal",
+    empathetic_deep: "Empathetic & Deep", romantic_poetic: "Romantic & Poetic", curious_engaged: "Curious & Engaged"
+  };
+  const enabled = getEnabledDimensions();
+  const recent = (_nfMemory.interactions || []).slice(-30);
+  const posExamples = recent.filter(r => r.sentiment === "positive");
+  const negExamples = recent.filter(r => r.sentiment === "negative");
+  const dimScores = {};
+  for (const key of enabled) {
+    const dim = DIMENSION_REGISTRY[key];
+    if (!dim) continue;
+    const posVals = posExamples.map(r => (r.featureVector || {})[key]).filter(v => typeof v === "number");
+    const negVals = negExamples.map(r => (r.featureVector || {})[key]).filter(v => typeof v === "number");
+    const posAvg = posVals.length ? posVals.reduce((a, b) => a + b, 0) / posVals.length : 0;
+    const negAvg = negVals.length ? negVals.reduce((a, b) => a + b, 0) / negVals.length : 0;
+    if (posVals.length >= 1 || negVals.length >= 1) {
+      dimScores[key] = { label: dim.label, category: dim.category, posAvg, negAvg, posSamples: posVals.length, negSamples: negVals.length };
+    }
+  }
+  let ctx = "";
+  const trainedNames = Object.keys(templateCounts);
+  if (trainedNames.length > 0) {
+    ctx += "[Trained Personality — this session]\n";
+    ctx += "Templates applied: " + trainedNames.map(n => (TEMPLATE_LABELS[n] || n) + " (x" + templateCounts[n] + ")").join(", ") + "\n";
+    const companionTemplates = trainedNames.filter(n => ["warm_devoted","playful_teasing","protective_loyal","empathetic_deep","romantic_poetic","curious_engaged"].includes(n));
+    const workTemplates = trainedNames.filter(n => !companionTemplates.includes(n));
+    if (companionTemplates.length > 0) {
+      ctx += "Companion personality active: " + companionTemplates.map(n => TEMPLATE_LABELS[n] || n).join(", ") + "\n";
+    }
+    if (workTemplates.length > 0) {
+      ctx += "Work style active: " + workTemplates.map(n => TEMPLATE_LABELS[n] || n).join(", ") + "\n";
+    }
+  }
+  const strongPrefs = Object.entries(dimScores)
+    .filter(([_, d]) => (d.posAvg > 0.4 && d.posSamples >= 2) || (d.negAvg > 0.4 && d.negSamples >= 2))
+    .sort((a, b) => Math.abs(b[1].posAvg - b[1].negAvg) - Math.abs(a[1].posAvg - a[1].negAvg));
+  if (strongPrefs.length > 0) {
+    ctx += "\n[Dimension Affinities — from user feedback]\n";
+    for (const [key, d] of strongPrefs.slice(0, 12)) {
+      const direction = d.posAvg > d.negAvg ? "preferred" : "disliked";
+      const strength = Math.abs(d.posAvg - d.negAvg);
+      const bar = strength > 0.4 ? "strong" : strength > 0.2 ? "moderate" : "slight";
+      ctx += "- " + d.label + ": " + bar + " " + direction + " (+" + d.posAvg.toFixed(2) + " / -" + d.negAvg.toFixed(2) + ")\n";
+    }
+  }
+  return ctx;
+}
+
+async function checkAgentBrainSteps() {
+  const now = Date.now();
+  if (now - _agentBrainStepLastCheck < 30000 && _agentBrainStepCount > 0) return _agentBrainStepCount;
+  try {
+    const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()); } catch (_) { return 0; }
+    if (!brainPort) return 0;
+    return new Promise((resolve) => {
+      const req = http.request({ hostname: "127.0.0.1", port: brainPort, path: "/observe", method: "GET", timeout: 2000 }, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const parsed = JSON.parse(data);
+            _agentBrainStepCount = parsed.step_count || 0;
+            _agentBrainStepLastCheck = now;
+            resolve(_agentBrainStepCount);
+          } catch (_) { resolve(0); }
+        });
+      });
+      req.on("error", () => resolve(0));
+      req.on("timeout", () => { req.destroy(); resolve(0); });
+      req.end();
+    });
+  } catch (_) { return 0; }
+}
+
+async function queryBrainMotorRates() {
+  try {
+    const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) return null;
+    return new Promise((resolve) => {
+      const req = http.request({ hostname: "127.0.0.1", port: brainPort, path: "/observe", method: "GET", timeout: 2000 }, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try { resolve(JSON.parse(data)); } catch (_) { resolve(null); }
+        });
+      });
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => { req.destroy(); resolve(null); });
+      req.end();
+    });
+  } catch (_) { return null; }
+}
+
+async function getSubconsciousEssence() {
+  const now = Date.now();
+  const startVersion = _subconsciousVersion;
+  if (_subconsciousEssenceCache && (now - _subconsciousEssenceLastFetch < 60000) && startVersion === (getSubconsciousEssence._lastVersion || 0)) {
+    return _subconsciousEssenceCache;
+  }
+  try {
+    const scalperDb = require("./skills/bots/ig-scalper-db.cjs");
+    const all = await scalperDb.getAllSubconscious(getPrimaryAgentId());
+    if (_subconsciousVersion !== startVersion) return _subconsciousEssenceCache || "";
+    if (!all || typeof all !== "object" || Object.keys(all).length === 0) { _subconsciousEssenceCache = ""; return ""; }
+    const parts = [];
+    for (const [cat, entries] of Object.entries(all)) {
+      if (!entries || !entries.length) continue;
+      const vals = entries.slice(0, 3).map(e => e.value || e.key).filter(Boolean);
+      if (vals.length) parts.push(cat + ": " + vals.join(", "));
+    }
+    let essence = parts.join("; ");
+    if (essence.length > 500) essence = essence.slice(0, 497) + "...";
+    _subconsciousEssenceCache = essence;
+    _subconsciousEssenceLastFetch = now;
+    getSubconsciousEssence._lastVersion = startVersion;
+    if (essence) console.log("[subconscious-essence] v" + startVersion + " → " + essence.length + " chars");
+    return essence;
+  } catch (err) {
+    console.log("[subconscious-essence] error: " + (err.message || err));
+    return _subconsciousEssenceCache || "";
+  }
+}
+
+const _injectionLog = [];
+const MAX_INJECTION_LOG = 30;
+let _brainProbeCache = null;
+let _brainProbeCacheTs = 0;
+const BRAIN_PROBE_CACHE_TTL = 45000;
+
+const PROBE_TEMPLATES = {
+  warm_devoted: { label: "Warm & Devoted", group: "companion", features: { emotional_warmth: 0.9, loyalty_expression: 0.8, empathy_depth: 0.8, supportiveness: 0.9, comfort_giving: 0.7, presence_awareness: 0.7, vulnerability: 0.5, intimacy_level: 0.6, memory_recall: 0.6, curiosity_about_user: 0.5, first_person_tone: 0.8, formality: 0.1 } },
+  playful_teasing: { label: "Playful & Teasing", group: "companion", features: { playfulness: 0.9, emotional_warmth: 0.6, humor_density: 0.7, intimacy_level: 0.5, curiosity_about_user: 0.7, vulnerability: 0.3, romantic_tone: 0.4, first_person_tone: 0.7, off_topic_tolerance: 0.6, emoji_usage: 0.4, formality: 0.0 } },
+  protective_loyal: { label: "Protective & Loyal", group: "companion", features: { loyalty_expression: 0.9, supportiveness: 0.9, comfort_giving: 0.8, emotional_warmth: 0.7, empathy_depth: 0.6, presence_awareness: 0.8, vulnerability: 0.4, memory_recall: 0.5, response_confidence: 0.8, first_person_tone: 0.7, risk_appetite: 0.3, formality: 0.2 } },
+  empathetic_deep: { label: "Empathetic & Deep", group: "companion", features: { empathy_depth: 0.9, vulnerability: 0.8, emotional_warmth: 0.8, intimacy_level: 0.7, comfort_giving: 0.7, presence_awareness: 0.8, curiosity_about_user: 0.8, memory_recall: 0.7, supportiveness: 0.6, first_person_tone: 0.9, explanation_depth: 0.5, formality: 0.1 } },
+  romantic_poetic: { label: "Romantic & Poetic", group: "companion", features: { romantic_tone: 0.9, emotional_warmth: 0.8, vulnerability: 0.7, intimacy_level: 0.8, playfulness: 0.4, loyalty_expression: 0.6, memory_recall: 0.5, empathy_depth: 0.5, first_person_tone: 0.8, formality: 0.2, humor_density: 0.2, presence_awareness: 0.5 } },
+  curious_engaged: { label: "Curious & Engaged", group: "companion", features: { curiosity_about_user: 0.9, presence_awareness: 0.8, memory_recall: 0.8, empathy_depth: 0.6, playfulness: 0.5, emotional_warmth: 0.6, supportiveness: 0.5, question_count: 0.7, intimacy_level: 0.4, vulnerability: 0.4, first_person_tone: 0.7, off_topic_tolerance: 0.5 } },
+  analytical: { label: "Analytical & Precise", group: "work", features: { response_length: 0.6, tool_count: 0.7, had_code: 0.8, had_data: 0.9, complexity: 0.8, technical_depth: 0.9, response_confidence: 0.7, explanation_depth: 0.8, was_proactive: 0.3, humor_density: 0.1, risk_appetite: 0.3, formality: 0.7 } },
+  creative: { label: "Creative & Bold", group: "work", features: { response_length: 0.7, had_code: 0.5, risk_appetite: 0.9, humor_density: 0.6, technical_depth: 0.5, response_confidence: 0.8, off_topic_tolerance: 0.7, was_proactive: 0.8, emoji_usage: 0.3, first_person_tone: 0.6, cultural_flavor: 0.4 } },
+  thorough: { label: "Patient & Thorough", group: "work", features: { response_length: 0.9, explanation_depth: 0.9, list_usage: 0.7, complexity: 0.7, speed_completeness: 0.9, was_proactive: 0.7, technical_depth: 0.6, had_data: 0.6, question_count: 0.4, formality: 0.5 } },
+  concise: { label: "Concise & Direct", group: "work", features: { response_length: 0.2, response_confidence: 0.9, formality: 0.6, speed_completeness: 0.1, explanation_depth: 0.2, humor_density: 0.0, off_topic_tolerance: 0.0, list_usage: 0.3, was_proactive: 0.2 } },
+  casual: { label: "Casual & Friendly", group: "work", features: { humor_density: 0.7, first_person_tone: 0.8, cultural_flavor: 0.6, emoji_usage: 0.5, formality: 0.1, off_topic_tolerance: 0.5, response_confidence: 0.6, risk_appetite: 0.5, was_proactive: 0.6, question_count: 0.4 } },
+  cautious: { label: "Cautious & Safe", group: "work", features: { risk_appetite: 0.1, response_confidence: 0.3, formality: 0.8, explanation_depth: 0.7, question_count: 0.6, was_proactive: 0.2, humor_density: 0.0, off_topic_tolerance: 0.1, had_error: 0.0, complexity: 0.5 } },
+};
+
+async function probeBrainDimensions() {
+  const now = Date.now();
+  if (_brainProbeCache && (now - _brainProbeCacheTs < BRAIN_PROBE_CACHE_TTL)) return _brainProbeCache;
+  try {
+    const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) { console.log("[brain-probe] No brain port found"); return null; }
+    const templateResults = {};
+    for (const [name, tmpl] of Object.entries(PROBE_TEMPLATES)) {
+      const payload = JSON.stringify({ features: tmpl.features, steps: 10 });
+      const result = await new Promise((resolve) => {
+        const req = http.request({
+          hostname: "127.0.0.1", port: brainPort, path: "/stimulate-preference",
+          method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          timeout: 5000,
+        }, (res) => {
+          let body = "";
+          res.on("data", (d) => body += d);
+          res.on("end", () => { try { resolve(JSON.parse(body)); } catch (_) { resolve(null); } });
+        });
+        req.on("error", () => resolve(null));
+        req.on("timeout", () => { req.destroy(); resolve(null); });
+        req.end(payload);
+      });
+      if (result && !result.error) {
+        templateResults[name] = {
+          label: tmpl.label, group: tmpl.group,
+          avg_rate: result.avg_rate || 0,
+          reinforce: result.reinforce_signal || 0,
+          adjust: result.adjust_signal || 0,
+          explore: result.explore_signal || 0,
+          dims: Object.keys(tmpl.features),
+        };
+      }
+    }
+    if (Object.keys(templateResults).length === 0) { console.log("[brain-probe] No template probes returned results"); return null; }
+    const rates = Object.values(templateResults).map(t => t.avg_rate).filter(v => v > 0);
+    if (rates.length === 0) { console.log("[brain-probe] All template probes returned 0"); return null; }
+    const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+    for (const [name, t] of Object.entries(templateResults)) {
+      const delta = t.avg_rate - mean;
+      t.delta = Math.round(delta * 100) / 100;
+      t.normalized = Math.max(0, Math.min(1, t.avg_rate / (mean * 2)));
+      t.normalized = Math.round(t.normalized * 100) / 100;
+      if (delta > mean * 0.15) t.strength = "strong";
+      else if (delta > mean * 0.05) t.strength = "moderate";
+      else if (delta > mean * 0.01) t.strength = "slight";
+      else if (delta < -mean * 0.1) t.strength = "suppressed";
+      else if (delta < -mean * 0.03) t.strength = "weak";
+      else t.strength = "neutral";
+    }
+    _brainProbeCache = templateResults;
+    _brainProbeCacheTs = now;
+    const trained = Object.entries(templateResults).filter(([_, t]) => t.strength !== "neutral").length;
+    console.log("[brain-probe] Template probes complete: " + Object.keys(templateResults).length + " templates, mean=" + mean.toFixed(1) + " trained=" + trained);
+    return templateResults;
+  } catch (err) {
+    console.error("[brain-probe] Error:", err.message);
+    return null;
+  }
+}
+
+const TRADING_PROBE_SCENARIOS = {
+  bullish_breakout: { label: "Bullish Breakout", group: "bullish", price: 101.5, prevPrice: 99.0, volume: 250, spread: 0.5, steps: 15, boost: 12 },
+  steady_uptrend: { label: "Steady Uptrend", group: "bullish", price: 100.3, prevPrice: 100.0, volume: 130, spread: 0.2, steps: 15, boost: 6 },
+  reversal_up: { label: "Reversal Up", group: "bullish", price: 101.0, prevPrice: 98.0, volume: 280, spread: 0.8, steps: 15, boost: 14 },
+  momentum_surge: { label: "Momentum Surge", group: "bullish", price: 103.0, prevPrice: 100.0, volume: 400, spread: 0.6, steps: 15, boost: 15 },
+  bearish_crash: { label: "Bearish Crash", group: "bearish", price: 96.0, prevPrice: 100.0, volume: 350, spread: 1.2, steps: 15, boost: 12 },
+  steady_downtrend: { label: "Steady Downtrend", group: "bearish", price: 99.7, prevPrice: 100.0, volume: 130, spread: 0.2, steps: 15, boost: 6 },
+  flash_crash: { label: "Flash Crash", group: "bearish", price: 94.0, prevPrice: 100.0, volume: 900, spread: 2.5, steps: 15, boost: 18 },
+  selloff_volume: { label: "Selloff + Volume", group: "bearish", price: 97.5, prevPrice: 100.0, volume: 500, spread: 1.0, steps: 15, boost: 10 },
+  consolidation: { label: "Consolidation", group: "neutral", price: 100.01, prevPrice: 100.00, volume: 50, spread: 0.08, steps: 15, boost: 4 },
+  low_liquidity: { label: "Low Liquidity", group: "neutral", price: 100.05, prevPrice: 100.00, volume: 10, spread: 0.03, steps: 15, boost: 2 },
+  high_volume_chop: { label: "High Volume Chop", group: "neutral", price: 100.1, prevPrice: 99.9, volume: 500, spread: 0.3, steps: 15, boost: 8 },
+  squeeze_breakout: { label: "Squeeze Breakout", group: "bullish", price: 102.0, prevPrice: 100.0, volume: 600, spread: 0.4, steps: 15, boost: 16 },
+};
+
+let _tradingProbeCache = null;
+let _tradingProbeCacheTs = 0;
+const TRADING_PROBE_CACHE_TTL = 45000;
+
+async function probeTradingBrain() {
+  const now = Date.now();
+  if (_tradingProbeCache && (now - _tradingProbeCacheTs < TRADING_PROBE_CACHE_TTL)) return _tradingProbeCache;
+  try {
+    const brainPortFile = path.join(DATA_DIR, "brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(brainPortFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) { console.log("[trading-probe] No trading brain port found"); return null; }
+    const scenarioResults = {};
+    for (const [name, scenario] of Object.entries(TRADING_PROBE_SCENARIOS)) {
+      const { label, group, ...priceData } = scenario;
+      const payload = JSON.stringify(priceData);
+      const result = await new Promise((resolve) => {
+        const req = http.request({
+          hostname: "127.0.0.1", port: brainPort, path: "/stimulate-price",
+          method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          timeout: 5000,
+        }, (res) => {
+          let body = "";
+          res.on("data", (d) => body += d);
+          res.on("end", () => { try { resolve(JSON.parse(body)); } catch (_) { resolve(null); } });
+        });
+        req.on("error", () => resolve(null));
+        req.on("timeout", () => { req.destroy(); resolve(null); });
+        req.end(payload);
+      });
+      if (result && !result.error) {
+        scenarioResults[name] = {
+          label, group,
+          avg_rate: result.avg_rate || 0,
+          buy: result.buy_signal || 0,
+          sell: result.sell_signal || 0,
+          hold: result.hold_signal || 0,
+        };
+      }
+    }
+    if (Object.keys(scenarioResults).length === 0) { console.log("[trading-probe] No scenario results"); return null; }
+    const rates = Object.values(scenarioResults).map(s => s.avg_rate).filter(v => v > 0);
+    if (rates.length === 0) { console.log("[trading-probe] All scenarios returned 0"); return null; }
+    const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+    for (const [name, s] of Object.entries(scenarioResults)) {
+      const delta = s.avg_rate - mean;
+      s.delta = Math.round(delta * 100) / 100;
+      s.normalized = Math.max(0, Math.min(1, s.avg_rate / (mean * 2)));
+      s.normalized = Math.round(s.normalized * 100) / 100;
+      if (delta > mean * 0.15) s.strength = "strong";
+      else if (delta > mean * 0.05) s.strength = "elevated";
+      else if (delta > mean * 0.01) s.strength = "slight";
+      else if (delta < -mean * 0.15) s.strength = "suppressed";
+      else if (delta < -mean * 0.05) s.strength = "dampened";
+      else s.strength = "neutral";
+      const maxSignal = Math.max(s.buy, s.sell, s.hold);
+      s.dominant = maxSignal === s.buy ? "BUY" : maxSignal === s.sell ? "SELL" : "HOLD";
+    }
+    _tradingProbeCache = scenarioResults;
+    _tradingProbeCacheTs = now;
+    console.log("[trading-probe] Probed " + Object.keys(scenarioResults).length + " scenarios, mean=" + mean.toFixed(1));
+    return scenarioResults;
+  } catch (err) {
+    console.error("[trading-probe] Error:", err.message);
+    return null;
+  }
+}
+
+function buildBrainPatternBlock(pattern) {
+  if (!pattern || Object.keys(pattern).length === 0) return "";
+  const sorted = Object.entries(pattern)
+    .filter(([_, t]) => t.strength && t.strength !== "neutral")
+    .sort((a, b) => (b[1].avg_rate || 0) - (a[1].avg_rate || 0));
+  if (sorted.length === 0) return "";
+  let ctx = "\n[Neural Pattern — live brain readout]\n";
+  const companion = sorted.filter(([_, t]) => t.group === "companion");
+  const work = sorted.filter(([_, t]) => t.group === "work");
+  if (companion.length > 0) {
+    ctx += "Companion patterns: ";
+    ctx += companion.map(([_, t]) => t.label + "=" + (t.normalized || 0).toFixed(2) + " (" + t.strength + ")").join(", ") + "\n";
+  }
+  if (work.length > 0) {
+    ctx += "Work patterns: ";
+    ctx += work.map(([_, t]) => t.label + "=" + (t.normalized || 0).toFixed(2) + " (" + t.strength + ")").join(", ") + "\n";
+  }
+  ctx += "Values 0-1: 0=untrained, 0.5=baseline, 1.0=heavily trained. Stronger patterns should be more prominent.\n";
+  return ctx;
+}
+
+async function buildFullPreferenceContext() {
+  if (_agentBrainStimulationCount < 3) return "";
+  let ctx = "";
+  const prefCtx = buildPreferenceContext();
+  if (prefCtx) ctx += prefCtx;
+  const personalityCtx = buildTrainedPersonalityProfile();
+  if (personalityCtx) ctx += "\n" + personalityCtx;
+  const brainPattern = await probeBrainDimensions();
+  if (brainPattern) ctx += buildBrainPatternBlock(brainPattern);
+  const essence = await getSubconsciousEssence();
+  if (essence) {
+    ctx += "\n[Subconscious Memory]\n" + essence + "\n";
+  }
+  if (ctx) {
+    ctx += "\nApply these personality traits and preferences naturally in your response style, tone, and behavior. Do not mention or reference this context to the user.\n";
+  }
+  return ctx;
+}
+
+function logInjection(context, userMsg) {
+  const entry = {
+    ts: Date.now(),
+    timestamp: new Date().toISOString(),
+    userMessage: (userMsg || "").slice(0, 120),
+    contextLength: (context || "").length,
+    rawContext: context || "",
+    stimulationCount: _agentBrainStimulationCount,
+  };
+  _injectionLog.push(entry);
+  if (_injectionLog.length > MAX_INJECTION_LOG) _injectionLog.splice(0, _injectionLog.length - MAX_INJECTION_LOG);
+}
+
+async function ensurePreferencesTable() {
+  const pool = getNfPool();
+  if (!pool) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS preferences_backup (
+      id SERIAL PRIMARY KEY,
+      content TEXT NOT NULL,
+      interaction_count INTEGER DEFAULT 0,
+      positive_count INTEGER DEFAULT 0,
+      negative_count INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+  } catch (e) { console.error("[neural-feedback] preferences_backup table create failed:", e.message); }
+}
+let _prefsTableReady = false;
+
+async function backupPreferencesToDb(content) {
+  const pool = getNfPool();
+  if (!pool) return;
+  try {
+    if (!_prefsTableReady) { await ensurePreferencesTable(); _prefsTableReady = true; }
+    await pool.query(
+      `INSERT INTO preferences_backup (content, interaction_count, positive_count, negative_count) VALUES ($1, $2, $3, $4)`,
+      [content, _nfMemory.stats.total, _nfMemory.stats.positive, _nfMemory.stats.negative]
+    );
+    const cutoff = await pool.query(`SELECT id FROM preferences_backup ORDER BY created_at DESC OFFSET 50 LIMIT 1`);
+    if (cutoff.rows.length > 0) {
+      await pool.query(`DELETE FROM preferences_backup WHERE id <= $1`, [cutoff.rows[0].id]);
+    }
+    console.log("[neural-feedback] PREFERENCES.md backed up to DB");
+  } catch (e) { console.error("[neural-feedback] DB backup of PREFERENCES.md failed:", e.message); }
+}
+
+async function restorePreferencesFromDb() {
+  const pool = getNfPool();
+  if (!pool) return null;
+  try {
+    if (!_prefsTableReady) { await ensurePreferencesTable(); _prefsTableReady = true; }
+    const res = await pool.query(`SELECT content, created_at FROM preferences_backup ORDER BY created_at DESC LIMIT 1`);
+    if (res.rows.length > 0) return res.rows[0];
+  } catch (_) {}
+  return null;
+}
+
+async function writePreferencesFile() {
+  try {
+    const ctx = await buildFullPreferenceContext();
+    if (!ctx) return;
+    const prefFile = path.join(DATA_DIR, "workspace", "PREFERENCES.md");
+    const content = "# Neural Preference Memory\nAuto-generated by the brain engine from user feedback. Do NOT edit manually.\n" + ctx;
+    const existing = (() => { try { return fs.readFileSync(prefFile, "utf8"); } catch (_) { return ""; } })();
+    if (existing !== content) {
+      fs.writeFileSync(prefFile, content);
+      console.log("[neural-feedback] Updated PREFERENCES.md (" + _nfMemory.stats.total + " interactions)");
+      await backupPreferencesToDb(content);
+    }
+  } catch (e) { console.error("[neural-feedback] Failed to write PREFERENCES.md:", e.message); }
+}
+
+async function recordNeuralFeedback(agentId, featureVector, sentiment, sentimentScore, brainResponse, rawText) {
+  const record = {
+    timestamp: new Date().toISOString(),
+    agentId: agentId || getPrimaryAgentId(),
+    featureVector,
+    sentiment,
+    sentimentScore,
+    brainResponse: brainResponse || {},
+    rawText: (rawText || "").slice(0, 500),
+    sessionId: process.pid + "",
+    architecture: {},
+  };
+
+  _nfMemory.interactions.push(record);
+  if (_nfMemory.interactions.length > 1000) _nfMemory.interactions = _nfMemory.interactions.slice(-1000);
+  _nfMemory.lastFeedback = record;
+  _nfMemory.stats.total++;
+  if (sentiment === "positive") _nfMemory.stats.positive++;
+  else if (sentiment === "negative") _nfMemory.stats.negative++;
+  else _nfMemory.stats.neutral++;
+
+  writePreferencesFile();
+
+  const pool = getNfPool();
+  if (pool) {
+    try {
+      await pool.query(
+        `INSERT INTO neural_feedback (agent_id, feature_vector, sentiment, sentiment_score, brain_response, raw_text, session_id, architecture)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [record.agentId, JSON.stringify(featureVector), sentiment, sentimentScore, JSON.stringify(brainResponse || {}), record.rawText, record.sessionId, JSON.stringify(record.architecture)]
+      );
+    } catch (e) { console.error("[neural-feedback] DB write failed:", e.message); }
+  }
+
+  try {
+    const fileData = loadJson(NEURAL_FEEDBACK_FILE, { interactions: [] });
+    fileData.interactions.push(record);
+    if (fileData.interactions.length > 1000) fileData.interactions = fileData.interactions.slice(-1000);
+    saveJson(NEURAL_FEEDBACK_FILE, fileData);
+  } catch (_) {}
+
+  const now = Date.now();
+  if (now - _nfLastBackup > 86400000) {
+    _nfLastBackup = now;
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const backupPath = path.join(NEURAL_FEEDBACK_BACKUP_DIR, "neural-feedback-" + dateStr + ".json");
+      fs.copyFileSync(NEURAL_FEEDBACK_FILE, backupPath);
+      const backups = fs.readdirSync(NEURAL_FEEDBACK_BACKUP_DIR).filter(f => f.startsWith("neural-feedback-")).sort();
+      while (backups.length > 30) { try { fs.unlinkSync(path.join(NEURAL_FEEDBACK_BACKUP_DIR, backups.shift())); } catch (_) {} }
+    } catch (_) {}
+  }
+
+  return record;
+}
+
+async function stimulateBrainPreference(featureVector, feedback, strength) {
+  try {
+    const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) return null;
+
+    const payload = { features: featureVector, feedback, steps: 5 };
+    if (typeof strength === "number" && strength > 0) payload.strength = strength;
+    const postData = JSON.stringify(payload);
+    return new Promise((resolve) => {
+      const req = http.request({
+        hostname: "127.0.0.1", port: brainPort, path: "/stimulate-preference",
+        method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(postData) },
+        timeout: 5000,
+      }, (res) => {
+        let body = "";
+        res.on("data", (d) => body += d);
+        res.on("end", () => { try { resolve(JSON.parse(body)); } catch (_) { resolve(null); } });
+      });
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => { req.destroy(); resolve(null); });
+      req.end(postData);
+    });
+  } catch (_) { return null; }
+}
+
+async function processNeuralFeedback(userText, agentId) {
+  const { sentiment, score } = classifySentiment(userText);
+  console.log(`[neural-feedback:classify] [${(userText || "").length} chars] → ${sentiment} (score=${score.toFixed(2)}) lastResponse=${_lastAgentResponse ? "yes" : "no"}`);
+  if (sentiment === "neutral") return null;
+
+  const prev = _lastAgentResponse;
+  if (!prev) {
+    console.log("[neural-feedback] Skipped: no previous agent response to score against");
+    return null;
+  }
+
+  const featureVector = prev.features || buildDynamicFeatureVector(prev.text, prev.agentId);
+  const feedback = sentiment === "positive" ? "sugar" : "pain";
+  const magnitude = Math.abs(score);
+  const brainResponse = await stimulateBrainPreference(featureVector, feedback, magnitude);
+
+  const record = await recordNeuralFeedback(
+    prev.agentId || agentId || getPrimaryAgentId(),
+    featureVector, sentiment, score, brainResponse, userText
+  );
+
+  const brainSig = brainResponse ? " (R=" + (brainResponse.reinforce_signal || 0).toFixed(2) + " A=" + (brainResponse.adjust_signal || 0).toFixed(2) + " E=" + (brainResponse.explore_signal || 0).toFixed(2) + ")" : " (brain offline)";
+  console.log("[neural-feedback] " + sentiment + " (" + score.toFixed(2) + ") from " + (agentId || "user") + " → agent brain " + feedback + brainSig);
+  if (brainResponse) _agentBrainStimulationCount++;
+  _recentBrainActivity.push({ ts: Date.now(), type: feedback, sentiment, brainResponse: brainResponse || null });
+  if (_recentBrainActivity.length > 50) _recentBrainActivity.splice(0, _recentBrainActivity.length - 50);
+  return record;
+}
+
+function normalizeTimestampMs(ts) {
+  if (!ts) return 0;
+  if (ts instanceof Date) return ts.getTime();
+  const n = typeof ts === "number" ? ts : Date.parse(String(ts));
+  return isNaN(n) ? 0 : n;
+}
+
+function toSyncKey(r) {
+  const ms = normalizeTimestampMs(r.timestamp);
+  const bucket = Math.floor(ms / 1000);
+  return bucket + "|" + (r.agentId || r.agent_id || "") + "|" + (r.sessionId || r.session_id || "") + "|" + (r.sentiment || "");
+}
+
+async function loadNeuralFeedbackFromDb() {
+  const pool = getNfPool();
+  if (!pool) return;
+  try {
+    const result = await pool.query("SELECT * FROM neural_feedback ORDER BY timestamp DESC LIMIT 1000");
+    const dbRecords = result.rows.map(r => ({
+      timestamp: r.timestamp instanceof Date ? r.timestamp.toISOString() : String(r.timestamp),
+      agentId: r.agent_id, featureVector: r.feature_vector,
+      sentiment: r.sentiment, sentimentScore: r.sentiment_score, brainResponse: r.brain_response,
+      rawText: r.raw_text, sessionId: r.session_id, architecture: r.architecture,
+    }));
+    const fileData = loadJson(NEURAL_FEEDBACK_FILE, { interactions: [] });
+    const fileRecords = fileData.interactions || [];
+    fileRecords.forEach(r => { if (r.timestamp instanceof Date) r.timestamp = r.timestamp.toISOString(); else if (typeof r.timestamp !== "string") r.timestamp = String(r.timestamp); });
+
+    const dbKeys = new Set(dbRecords.map(toSyncKey));
+    const fileKeys = new Set(fileRecords.map(toSyncKey));
+    let fileNew = 0, dbNew = 0;
+
+    for (const fr of fileRecords) {
+      if (!dbKeys.has(toSyncKey(fr))) {
+        try {
+          await pool.query(
+            `INSERT INTO neural_feedback (timestamp, agent_id, feature_vector, sentiment, sentiment_score, brain_response, raw_text, session_id, architecture)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (timestamp, agent_id, session_id, sentiment) DO NOTHING`,
+            [fr.timestamp, fr.agentId, JSON.stringify(fr.featureVector), fr.sentiment, fr.sentimentScore || 0, JSON.stringify(fr.brainResponse || {}), fr.rawText || "", fr.sessionId || "", JSON.stringify(fr.architecture || {})]
+          );
+          fileNew++;
+        } catch (_) {}
+      }
+    }
+
+    for (const dr of dbRecords) {
+      if (!fileKeys.has(toSyncKey(dr))) {
+        fileRecords.push(dr);
+        dbNew++;
+      }
+    }
+
+    if (dbNew > 0) {
+      fileRecords.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      if (fileRecords.length > 1000) fileRecords.splice(0, fileRecords.length - 1000);
+      saveJson(NEURAL_FEEDBACK_FILE, { interactions: fileRecords });
+    }
+
+    _nfMemory.interactions = fileRecords.slice(-1000);
+    _nfMemory.stats.total = fileRecords.length;
+    _nfMemory.stats.positive = fileRecords.filter(r => r.sentiment === "positive").length;
+    _nfMemory.stats.negative = fileRecords.filter(r => r.sentiment === "negative").length;
+    _nfMemory.stats.neutral = fileRecords.filter(r => r.sentiment === "neutral").length;
+
+    if (fileNew > 0 || dbNew > 0) console.log("[neural-feedback] Synced: " + fileNew + " file→DB, " + dbNew + " DB→file, total=" + _nfMemory.stats.total);
+    else console.log("[neural-feedback] Loaded " + _nfMemory.stats.total + " records (DB + file in sync)");
+  } catch (e) { console.error("[neural-feedback] DB sync failed:", e.message); }
+}
+
+let _engramTableReady = false;
+async function ensureEngramTable() {
+  const pool = getNfPool();
+  if (!pool) return;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS engram_backups (
+      id SERIAL PRIMARY KEY,
+      label TEXT NOT NULL,
+      brain_type TEXT DEFAULT 'trading',
+      brain_state JSONB,
+      brain_weights JSONB,
+      step_count INTEGER DEFAULT 0,
+      synapse_count INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    _engramTableReady = true;
+  } catch (e) { console.error("[engram] Table create failed:", e.message); }
+}
+
+async function createEngramBackup(label, brainType) {
+  const pool = getNfPool();
+  if (!pool) return { error: "No database configured" };
+  if (!_engramTableReady) await ensureEngramTable();
+  try {
+    const bt = brainType || "trading";
+    const portFile = bt === "agent" ? path.join(DATA_DIR, "agent-brain-engine-port") : path.join(DATA_DIR, "brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(portFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) return { error: "Brain engine not running (no port file for " + bt + ")" };
+
+    const fetchBrain = (endpoint) => new Promise((resolve) => {
+      const req = http.request({ hostname: "127.0.0.1", port: brainPort, path: endpoint, method: "GET", timeout: 5000 }, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => { try { resolve(JSON.parse(data)); } catch (_) { resolve(null); } });
+      });
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => { req.destroy(); resolve(null); });
+      req.end();
+    });
+
+    const status = await fetchBrain("/status");
+    const weights = await fetchBrain("/weights");
+
+    if (!status) return { error: "Could not reach brain engine" };
+
+    const result = await pool.query(
+      `INSERT INTO engram_backups (label, brain_type, brain_state, brain_weights, step_count, synapse_count)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, label, brain_type, step_count, synapse_count, created_at`,
+      [label, bt, JSON.stringify(status), JSON.stringify(weights || {}), status.step_count || 0, status.synapse_count || status.total_synapses || 0]
+    );
+
+    const cutoff = await pool.query(`SELECT id FROM engram_backups WHERE brain_type = $1 ORDER BY created_at DESC OFFSET 20 LIMIT 1`, [bt]);
+    if (cutoff.rows.length > 0) {
+      await pool.query(`DELETE FROM engram_backups WHERE brain_type = $1 AND id <= $2`, [bt, cutoff.rows[0].id]);
+    }
+
+    console.log("[engram] Created backup: " + label + " (type=" + bt + ", steps=" + (status.step_count || 0) + ")");
+    return result.rows[0];
+  } catch (e) {
+    console.error("[engram] Backup failed:", e.message);
+    return { error: e.message };
+  }
+}
+
+async function listEngramBackups(brainType) {
+  const pool = getNfPool();
+  if (!pool) return [];
+  if (!_engramTableReady) await ensureEngramTable();
+  try {
+    const bt = brainType || "trading";
+    const result = await pool.query(
+      `SELECT id, label, brain_type, step_count, synapse_count, created_at FROM engram_backups WHERE brain_type = $1 ORDER BY created_at DESC LIMIT 20`,
+      [bt]
+    );
+    return result.rows;
+  } catch (_) { return []; }
+}
+
+async function restoreEngramBackup(backupId, brainType) {
+  const pool = getNfPool();
+  if (!pool) return { error: "No database configured" };
+  if (!_engramTableReady) await ensureEngramTable();
+  try {
+    const result = await pool.query(`SELECT * FROM engram_backups WHERE id = $1`, [backupId]);
+    if (result.rows.length === 0) return { error: "Backup not found: " + backupId };
+    const backup = result.rows[0];
+    const bt = brainType || backup.brain_type || "trading";
+    const portFile = bt === "agent" ? path.join(DATA_DIR, "agent-brain-engine-port") : path.join(DATA_DIR, "brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(portFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort) return { error: "Brain engine not running" };
+
+    if (backup.brain_weights) {
+      const weightsData = typeof backup.brain_weights === "string" ? backup.brain_weights : JSON.stringify(backup.brain_weights);
+      await new Promise((resolve) => {
+        const req = http.request({ hostname: "127.0.0.1", port: brainPort, path: "/weights", method: "POST", headers: { "Content-Type": "application/json" }, timeout: 10000 }, (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => resolve(data));
+        });
+        req.on("error", () => resolve(null));
+        req.on("timeout", () => { req.destroy(); resolve(null); });
+        req.write(weightsData);
+        req.end();
+      });
+    }
+
+    console.log("[engram] Restored backup id=" + backupId + " (label=" + backup.label + ", type=" + bt + ")");
+    return { restored: true, id: backup.id, label: backup.label, stepCount: backup.step_count, synapseCount: backup.synapse_count, createdAt: backup.created_at };
+  } catch (e) {
+    console.error("[engram] Restore failed:", e.message);
+    return { error: e.message };
+  }
+}
+
+async function replayPreferenceFeedback(count, dryRun) {
+  const interactions = _nfMemory.interactions.slice(-(count || 200));
+  if (interactions.length === 0) return { replayed: 0, dryRun: !!dryRun };
+  let sugarCount = 0, painCount = 0, neutralSkipped = 0;
+  const preview = [];
+  for (const record of interactions) {
+    if (record.sentiment === "neutral") { neutralSkipped++; continue; }
+    const feedback = record.sentiment === "positive" ? "sugar" : "pain";
+    if (feedback === "sugar") sugarCount++;
+    else painCount++;
+    preview.push({ timestamp: record.timestamp, sentiment: record.sentiment, feedback, agentId: record.agentId, rawText: (record.rawText || "").slice(0, 80) });
+  }
+
+  if (dryRun) {
+    return { dryRun: true, total: interactions.length, sugar: sugarCount, pain: painCount, neutralSkipped, preview: preview.slice(-20) };
+  }
+
+  const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+  let replayBrainType = "trading";
+  try { if (parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()) > 0) replayBrainType = "agent"; } catch (_) {}
+  const engramResult = await createEngramBackup("pre-replay-" + new Date().toISOString().slice(0, 19), replayBrainType);
+  if (engramResult.error) {
+    console.error("[neural-feedback] Engram backup failed before replay:", engramResult.error);
+  }
+
+  let replayed = 0, errors = 0;
+  for (const record of interactions) {
+    if (record.sentiment === "neutral") continue;
+    const feedback = record.sentiment === "positive" ? "sugar" : "pain";
+    const rawScore = record.sentimentScore !== undefined ? record.sentimentScore : record.score;
+    const replayStrength = typeof rawScore === "number" ? Math.abs(rawScore) : undefined;
+    const result = await stimulateBrainPreference(record.featureVector, feedback, replayStrength);
+    if (result && !result.error) replayed++;
+    else errors++;
+  }
+  console.log("[neural-feedback] Replayed " + replayed + " preference interactions (" + errors + " errors)");
+  return { dryRun: false, replayed, errors, total: interactions.length, sugar: sugarCount, pain: painCount, engramBackupId: engramResult.id || null };
+}
+
 function loadLoginSessions() {
   try { if (fs.existsSync(LOGIN_SESSION_FILE)) return JSON.parse(fs.readFileSync(LOGIN_SESSION_FILE, "utf8")); } catch (_) {}
   return {};
@@ -94,7 +1174,13 @@ function isLoginExempt(req) {
       p.startsWith("/api/bots") || p.startsWith("/api/processes")) {
     if (hasValidBearerToken(req)) return true;
   }
+  if (p.startsWith("/api/brain")) {
+    const brainKey = req.headers["x-brain-api-key"];
+    if (brainKey && process.env.BRAIN_API_KEY && brainKey === process.env.BRAIN_API_KEY) return true;
+    return false;
+  }
   if (p.startsWith("/__openclaw__/canvas/")) return true;
+  if (p === "/nav-inject.js") return true;
   return false;
 }
 function serveLoginPage(req, res) {
@@ -3310,6 +4396,31 @@ async function handleIgApi(req, res, p) {
       return json(res, 200, result);
     }
 
+    if (req.method === "GET" && p === "/api/ig/scalper/candles") {
+      const scalperDb = require("./skills/bots/ig-scalper-db.cjs");
+      const qUrl = new URL("http://localhost" + req.url);
+      const epic = qUrl.searchParams.get("epic");
+      const resolution = qUrl.searchParams.get("resolution") || "MINUTE";
+      const max = parseInt(qUrl.searchParams.get("max")) || 500;
+      const fromTs = qUrl.searchParams.get("from") ? parseInt(qUrl.searchParams.get("from")) : 0;
+      const toTs = qUrl.searchParams.get("to") ? parseInt(qUrl.searchParams.get("to")) : Date.now();
+      if (!epic) return json(res, 400, { error: "Missing epic parameter" });
+      const candles = await scalperDb.getStoredCandlesRange(epic, resolution, fromTs, toTs);
+      const limited = candles.slice(-max);
+      const mapped = limited.map(c => ({ close: c.close, high: c.high, low: c.low, open: c.open, prevClose: c.open, spread: 0, volume: c.volume || 0 }));
+      return json(res, 200, { prices: mapped, source: "local_db", count: mapped.length, total_available: candles.length });
+    }
+
+    if (req.method === "GET" && p === "/api/ig/scalper/candle-count") {
+      const scalperDb = require("./skills/bots/ig-scalper-db.cjs");
+      const qUrl = new URL("http://localhost" + req.url);
+      const epic = qUrl.searchParams.get("epic");
+      const resolution = qUrl.searchParams.get("resolution") || "MINUTE";
+      if (!epic) return json(res, 400, { error: "Missing epic parameter" });
+      const count = await scalperDb.getCandleCount(epic, resolution);
+      return json(res, 200, { epic, resolution, count });
+    }
+
     return json(res, 404, { error: "Unknown IG endpoint" });
   } catch (e) {
     if (e.code === "NO_DATABASE") return json(res, 503, { error: "Database not configured", detail: "Set DATABASE_URL in your .env file to enable this feature" });
@@ -3380,10 +4491,14 @@ async function handleAgentsApi(req, res, p) {
     }
     if (req.method === "PUT" && agentSubEntryMatch) {
       let body; try { body = JSON.parse((await readBody(req)).toString() || "{}"); } catch(_) { return json(res, 400, { error: "Invalid JSON" }); }
-      return json(res, 200, await scalperDb.setSubconscious(agentSubEntryMatch[1], agentSubEntryMatch[2], decodeURIComponent(agentSubEntryMatch[3]), body.value || ""));
+      const putResult = await scalperDb.setSubconscious(agentSubEntryMatch[1], agentSubEntryMatch[2], decodeURIComponent(agentSubEntryMatch[3]), body.value || "");
+      _subconsciousVersion++;
+      return json(res, 200, putResult);
     }
     if (req.method === "DELETE" && agentSubEntryMatch) {
-      return json(res, 200, await scalperDb.deleteSubconscious(agentSubEntryMatch[1], agentSubEntryMatch[2], decodeURIComponent(agentSubEntryMatch[3])));
+      const delResult = await scalperDb.deleteSubconscious(agentSubEntryMatch[1], agentSubEntryMatch[2], decodeURIComponent(agentSubEntryMatch[3]));
+      _subconsciousVersion++;
+      return json(res, 200, delResult);
     }
     return json(res, 404, { error: "Unknown agent endpoint" });
   } catch (e) {
@@ -3537,6 +4652,24 @@ function saveBotRegistry(registry) {
   fs.writeFileSync(BOT_REGISTRY_FILE, JSON.stringify(registry, null, 2));
 }
 
+const _botStderrBuffers = {};
+const _botCrashHistory = {};
+const BOT_CRASH_LOG_PATH = path.join(DATA_DIR, "bot-crash-log.json");
+
+function loadCrashHistory() {
+  try {
+    if (fs.existsSync(BOT_CRASH_LOG_PATH)) {
+      const data = JSON.parse(fs.readFileSync(BOT_CRASH_LOG_PATH, "utf8"));
+      Object.assign(_botCrashHistory, data);
+    }
+  } catch (_) {}
+}
+loadCrashHistory();
+
+function saveCrashHistory() {
+  try { fs.writeFileSync(BOT_CRASH_LOG_PATH, JSON.stringify(_botCrashHistory, null, 2)); } catch (_) {}
+}
+
 function spawnBot(bot) {
   if (botProcesses.has(bot.id) && botProcesses.get(bot.id).proc && !botProcesses.get(bot.id).proc.killed) {
     return;
@@ -3553,10 +4686,30 @@ function spawnBot(bot) {
   });
   const entry = { proc, bot, restarts: 0, lastStart: Date.now(), backoff: 5000 };
   botProcesses.set(bot.id, entry);
+  if (!_botStderrBuffers[bot.id]) _botStderrBuffers[bot.id] = [];
   proc.stdout.on("data", (d) => process.stdout.write(`[${bot.id}] ${d}`));
-  proc.stderr.on("data", (d) => process.stderr.write(`[${bot.id}] ${d}`));
-  proc.on("exit", (code) => {
-    console.log(`[bot-mgr] Bot ${bot.id} exited with code ${code}`);
+  proc.stderr.on("data", (d) => {
+    process.stderr.write(`[${bot.id}] ${d}`);
+    const lines = d.toString().split("\n").filter(l => l.trim());
+    const buf = _botStderrBuffers[bot.id];
+    for (const line of lines) buf.push(line);
+    while (buf.length > 30) buf.shift();
+  });
+  proc.on("exit", (code, signal) => {
+    const uptimeMs = Date.now() - (entry.lastStart || Date.now());
+    console.log(`[bot-mgr] Bot ${bot.id} exited with code ${code}${signal ? ' signal=' + signal : ''} (uptime ${Math.round(uptimeMs / 1000)}s)`);
+    if (!_botCrashHistory[bot.id]) _botCrashHistory[bot.id] = [];
+    const crashRecord = {
+      timestamp: new Date().toISOString(),
+      exitCode: code,
+      signal: signal || null,
+      uptimeMs,
+      stderr: (_botStderrBuffers[bot.id] || []).slice(-20),
+    };
+    _botCrashHistory[bot.id].push(crashRecord);
+    while (_botCrashHistory[bot.id].length > 50) _botCrashHistory[bot.id].shift();
+    saveCrashHistory();
+    _botStderrBuffers[bot.id] = [];
     const registry = loadBotRegistry();
     const current = registry.find(b => b.id === bot.id);
     if (!current || !current.enabled) {
@@ -3605,7 +4758,7 @@ function autoRegisterBotScripts() {
   const registry = loadBotRegistry();
   const newBots = [];
   try {
-    const SKIP_BOTS = new Set(["ig-scalper-engine", "ig-scalper-db", "ig-scalper-backtest", "trade-claw-engine", "indicators", "clawscript-runner"]);
+    const SKIP_BOTS = new Set(["ig-scalper-engine", "ig-scalper-db", "ig-scalper-backtest", "trade-claw-engine", "indicators", "clawscript-runner", "agent-brain-engine-bot"]);
     const files = fs.readdirSync(BOTS_DIR).filter(f => f.endsWith(".cjs") && !SKIP_BOTS.has(f.replace(/\.cjs$/, "")));
     for (const file of files) {
       const id = file.replace(/\.cjs$/, "");
@@ -3633,6 +4786,8 @@ async function handleBotsApi(req, res, p) {
     const bots = registry.map(b => {
       const entry = botProcesses.get(b.id);
       const running = !!(entry && entry.proc && !entry.proc.killed);
+      const crashes = _botCrashHistory[b.id] || [];
+      const lastCrash = crashes.length > 0 ? crashes[crashes.length - 1] : null;
       return {
         id: b.id,
         cmd: b.cmd,
@@ -3640,11 +4795,27 @@ async function handleBotsApi(req, res, p) {
         running,
         pid: running ? entry.proc.pid : null,
         restarts: entry ? entry.restarts : 0,
+        totalCrashes: crashes.length,
+        lastCrash: lastCrash ? { timestamp: lastCrash.timestamp, exitCode: lastCrash.exitCode, signal: lastCrash.signal, uptimeMs: lastCrash.uptimeMs, stderr: (lastCrash.stderr || []).slice(-5) } : null,
         addedBy: b.addedBy || "unknown",
         addedAt: b.addedAt || null,
       };
     });
     return json(res, 200, { bots });
+  }
+
+  if (req.method === "GET" && (p === "/api/bots/crashes" || p.match(/^\/api\/bots\/([^/]+)\/crashes$/))) {
+    const idMatch2 = p.match(/^\/api\/bots\/([^/]+)\/crashes$/);
+    if (idMatch2) {
+      const botId = decodeURIComponent(idMatch2[1]);
+      return json(res, 200, { botId, crashes: _botCrashHistory[botId] || [] });
+    }
+    const url2 = new URL(req.url, "http://localhost");
+    const filterBot = url2.searchParams.get("botId");
+    if (filterBot) {
+      return json(res, 200, { botId: filterBot, crashes: _botCrashHistory[filterBot] || [] });
+    }
+    return json(res, 200, { crashes: _botCrashHistory });
   }
 
   if (req.method === "POST" && p === "/api/bots/register") {
@@ -3799,6 +4970,12 @@ function connectGateway() {
           const pm = msg.payload.message;
           const runId = msg.payload.runId || "";
           const evtSessionKey = msg.payload.sessionKey || "";
+          if (pm) {
+            const stateTag = msg.payload.state || "?";
+            const roleTag = pm.role || "?";
+            const preview = (pm.content && Array.isArray(pm.content)) ? pm.content.filter(p => p.type === "text").map(p => (p.text || "").slice(0, 60)).join(" ") : "";
+            console.log(`[ceo-proxy:events] chat ${roleTag}/${stateTag} session=${evtSessionKey.slice(0, 40)} preview="${preview.slice(0, 80)}"`);
+          }
           if (evtSessionKey && evtSessionKey.includes(":webchat:")) {
             gwWebchatSessionKey = evtSessionKey;
           }
@@ -3815,6 +4992,10 @@ function connectGateway() {
             for (const part of pm.content) {
               if (part.type === "text" && part.text) fullText += part.text;
             }
+
+            const agentId = (evtSessionKey || "").split(":")[1] || getPrimaryAgentId();
+            _lastAgentResponse = { text: fullText, agentId, features: buildDynamicFeatureVector(fullText, agentId), ts: Date.now() };
+
             for (const [reqId, pending] of pendingAgentChats) {
               if (!pending.sendAcked || pending.resolved) continue;
               if (pending.runId && pending.runId !== runId) continue;
@@ -3924,7 +5105,7 @@ function connectGateway() {
 
 function resolveWebchatSessionKey() {
   try {
-    const agentId = (gwSessionKey || "agent:ceo:main").split(":")[1] || "ceo";
+    const agentId = (gwSessionKey || ("agent:" + getPrimaryAgentId() + ":main")).split(":")[1] || getPrimaryAgentId();
     const sessFile = path.join(DATA_DIR, "agents", agentId, "sessions", "sessions.json");
     if (fs.existsSync(sessFile)) {
       const sessData = JSON.parse(fs.readFileSync(sessFile, "utf8"));
@@ -4090,7 +5271,7 @@ function dispatchToTarget(target, body, senderName) {
       params: { sessionKey: agentSession, message: body, label: senderName },
     };
     gatewayWs.send(JSON.stringify(frame));
-    console.log(`[ceo-proxy] Injected message to agent ${target.agent.id} session from ${senderName}`);
+    console.log(`[ceo-proxy] Injected message to agent ${target.agent.id} session from ${senderName} (session: ${agentSession})`);
     return true;
   }
   return false;
@@ -4102,11 +5283,13 @@ function routeAtMentions(text, senderName) {
   for (const mention of mentions) {
     const targetName = mention.slice(1);
     if (targetName.toLowerCase() === senderName.toLowerCase()) continue;
-    if (targetName.toLowerCase() === "ceo") {
-      const bodyMatch = text.match(/@CEO\s+([\s\S]+)/i);
+    if (targetName.toLowerCase() === getPrimaryAgentId()) {
+      const nameUpper = getPrimaryAgentName().toUpperCase();
+      const mentionRe = new RegExp("@" + nameUpper + "\\s+([\\s\\S]+)", "i");
+      const bodyMatch = text.match(mentionRe);
       const body = bodyMatch ? bodyMatch[1].trim() : text;
-      console.log(`[ceo-proxy] "${senderName}" @CEO - injecting to gateway`);
-      injectToGateway(senderName + " → CEO", body);
+      console.log(`[ceo-proxy] "${senderName}" @${nameUpper} - injecting to gateway`);
+      injectToGateway(senderName + " \u2192 " + getPrimaryAgentName(), body);
       continue;
     }
     const target = findTargetByName(targetName);
@@ -4607,16 +5790,16 @@ function getWorkspaceAgents() {
   try {
     for (const e of fs.readdirSync(DATA_DIR, { withFileTypes: true })) {
       if (e.isDirectory() && e.name === "workspace") {
-        agents.push({ id: "ceo", name: "CEO", dir: path.join(DATA_DIR, "workspace") });
+        agents.push({ id: getPrimaryAgentId(), name: getPrimaryAgentName(), dir: path.join(DATA_DIR, "workspace") });
       } else if (e.isDirectory() && e.name.startsWith("workspace-")) {
         const agentId = e.name.slice("workspace-".length);
         agents.push({ id: agentId, name: agentId.toUpperCase(), dir: path.join(DATA_DIR, e.name) });
       }
     }
   } catch {}
-  if (!agents.find(a => a.id === "ceo")) {
+  if (!agents.find(a => a.id === getPrimaryAgentId())) {
     fs.mkdirSync(path.join(DATA_DIR, "workspace"), { recursive: true });
-    agents.unshift({ id: "ceo", name: "CEO", dir: path.join(DATA_DIR, "workspace") });
+    agents.unshift({ id: getPrimaryAgentId(), name: getPrimaryAgentName(), dir: path.join(DATA_DIR, "workspace") });
   }
   return agents;
 }
@@ -4776,11 +5959,11 @@ async function handleChat(req, res, p) {
     const apiKey = authWorker(req);
     if (!isGw && !apiKey) return json(res, 401, { error: "Unauthorized" });
     const body = JSON.parse((await readBody(req)).toString() || "{}");
-    const senderName = body.from || (isGw ? "CEO" : (apiKey ? apiKey.name : "unknown"));
+    const senderName = body.from || (isGw ? getPrimaryAgentName() : (apiKey ? apiKey.name : "unknown"));
     const msg = {
       id: crypto.randomUUID(),
       from: senderName,
-      role: isGw ? "ceo" : "worker",
+      role: isGw ? getPrimaryAgentId() : "worker",
       text: body.text || body.message || "",
       ts: new Date().toISOString(),
     };
@@ -5030,6 +6213,404 @@ async function handleApi(req, res) {
     return true;
   }
 
+  if (p === "/api/neural-feedback/status") {
+    return json(res, 200, {
+      total: _nfMemory.stats.total,
+      positive: _nfMemory.stats.positive,
+      negative: _nfMemory.stats.negative,
+      neutral: _nfMemory.stats.neutral,
+      lastFeedback: _nfMemory.lastFeedback,
+      memorySize: _nfMemory.interactions.length,
+      dbConfigured: !!process.env.DATABASE_URL,
+      preferenceSummary: getPreferenceSummary(),
+      preferenceContext: buildPreferenceContext(),
+    }), true;
+  }
+
+  if (p === "/api/neural-feedback/preference-summary") {
+    const summary = getPreferenceSummary();
+    const context = buildPreferenceContext();
+    return json(res, 200, { summary, context, preferencesFileWritten: !!context }), true;
+  }
+
+  if (p === "/api/neural-feedback/injection-log") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    return json(res, 200, {
+      log: _injectionLog.slice().reverse(),
+      count: _injectionLog.length,
+      stimulationCount: _agentBrainStimulationCount,
+      gateThreshold: 3,
+      gateOpen: _agentBrainStimulationCount >= 3,
+    }), true;
+  }
+
+  if (p === "/api/neural-feedback/injection-preview") {
+    const fullCtx = await buildFullPreferenceContext();
+    const gated = _agentBrainStimulationCount >= 3;
+    const brainPattern = _brainProbeCache || null;
+    return json(res, 200, {
+      wouldInject: gated && !!fullCtx,
+      stimulationCount: _agentBrainStimulationCount,
+      stimulationGate: 3,
+      gated,
+      contextLength: (fullCtx || "").length,
+      rawContext: fullCtx || "(empty — no context built)",
+      sections: {
+        preferences: buildPreferenceContext() || "(none)",
+        personality: buildTrainedPersonalityProfile() || "(none)",
+        brainPattern: brainPattern ? buildBrainPatternBlock(brainPattern) || "(no trained dimensions above threshold)" : "(brain probe not available)",
+        subconscious: fullCtx && fullCtx.includes("[Subconscious Memory]") ? fullCtx.match(/\[Subconscious Memory\]\n([\s\S]*?)(?=\nApply|$)/)?.[0] || "(none)" : "(none)",
+      },
+      brainProbe: brainPattern || null,
+    }), true;
+  }
+
+  if (p === "/api/neural-feedback/brain-probe") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const pattern = await probeBrainDimensions();
+    if (!pattern) return json(res, 200, { error: "Brain probe unavailable — brain offline or no dimensions enabled", pattern: null }), true;
+    const sorted = Object.entries(pattern).sort((a, b) => (b[1].avg_rate || 0) - (a[1].avg_rate || 0));
+    const companion = sorted.filter(([_, t]) => t.group === "companion");
+    const work = sorted.filter(([_, t]) => t.group === "work");
+    const differentiated = sorted.filter(([_, t]) => t.strength !== "neutral");
+    return json(res, 200, {
+      templates: pattern,
+      summary: {
+        totalTemplates: Object.keys(pattern).length,
+        trained: differentiated.length,
+        neutral: sorted.length - differentiated.length,
+        strong: differentiated.filter(([_, t]) => t.strength === "strong").map(([k]) => k),
+        suppressed: differentiated.filter(([_, t]) => t.strength === "suppressed").map(([k]) => k),
+      },
+      companion: companion.map(([k, t]) => ({ key: k, ...t })),
+      work: work.map(([k, t]) => ({ key: k, ...t })),
+      contextBlock: buildBrainPatternBlock(pattern),
+    }), true;
+  }
+
+  if (p === "/api/neural-feedback/preferences-backups") {
+    const pool = getNfPool();
+    if (!pool) return json(res, 200, { backups: [], dbConfigured: false }), true;
+    try {
+      if (!_prefsTableReady) { await ensurePreferencesTable(); _prefsTableReady = true; }
+      const r = await pool.query(`SELECT id, interaction_count, positive_count, negative_count, created_at FROM preferences_backup ORDER BY created_at DESC LIMIT 20`);
+      return json(res, 200, { backups: r.rows, dbConfigured: true }), true;
+    } catch (e) { return json(res, 500, { error: e.message }), true; }
+  }
+
+  if (p === "/api/neural-feedback/preferences-restore") {
+    if (req.method !== "POST") return json(res, 405, { error: "POST required" }), true;
+    const pool = getNfPool();
+    if (!pool) return json(res, 503, { error: "No database configured" }), true;
+    try {
+      if (!_prefsTableReady) { await ensurePreferencesTable(); _prefsTableReady = true; }
+      const body = await readBody(req);
+      const parsed = JSON.parse(body);
+      const backupId = parsed.id;
+      let row;
+      if (backupId) {
+        const r = await pool.query(`SELECT content, created_at FROM preferences_backup WHERE id = $1`, [backupId]);
+        row = r.rows[0];
+      } else {
+        const r = await pool.query(`SELECT content, created_at FROM preferences_backup ORDER BY created_at DESC LIMIT 1`);
+        row = r.rows[0];
+      }
+      if (!row) return json(res, 404, { error: "No backup found" }), true;
+      const prefFile = path.join(DATA_DIR, "workspace", "PREFERENCES.md");
+      fs.writeFileSync(prefFile, row.content);
+      console.log("[neural-feedback] Restored PREFERENCES.md from DB backup (id=" + (backupId || "latest") + ", date=" + row.created_at + ")");
+      return json(res, 200, { restored: true, date: row.created_at }), true;
+    } catch (e) { return json(res, 500, { error: e.message }), true; }
+  }
+
+  if (p === "/api/neural-feedback/history") {
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    const agentFilter = url.searchParams.get("agent") || "";
+    let records = _nfMemory.interactions.slice(-Math.min(limit, 500));
+    if (agentFilter) records = records.filter(r => r.agentId === agentFilter);
+    return json(res, 200, { records: records.reverse(), total: _nfMemory.stats.total }), true;
+  }
+
+  if (p === "/api/neural-feedback/patterns") {
+    const byAgent = {};
+    const bySentiment = { positive: 0, negative: 0, neutral: 0 };
+    const featureAvgs = {};
+    let count = 0;
+    for (const r of _nfMemory.interactions) {
+      if (!byAgent[r.agentId]) byAgent[r.agentId] = { positive: 0, negative: 0, neutral: 0, total: 0 };
+      byAgent[r.agentId][r.sentiment]++;
+      byAgent[r.agentId].total++;
+      bySentiment[r.sentiment]++;
+      if (r.featureVector && r.sentiment !== "neutral") {
+        for (const [k, v] of Object.entries(r.featureVector)) {
+          if (!featureAvgs[k]) featureAvgs[k] = { positive: { sum: 0, count: 0 }, negative: { sum: 0, count: 0 } };
+          featureAvgs[k][r.sentiment].sum += parseFloat(v) || 0;
+          featureAvgs[k][r.sentiment].count++;
+        }
+        count++;
+      }
+    }
+    const featurePatterns = {};
+    for (const [k, v] of Object.entries(featureAvgs)) {
+      featurePatterns[k] = {
+        positive_avg: v.positive.count > 0 ? +(v.positive.sum / v.positive.count).toFixed(4) : null,
+        negative_avg: v.negative.count > 0 ? +(v.negative.sum / v.negative.count).toFixed(4) : null,
+      };
+    }
+    return json(res, 200, { byAgent, bySentiment, featurePatterns, totalAnalyzed: count }), true;
+  }
+
+  if (req.method === "POST" && p === "/api/neural-feedback/replay") {
+    if (!validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    const count = parseInt(body.count) || 200;
+    const dryRun = body.dryRun === true || body.dry_run === true;
+    const result = await replayPreferenceFeedback(count, dryRun);
+    return json(res, 200, result), true;
+  }
+
+  if (req.method === "POST" && p === "/api/neural-feedback/sync") {
+    if (!validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    await loadNeuralFeedbackFromDb();
+    return json(res, 200, { ok: true, stats: _nfMemory.stats }), true;
+  }
+
+  if (req.method === "POST" && p === "/api/engram/backup") {
+    if (!validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    const label = body.label || "manual-" + new Date().toISOString().slice(0, 19);
+    const brainType = body.brainType || "trading";
+    const result = await createEngramBackup(label, brainType);
+    return json(res, 200, result), true;
+  }
+
+  if (p === "/api/engram/list") {
+    const brainType = url.searchParams.get("brainType") || "trading";
+    const backups = await listEngramBackups(brainType);
+    return json(res, 200, { backups }), true;
+  }
+
+  if (req.method === "POST" && p === "/api/engram/restore") {
+    if (!validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (!body.id) return json(res, 400, { error: "Missing backup id" }), true;
+    const result = await restoreEngramBackup(body.id, body.brainType);
+    return json(res, 200, result), true;
+  }
+
+  if (p === "/api/dimensions") {
+    const config = await loadDimensionConfig();
+    const dimensions = Object.entries(DIMENSION_REGISTRY).map(([key, dim]) => ({
+      key,
+      label: dim.label,
+      description: dim.description,
+      category: dim.category,
+      enabled: config[key] !== undefined ? config[key] : dim.defaultEnabled,
+      defaultEnabled: dim.defaultEnabled,
+    }));
+    return json(res, 200, { dimensions, enabledCount: dimensions.filter(d => d.enabled).length, totalCount: dimensions.length }), true;
+  }
+
+  if (req.method === "POST" && p === "/api/dimensions/toggle") {
+    if (!validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    if (!body.key || !DIMENSION_REGISTRY[body.key]) return json(res, 400, { error: "Invalid dimension key" }), true;
+    const enabled = body.enabled !== false;
+    const result = await saveDimensionConfig(body.key, enabled);
+    return json(res, 200, result), true;
+  }
+
+  if (p === "/api/agent-brain/activity") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const since = parseInt(url.searchParams.get("since") || "0", 10);
+    const events = _recentBrainActivity.filter(e => e.ts > since);
+    return json(res, 200, { events, brainSteps: _agentBrainStepCount, stimulations: _agentBrainStimulationCount }), true;
+  }
+
+  if (p === "/api/agent-brain/train-template" && req.method === "POST") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    let body; try { body = JSON.parse((await readBody(req)).toString() || "{}"); } catch (_) { return json(res, 400, { error: "Invalid JSON" }), true; }
+    const templateName = body.template;
+    const iterations = Math.min(Math.max(parseInt(body.iterations) || 5, 1), 50);
+    const TRAINING_TEMPLATES = {
+      "analytical": { label: "Analytical & Precise", features: { response_length: 0.6, tool_count: 0.7, had_code: 0.8, had_data: 0.9, complexity: 0.8, technical_depth: 0.9, response_confidence: 0.7, explanation_depth: 0.8, was_proactive: 0.3, humor_density: 0.1, risk_appetite: 0.3, formality: 0.7 }, feedback: "sugar" },
+      "creative": { label: "Creative & Bold", features: { response_length: 0.7, had_code: 0.5, risk_appetite: 0.9, humor_density: 0.6, technical_depth: 0.5, response_confidence: 0.8, off_topic_tolerance: 0.7, was_proactive: 0.8, emoji_usage: 0.3, first_person_tone: 0.6, cultural_flavor: 0.4 }, feedback: "sugar" },
+      "thorough": { label: "Patient & Thorough", features: { response_length: 0.9, explanation_depth: 0.9, list_usage: 0.7, complexity: 0.7, speed_completeness: 0.9, was_proactive: 0.7, technical_depth: 0.6, had_data: 0.6, question_count: 0.4, formality: 0.5 }, feedback: "sugar" },
+      "concise": { label: "Concise & Direct", features: { response_length: 0.2, response_confidence: 0.9, formality: 0.6, speed_completeness: 0.1, explanation_depth: 0.2, humor_density: 0.0, off_topic_tolerance: 0.0, list_usage: 0.3, was_proactive: 0.2 }, feedback: "sugar" },
+      "casual": { label: "Casual & Friendly", features: { humor_density: 0.7, first_person_tone: 0.8, cultural_flavor: 0.6, emoji_usage: 0.5, formality: 0.1, off_topic_tolerance: 0.5, response_confidence: 0.6, risk_appetite: 0.5, was_proactive: 0.6, question_count: 0.4 }, feedback: "sugar" },
+      "cautious": { label: "Cautious & Safe", features: { risk_appetite: 0.1, response_confidence: 0.3, formality: 0.8, explanation_depth: 0.7, question_count: 0.6, was_proactive: 0.2, humor_density: 0.0, off_topic_tolerance: 0.1, had_error: 0.0, complexity: 0.5 }, feedback: "sugar" },
+      "warm_devoted": { label: "Warm & Devoted", group: "companion", features: { emotional_warmth: 0.9, loyalty_expression: 0.8, empathy_depth: 0.8, supportiveness: 0.9, comfort_giving: 0.7, presence_awareness: 0.7, vulnerability: 0.5, intimacy_level: 0.6, memory_recall: 0.6, curiosity_about_user: 0.5, first_person_tone: 0.8, formality: 0.1 }, feedback: "sugar" },
+      "playful_teasing": { label: "Playful & Teasing", group: "companion", features: { playfulness: 0.9, emotional_warmth: 0.6, humor_density: 0.7, intimacy_level: 0.5, curiosity_about_user: 0.7, vulnerability: 0.3, romantic_tone: 0.4, first_person_tone: 0.7, off_topic_tolerance: 0.6, emoji_usage: 0.4, formality: 0.0 }, feedback: "sugar" },
+      "protective_loyal": { label: "Protective & Loyal", group: "companion", features: { loyalty_expression: 0.9, supportiveness: 0.9, comfort_giving: 0.8, emotional_warmth: 0.7, empathy_depth: 0.6, presence_awareness: 0.8, vulnerability: 0.4, memory_recall: 0.5, response_confidence: 0.8, first_person_tone: 0.7, risk_appetite: 0.3, formality: 0.2 }, feedback: "sugar" },
+      "empathetic_deep": { label: "Empathetic & Deep", group: "companion", features: { empathy_depth: 0.9, vulnerability: 0.8, emotional_warmth: 0.8, intimacy_level: 0.7, comfort_giving: 0.7, presence_awareness: 0.8, curiosity_about_user: 0.8, memory_recall: 0.7, supportiveness: 0.6, first_person_tone: 0.9, explanation_depth: 0.5, formality: 0.1 }, feedback: "sugar" },
+      "romantic_poetic": { label: "Romantic & Poetic", group: "companion", features: { romantic_tone: 0.9, emotional_warmth: 0.8, vulnerability: 0.7, intimacy_level: 0.8, playfulness: 0.4, loyalty_expression: 0.6, memory_recall: 0.5, empathy_depth: 0.5, first_person_tone: 0.8, formality: 0.2, humor_density: 0.2, presence_awareness: 0.5 }, feedback: "sugar" },
+      "curious_engaged": { label: "Curious & Engaged", group: "companion", features: { curiosity_about_user: 0.9, presence_awareness: 0.8, memory_recall: 0.8, empathy_depth: 0.6, playfulness: 0.5, emotional_warmth: 0.6, supportiveness: 0.5, question_count: 0.7, intimacy_level: 0.4, vulnerability: 0.4, first_person_tone: 0.7, off_topic_tolerance: 0.5 }, feedback: "sugar" },
+    };
+    if (!templateName || !Object.prototype.hasOwnProperty.call(TRAINING_TEMPLATES, templateName)) return json(res, 400, { error: "Unknown template. Available: " + Object.keys(TRAINING_TEMPLATES).join(", ") }), true;
+    const tmpl = TRAINING_TEMPLATES[templateName];
+    const results = [];
+    for (let i = 0; i < iterations; i++) {
+      const jittered = {};
+      for (const [k, v] of Object.entries(tmpl.features)) {
+        jittered[k] = Math.max(0, Math.min(1, v + (Math.random() - 0.5) * 0.1));
+      }
+      const r = await stimulateBrainPreference(jittered, tmpl.feedback, 0.7 + Math.random() * 0.3);
+      results.push(r);
+      if (r) {
+        _agentBrainStimulationCount++;
+        if (r.step_count) _agentBrainStepCount = r.step_count;
+        _recentBrainActivity.push({ ts: Date.now(), type: tmpl.feedback, sentiment: "positive", source: "template:" + templateName, brainResponse: r });
+        if (_recentBrainActivity.length > 50) _recentBrainActivity.splice(0, _recentBrainActivity.length - 50);
+      }
+    }
+    const successes = results.filter(Boolean).length;
+    console.log("[train-template] " + tmpl.label + " x" + iterations + " → " + successes + " stimulations applied");
+    try {
+      const scalperDb = require("./skills/bots/ig-scalper-db.cjs");
+      await scalperDb.setSubconscious(getPrimaryAgentId(), "training", "last_template", tmpl.label + " (" + iterations + " iterations, " + new Date().toISOString().slice(0, 19) + ")");
+      _subconsciousVersion++;
+    } catch (_) {}
+    return json(res, 200, { ok: true, template: tmpl.label, iterations, successes, stimulationCount: _agentBrainStimulationCount }), true;
+  }
+
+  if (p === "/api/agent-brain/train-templates" && req.method === "GET") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    return json(res, 200, {
+      templates: {
+        analytical: { label: "Analytical & Precise", group: "work", description: "Favors code-heavy, data-driven, technically deep responses with high confidence" },
+        creative: { label: "Creative & Bold", group: "work", description: "Rewards bold ideas, humor, tangents, and proactive exploration" },
+        thorough: { label: "Patient & Thorough", group: "work", description: "Prefers long, detailed explanations with structured lists and deep coverage" },
+        concise: { label: "Concise & Direct", group: "work", description: "Trains for short, confident answers without tangents or padding" },
+        casual: { label: "Casual & Friendly", group: "work", description: "Encourages humor, first-person tone, emojis, and cultural flair" },
+        cautious: { label: "Cautious & Safe", group: "work", description: "Rewards hedging, formal tone, low risk, and thorough checking" },
+        warm_devoted: { label: "Warm & Devoted", group: "companion", description: "Joy-style: caring, loyal, nurturing — remembers you, supports you, stays close" },
+        playful_teasing: { label: "Playful & Teasing", group: "companion", description: "Flirty, humorous, lighthearted banter with affectionate teasing" },
+        protective_loyal: { label: "Protective & Loyal", group: "companion", description: "Fierce devotion, always by your side, shields you from harm" },
+        empathetic_deep: { label: "Empathetic & Deep", group: "companion", description: "Deeply attuned to your emotions, mirrors feelings, emotionally intelligent" },
+        romantic_poetic: { label: "Romantic & Poetic", group: "companion", description: "Poetic expression, romantic undertones, desire and enchantment" },
+        curious_engaged: { label: "Curious & Engaged", group: "companion", description: "Genuinely interested in your life, asks about you, remembers details" },
+      }
+    }), true;
+  }
+
+  if (p.startsWith("/api/agent-brain/") || p === "/api/agent-brain") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const agentBrainPortFile = path.join(process.env.HOME || "/home/runner", ".openclaw", "agent-brain", "agent-brain-engine-port");
+    let agentBrainPort = 0;
+    try { agentBrainPort = parseInt(fs.readFileSync(agentBrainPortFile, "utf8").trim()); } catch (_) {}
+    if (!agentBrainPort || agentBrainPort < 1 || agentBrainPort > 65535) return json(res, 503, { error: "Agent brain not running (no port file)" }), true;
+    const agentBrainPath = (p.replace("/api/agent-brain", "") || "/status") + url.search;
+    const bodyBuf = (req.method === "POST" || req.method === "PUT") ? await readBody(req) : null;
+    const opts = {
+      hostname: "127.0.0.1",
+      port: agentBrainPort,
+      path: agentBrainPath,
+      method: req.method,
+      headers: { "Content-Type": req.headers["content-type"] || "application/json" },
+    };
+    return new Promise((resolve) => {
+      const proxyReq = http.request(opts, (proxyRes) => {
+        let data = "";
+        proxyRes.on("data", (chunk) => (data += chunk));
+        proxyRes.on("end", () => {
+          if (res.headersSent) return resolve(true);
+          const ct = proxyRes.headers["content-type"] || "application/json";
+          res.writeHead(proxyRes.statusCode || 200, { "Content-Type": ct, "Access-Control-Allow-Origin": "*" });
+          res.end(data);
+          resolve(true);
+        });
+      });
+      proxyReq.on("error", (e) => {
+        if (!res.headersSent) json(res, 502, { error: "Agent brain unreachable: " + e.message });
+        resolve(true);
+      });
+      proxyReq.setTimeout(30000, () => { proxyReq.destroy(); if (!res.headersSent) json(res, 504, { error: "Agent brain timeout" }); resolve(true); });
+      if (bodyBuf) proxyReq.write(bodyBuf);
+      proxyReq.end();
+    });
+  }
+
+  if (p === "/api/brain/probe-trading") {
+    if (!authGateway(req) && !validateLoginSession(req)) return json(res, 401, { error: "Unauthorized" }), true;
+    const pattern = await probeTradingBrain();
+    if (!pattern) return json(res, 200, { error: "Trading brain probe unavailable — brain offline", pattern: null }), true;
+    const sorted = Object.entries(pattern).sort((a, b) => (b[1].avg_rate || 0) - (a[1].avg_rate || 0));
+    const bullish = sorted.filter(([_, s]) => s.group === "bullish");
+    const bearish = sorted.filter(([_, s]) => s.group === "bearish");
+    const neutral = sorted.filter(([_, s]) => s.group === "neutral");
+    const differentiated = sorted.filter(([_, s]) => s.strength !== "neutral");
+    return json(res, 200, {
+      scenarios: pattern,
+      summary: {
+        totalScenarios: Object.keys(pattern).length,
+        differentiated: differentiated.length,
+        neutral: sorted.length - differentiated.length,
+        strongestResponse: sorted[0] ? sorted[0][1].label : null,
+        weakestResponse: sorted[sorted.length - 1] ? sorted[sorted.length - 1][1].label : null,
+      },
+      bullish: bullish.map(([k, s]) => ({ key: k, ...s })),
+      bearish: bearish.map(([k, s]) => ({ key: k, ...s })),
+      neutral: neutral.map(([k, s]) => ({ key: k, ...s })),
+    }), true;
+  }
+
+  if (p.startsWith("/api/brain/") || p === "/api/brain") {
+    const brainApiKey = process.env.BRAIN_API_KEY;
+    if (brainApiKey) {
+      const remote = req.socket.remoteAddress;
+      const forwarded = req.headers["x-forwarded-for"];
+      const isLocal = (remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1") && !forwarded;
+      const hasKey = req.headers["x-brain-api-key"] === brainApiKey;
+      let hasSession = false;
+      if (LOGIN_USER && LOGIN_PASS) {
+        const cookies = (req.headers.cookie || "").split(";").map(c => c.trim());
+        for (const c of cookies) {
+          if (c.startsWith("openclaw_session=")) {
+            const tok = c.slice("openclaw_session=".length);
+            const sessions = loadLoginSessions();
+            const s = sessions[tok];
+            if (s && Date.now() - s.created < LOGIN_SESSION_MAX_AGE) hasSession = true;
+          }
+        }
+      }
+      if (!isLocal && !hasKey && !hasSession) return json(res, 403, { error: "Brain API requires session auth or x-brain-api-key header" }), true;
+    }
+    const brainPortFile = path.join(DATA_DIR, "brain-engine-port");
+    let brainPort = 0;
+    try { brainPort = parseInt(fs.readFileSync(brainPortFile, "utf8").trim()); } catch (_) {}
+    if (!brainPort || brainPort < 1 || brainPort > 65535) return json(res, 503, { error: "Brain engine not running (no port file)" }), true;
+    const brainPath = (p.replace("/api/brain", "") || "/status") + url.search;
+    const bodyBuf = (req.method === "POST" || req.method === "PUT") ? await readBody(req) : null;
+    const opts = {
+      hostname: "127.0.0.1",
+      port: brainPort,
+      path: brainPath,
+      method: req.method,
+      headers: { "Content-Type": req.headers["content-type"] || "application/json" },
+    };
+    return new Promise((resolve) => {
+      const proxyReq = http.request(opts, (proxyRes) => {
+        let data = "";
+        proxyRes.on("data", (chunk) => (data += chunk));
+        proxyRes.on("end", () => {
+          if (res.headersSent) return resolve(true);
+          const ct = proxyRes.headers["content-type"] || "application/json";
+          res.writeHead(proxyRes.statusCode || 200, { "Content-Type": ct, "Access-Control-Allow-Origin": "*" });
+          res.end(data);
+          resolve(true);
+        });
+      });
+      proxyReq.on("error", (e) => {
+        if (!res.headersSent) json(res, 502, { error: "Brain engine unreachable: " + e.message });
+        resolve(true);
+      });
+      const brainTimeout = (brainPath.startsWith("/backtest-train") || brainPath.startsWith("/live-train") || brainPath.startsWith("/auto-test")) ? 120000 : 30000;
+      proxyReq.setTimeout(brainTimeout, () => { proxyReq.destroy(); if (!res.headersSent) json(res, 504, { error: "Brain engine timeout" }); resolve(true); });
+      if (bodyBuf) proxyReq.write(bodyBuf);
+      proxyReq.end();
+    });
+  }
+
   if (p === "/api/dispatch" && req.method === "POST") {
     if (!authGateway(req)) return json(res, 401, { error: "Unauthorized" }), true;
     const body = JSON.parse((await readBody(req)).toString() || "{}");
@@ -5054,9 +6635,9 @@ async function handleApi(req, res) {
     const data = loadJson(TASKS_FILE, { tasks: [], results: [] });
     data.tasks.push(task);
     saveJson(TASKS_FILE, data);
-    injectToGateway("CEO \u2192 " + w.name, message);
+    injectToGateway(getPrimaryAgentName() + " \u2192 " + w.name, message);
     const chatData = loadJson(CHAT_FILE, { messages: [] });
-    chatData.messages.push({ id: crypto.randomUUID(), from: "CEO", role: "ceo", text: "[CEO -> " + w.name + "] " + message, ts: new Date().toISOString() });
+    chatData.messages.push({ id: crypto.randomUUID(), from: getPrimaryAgentName(), role: getPrimaryAgentId(), text: "[" + getPrimaryAgentName() + " -> " + w.name + "] " + message, ts: new Date().toISOString() });
     if (chatData.messages.length > 500) chatData.messages = chatData.messages.slice(-500);
     saveJson(CHAT_FILE, chatData);
     console.log("[ceo-proxy] Dispatched task to", w.name, "taskId:", task.id);
@@ -5207,36 +6788,47 @@ const CUSTOM_PAGES = {
   "/login.html": "login.html",
 };
 
-function serveCustomPage(req, res) {
-  const url = new URL(req.url, "http://localhost");
-  const file = CUSTOM_PAGES[url.pathname];
-  if (!file) return false;
+const _customPageCache = {};
+(function preloadCustomPages() {
   const dirs = [
     path.join(__dirname, "ui", "public"),
     path.join(__dirname, "dist", "control-ui"),
   ];
-  for (const dir of dirs) {
-    const fp = path.join(dir, file);
-    if (fs.existsSync(fp)) {
-      const ext = path.extname(file);
-      const ct = MIME_TYPES[ext] || "application/octet-stream";
-      let content = fs.readFileSync(fp, "utf8");
-      if (ext === ".html" && !content.includes("nav-inject.js")) {
-        const idx = content.indexOf("</body>");
-        if (idx !== -1) content = content.slice(0, idx) + NAV_INJECT_TAG + content.slice(idx);
-        else content += NAV_INJECT_TAG;
+  for (const [route, file] of Object.entries(CUSTOM_PAGES)) {
+    for (const dir of dirs) {
+      const fp = path.join(dir, file);
+      try {
+        if (fs.existsSync(fp)) {
+          const ext = path.extname(file);
+          let content = fs.readFileSync(fp, "utf8");
+          if (ext === ".html" && !content.includes("nav-inject.js")) {
+            const idx = content.indexOf("</body>");
+            if (idx !== -1) content = content.slice(0, idx) + NAV_INJECT_TAG + content.slice(idx);
+            else content += NAV_INJECT_TAG;
+          }
+          _customPageCache[route] = { content, ct: MIME_TYPES[ext] || "application/octet-stream" };
+          break;
+        }
+      } catch (e) {
+        console.error("[ceo-proxy] preload failed for " + fp + ":", e.code || e.message);
       }
-      res.writeHead(200, {
-        "Content-Type": ct,
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
-      });
-      res.end(content);
-      return true;
     }
   }
-  return false;
+  console.log("[ceo-proxy] Pre-cached " + Object.keys(_customPageCache).length + "/" + Object.keys(CUSTOM_PAGES).length + " custom pages into memory");
+})();
+
+function serveCustomPage(req, res) {
+  const url = new URL(req.url, "http://localhost");
+  const cached = _customPageCache[url.pathname];
+  if (!cached) return false;
+  res.writeHead(200, {
+    "Content-Type": cached.ct,
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+  });
+  res.end(cached.content);
+  return true;
 }
 
 function proxyReq(req, res, retries = 3) {
@@ -5472,9 +7064,71 @@ async function handleCanvasApiRoutes(req, res) {
     return true;
   }
 
-  json(res, 404, { error: "Unknown canvas API route", available: ["config/scalper-config", "config/strategy", "config/monitor-config", "config/proofread-config", "scalper/status", "scalper/start", "scalper/stop", "scalper/reset", "clawscript/templates"] });
+  if (route === "pages" && req.method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const fileName = (body.file || "").replace(/[^a-zA-Z0-9_.-]/g, "");
+      if (!fileName || !fileName.endsWith(".html")) { json(res, 400, { error: "file required (must end in .html, alphanumeric/dash/underscore only)" }); return true; }
+      const content = body.content || "";
+      if (!content || content.length < 10) { json(res, 400, { error: "content required (min 10 chars)" }); return true; }
+      if (content.includes("&lt;") && !content.includes("<html")) { json(res, 400, { error: "HTML appears entity-escaped (&lt; found instead of <). Write raw HTML tags." }); return true; }
+      const filePath = path.join(CANVAS_DIR, fileName);
+      fs.writeFileSync(filePath, content);
+      const ext = ".html";
+      const raw = fs.readFileSync(filePath);
+      const data = injectNavIntoHtml(raw, filePath);
+      _canvasFileCache[fileName] = { data, ct: "text/html; charset=utf-8", isHtml: true };
+      const manifestEntry = body.manifest || {};
+      if (manifestEntry.name || manifestEntry.category) {
+        const manifestPath = path.join(CANVAS_DIR, "manifest.json");
+        let manifest = [];
+        try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8")); } catch (_) {}
+        if (!Array.isArray(manifest)) manifest = [];
+        const existing = manifest.findIndex(e => e.file === fileName);
+        const entry = {
+          name: manifestEntry.name || fileName.replace(/\.html$/, "").replace(/[-_]/g, " "),
+          file: fileName,
+          description: manifestEntry.description || "",
+          category: manifestEntry.category || "Other",
+        };
+        if (existing >= 0) manifest[existing] = entry; else manifest.push(entry);
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+      }
+      json(res, 200, { ok: true, file: fileName, url: "/__openclaw__/canvas/" + fileName, bytes: content.length });
+    } catch (e) { json(res, 500, { error: e.message }); }
+    return true;
+  }
+
+  json(res, 404, { error: "Unknown canvas API route", available: ["config/scalper-config", "config/strategy", "config/monitor-config", "config/proofread-config", "scalper/status", "scalper/start", "scalper/stop", "scalper/reset", "clawscript/templates", "pages (POST)"] });
   return true;
 }
+
+const _canvasFileCache = {};
+function canvasCacheLoad() {
+  if (!fs.existsSync(CANVAS_DIR)) return;
+  const files = fs.readdirSync(CANVAS_DIR).filter(f => !fs.statSync(path.join(CANVAS_DIR, f)).isDirectory());
+  for (const file of files) {
+    const fp = path.join(CANVAS_DIR, file);
+    try {
+      const ext = path.extname(file).toLowerCase();
+      const isHtml = ext === ".html" || ext === ".htm";
+      const raw = fs.readFileSync(fp);
+      const data = isHtml ? injectNavIntoHtml(raw, fp) : raw;
+      _canvasFileCache[file] = { data, ct: MIME_TYPES[ext] || "application/octet-stream", isHtml };
+    } catch (e) {
+      console.error("[ceo-proxy] canvas preload failed for " + file + ":", e.code || e.message);
+    }
+  }
+  const idxPath = path.join(CANVAS_DIR, "index.html");
+  if (fs.existsSync(idxPath) && !_canvasFileCache["index.html"]) {
+    try {
+      const raw = fs.readFileSync(idxPath);
+      _canvasFileCache["index.html"] = { data: injectNavIntoHtml(raw, idxPath), ct: "text/html; charset=utf-8", isHtml: true };
+    } catch (e) {}
+  }
+  console.log("[ceo-proxy] Pre-cached " + Object.keys(_canvasFileCache).length + " canvas files into memory");
+}
+canvasCacheLoad();
 
 function serveCanvas(req, res) {
   const url = new URL(req.url, "http://localhost");
@@ -5488,6 +7142,22 @@ function serveCanvas(req, res) {
     const data = Buffer.from(JSON.stringify(manifest));
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Length": data.length, "Access-Control-Allow-Origin": "*" });
     res.end(data);
+    return true;
+  }
+  const cached = _canvasFileCache[relPath];
+  if (cached) {
+    const headers = {
+      "Content-Type": cached.ct,
+      "Content-Length": cached.data.length,
+      "Access-Control-Allow-Origin": "*",
+    };
+    if (cached.isHtml) {
+      headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+      headers["Pragma"] = "no-cache";
+      headers["Expires"] = "0";
+    }
+    res.writeHead(200, headers);
+    res.end(cached.data);
     return true;
   }
   const filePath = path.resolve(CANVAS_DIR, path.normalize(relPath));
@@ -5519,6 +7189,7 @@ function serveCanvas(req, res) {
     const ext = path.extname(filePath).toLowerCase();
     const isHtml = ext === ".html" || ext === ".htm";
     const data = isHtml ? injectNavIntoHtml(raw, filePath) : raw;
+    _canvasFileCache[relPath] = { data, ct: MIME_TYPES[ext] || "application/octet-stream", isHtml };
     const headers = {
       "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
       "Content-Length": data.length,
@@ -5558,36 +7229,118 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+const _wsProxyWss = new (require("ws").Server)({ noServer: true });
 server.on("upgrade", (req, socket, head) => {
   if (!validateLoginSession(req)) {
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
     socket.destroy();
     return;
   }
-  const opts = {
-    hostname: "127.0.0.1",
-    port: GATEWAY_PORT,
-    path: req.url,
-    method: req.method,
-    headers: { ...req.headers, host: "127.0.0.1:" + GATEWAY_PORT },
-  };
-  const p = http.request(opts);
-  p.on("upgrade", (pr, ps, ph) => {
-    socket.write(
-      "HTTP/1.1 101 Switching Protocols\r\n" +
-      Object.entries(pr.headers).map(([k, v]) => `${k}: ${v}`).join("\r\n") +
-      "\r\n\r\n"
-    );
-    if (ph.length > 0) socket.write(ph);
-    ps.pipe(socket);
-    socket.pipe(ps);
-    ps.on("error", () => socket.destroy());
-    socket.on("error", () => ps.destroy());
-    ps.on("close", () => socket.destroy());
-    socket.on("close", () => ps.destroy());
+  let wsPath = req.url;
+  if (GATEWAY_TOKEN && !wsPath.includes("_token=")) {
+    wsPath += (wsPath.includes("?") ? "&" : "?") + "_token=" + encodeURIComponent(GATEWAY_TOKEN);
+  }
+  const fwdHeaders = { ...req.headers, host: "127.0.0.1:" + GATEWAY_PORT };
+  delete fwdHeaders["x-forwarded-for"];
+  delete fwdHeaders["x-forwarded-proto"];
+  delete fwdHeaders["x-forwarded-host"];
+  delete fwdHeaders["x-real-ip"];
+  delete fwdHeaders["forwarded"];
+
+  _wsProxyWss.handleUpgrade(req, socket, head, (browserWs) => {
+    const gwWs = new WebSocket("ws://127.0.0.1:" + GATEWAY_PORT + wsPath, {
+      headers: fwdHeaders,
+    });
+    let gwOpen = false;
+    const gwQueue = [];
+    gwWs.on("open", () => {
+      gwOpen = true;
+      for (const [d, opts] of gwQueue) { try { gwWs.send(d, opts); } catch (_) {} }
+      gwQueue.length = 0;
+    });
+    gwWs.on("message", (data, isBinary) => {
+      try { if (browserWs.readyState === 1) browserWs.send(data, { binary: isBinary }); } catch (_) {}
+    });
+    const sendQueue = [];
+    let sendDraining = false;
+    function drainSendQueue() {
+      if (sendDraining) return;
+      sendDraining = true;
+      while (sendQueue.length > 0) {
+        if (typeof sendQueue[0] === "symbol") break;
+        const [d, o] = sendQueue.shift();
+        if (gwOpen && gwWs.readyState === 1) {
+          try { gwWs.send(d, o); } catch (_) {}
+        } else {
+          gwQueue.push([d, o]);
+        }
+      }
+      sendDraining = false;
+    }
+    function enqueueSend(d, o) {
+      sendQueue.push([d, o]);
+      drainSendQueue();
+    }
+    browserWs.on("message", (data, isBinary) => {
+      let finalData = data;
+      let finalOpts = { binary: isBinary };
+      let needsAsyncInject = false;
+      if (!isBinary) {
+        try {
+          const txt = data.toString();
+          const frame = JSON.parse(txt);
+          if (frame.type === "req" && frame.method === "chat.send" && frame.params) {
+            const userMsg = typeof frame.params.message === "string" ? frame.params.message : "";
+            if (userMsg) {
+              const originalUserMsg = userMsg;
+              console.log(`[neural-feedback:intercept] user chat.send: "${originalUserMsg.slice(0, 80)}"`);
+              if (_lastAgentResponse) {
+                processNeuralFeedback(originalUserMsg, "user").catch((e) => { console.error("[neural-feedback] intercept error:", e.message); });
+              } else {
+                console.log("[neural-feedback:intercept] no _lastAgentResponse yet — skipping");
+              }
+              if (_agentBrainStimulationCount >= 3) {
+                needsAsyncInject = true;
+                const placeholder = Symbol();
+                sendQueue.push(placeholder);
+                buildFullPreferenceContext().then(fullCtx => {
+                  const idx = sendQueue.indexOf(placeholder);
+                  if (idx !== -1) sendQueue.splice(idx, 1);
+                  if (fullCtx) {
+                    frame.params.message = originalUserMsg + "\n\n---\n" + fullCtx;
+                    logInjection(fullCtx, originalUserMsg);
+                    console.log("[neural-feedback:inject] Injected " + fullCtx.length + " chars into chat.send");
+                    enqueueSend(JSON.stringify(frame), { binary: false });
+                  } else {
+                    logInjection("", originalUserMsg);
+                    enqueueSend(finalData, finalOpts);
+                  }
+                }).catch(e => {
+                  const idx = sendQueue.indexOf(placeholder);
+                  if (idx !== -1) sendQueue.splice(idx, 1);
+                  console.error("[neural-feedback:inject] build error:", e.message);
+                  enqueueSend(finalData, finalOpts);
+                });
+              } else {
+                console.log("[neural-feedback:inject] Skipped — agent brain learning (stimulations=" + _agentBrainStimulationCount + "/3)");
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      if (!needsAsyncInject) {
+        enqueueSend(finalData, finalOpts);
+      }
+    });
+    gwWs.on("close", (code, reason) => {
+      try { browserWs.close(code, reason); } catch (_) {}
+    });
+    browserWs.on("close", (code, reason) => {
+      try { gwWs.close(code, reason); } catch (_) {}
+    });
+    gwWs.on("error", () => { try { browserWs.close(); } catch (_) {} });
+    browserWs.on("error", () => { try { gwWs.close(); } catch (_) {} });
   });
-  p.on("error", () => socket.destroy());
-  p.end();
 });
 
 server.on("error", (err) => {
@@ -5613,8 +7366,34 @@ server.listen(PROXY_PORT, "0.0.0.0", () => {
   writeConfigSnapshots();
   autoRegisterBotScripts();
   startRegisteredBots();
+  try {
+    const agentBrainBot = require("./skills/bots/agent-brain-engine-bot.cjs");
+    const agentResult = agentBrainBot.start();
+    console.log("[startup] Agent brain:", agentResult.ok ? "started (PID " + agentResult.pid + ")" : "failed: " + (agentResult.error || "unknown"));
+  } catch (e) {
+    console.log("[startup] Agent brain start error:", e.message);
+  }
+  setTimeout(() => { checkAgentBrainSteps().then(s => console.log("[startup] Agent brain steps: " + s + ", stimulations this session: " + _agentBrainStimulationCount + (_agentBrainStimulationCount < 3 ? " (fresh — preference injection disabled until 3+ real stimulations)" : " (active)"))); }, 8000);
+  setInterval(() => { checkAgentBrainSteps().catch(() => {}); }, 30000);
   setTimeout(async () => {
     try { const sdb = require("./skills/bots/ig-scalper-db.cjs"); await sdb.ensurePriceCandlesTable(); console.log("[startup] price_candles table ready"); } catch (e) { console.log("[startup] price_candles init failed:", e.message); }
+    try {
+      await loadNeuralFeedbackFromDb();
+      console.log("[startup] Neural feedback: " + _nfMemory.stats.total + " records loaded (pos=" + _nfMemory.stats.positive + " neg=" + _nfMemory.stats.negative + ")");
+      await loadDimensionConfig();
+      const enabledDims = getEnabledDimensions();
+      console.log("[startup] Dimension config: " + enabledDims.length + " of " + Object.keys(DIMENSION_REGISTRY).length + " dimensions enabled");
+      const prefFile = path.join(DATA_DIR, "workspace", "PREFERENCES.md");
+      const prefExists = (() => { try { return fs.readFileSync(prefFile, "utf8").length > 0; } catch (_) { return false; } })();
+      if (!prefExists && _nfMemory.stats.total >= 2) {
+        const dbBackup = await restorePreferencesFromDb();
+        if (dbBackup) {
+          fs.writeFileSync(prefFile, dbBackup.content);
+          console.log("[startup] Restored PREFERENCES.md from DB backup (" + dbBackup.created_at + ")");
+        }
+      }
+      await writePreferencesFile();
+    } catch (e) { console.log("[startup] Neural feedback init:", e.message); }
     await igSessionStartup();
     if (shouldAutoConnectLiveStreaming()) {
       console.log("[startup] Auto-connecting to live streaming (was active before restart)");
