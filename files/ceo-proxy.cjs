@@ -7275,26 +7275,7 @@ server.on("upgrade", (req, socket, head) => {
       for (const [d, opts] of gwQueue) { try { gwWs.send(d, opts); } catch (_) {} }
       gwQueue.length = 0;
     });
-    let _lastInjectedContext = null;
     gwWs.on("message", (data, isBinary) => {
-      if (!isBinary && _lastInjectedContext) {
-        try {
-          const txt = data.toString();
-          const echoFrame = JSON.parse(txt);
-          if (echoFrame.type === "evt" && echoFrame.event === "chat.message" && echoFrame.payload) {
-            const body = echoFrame.payload.body || echoFrame.payload.message || "";
-            if (typeof body === "string" && body.includes(_lastInjectedContext.slice(0, 60))) {
-              const cleanBody = body.replace("\n\n---\n" + _lastInjectedContext, "");
-              if (echoFrame.payload.body) echoFrame.payload.body = cleanBody;
-              if (echoFrame.payload.message) echoFrame.payload.message = cleanBody;
-              const cleanData = JSON.stringify(echoFrame);
-              _lastInjectedContext = null;
-              try { if (browserWs.readyState === 1) browserWs.send(cleanData, { binary: false }); } catch (_) {}
-              return;
-            }
-          }
-        } catch (_) {}
-      }
       try { if (browserWs.readyState === 1) browserWs.send(data, { binary: isBinary }); } catch (_) {}
     });
     const sendQueue = [];
@@ -7343,11 +7324,18 @@ server.on("upgrade", (req, socket, head) => {
                   const idx = sendQueue.indexOf(placeholder);
                   if (idx !== -1) sendQueue.splice(idx, 1);
                   if (fullCtx) {
-                    _lastInjectedContext = fullCtx;
-                    frame.params.message = originalUserMsg + "\n\n---\n" + fullCtx;
+                    const injectId = "brain-inject-" + Date.now();
+                    const sessionKey = frame.params.sessionKey || frame.params.session || "";
+                    const injectFrame = {
+                      type: "req", id: injectId, method: "chat.inject",
+                      params: { sessionKey, message: fullCtx, label: "[brain-pattern]" },
+                    };
+                    if (gwOpen && gwWs.readyState === 1) {
+                      try { gwWs.send(JSON.stringify(injectFrame)); } catch (_) {}
+                    }
                     logInjection(fullCtx, originalUserMsg);
-                    console.log("[neural-feedback:inject] Injected " + fullCtx.length + " chars into chat.send" + (_brainHasTrainedWeights ? " (trained weights carryover)" : ""));
-                    enqueueSend(JSON.stringify(frame), { binary: false });
+                    console.log("[neural-feedback:inject] Brain context injected silently (" + fullCtx.length + " chars)" + (_brainHasTrainedWeights ? " (trained weights carryover)" : ""));
+                    enqueueSend(finalData, finalOpts);
                   } else {
                     logInjection("", originalUserMsg);
                     enqueueSend(finalData, finalOpts);

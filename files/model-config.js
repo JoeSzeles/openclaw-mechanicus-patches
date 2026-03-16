@@ -1402,13 +1402,48 @@ function previewInjection() {
   fetch('/api/neural-feedback/injection-preview').then(function(r) { return r.json(); }).then(function(data) {
     var statusColor = data.wouldInject ? '#2d6a4f' : '#6b3030';
     var statusLabel = data.wouldInject ? 'WOULD INJECT' : 'WOULD NOT INJECT';
-    var html = '<div style="border:1px solid #444;border-radius:6px;padding:14px;background:#1a1a2e;">';
-    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+    var parsed = parseBrainContext(data.rawContext);
+    var html = '<div style="border:1px solid #444;border-radius:8px;padding:16px;background:#0d1117;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">';
     html += '<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:' + statusColor + ';color:#fff;">' + statusLabel + '</span>';
-    html += '<span style="color:#999;font-size:11px;">Stimulations: ' + data.stimulationCount + '/' + data.stimulationGate + ' | Context: ' + data.contextLength + ' chars</span>';
+    html += '<span style="color:#999;font-size:11px;">Context: ' + data.contextLength + ' chars | Silently injected via chat.inject</span>';
+    if (data.trainedWeightsCarryover) html += '<span style="font-size:10px;color:#3fb950;">(trained weights carryover)</span>';
     html += '</div>';
-    html += '<div style="font-size:11px;color:#8be9fd;margin-bottom:6px;font-weight:600;">Raw context that would be appended to your next message:</div>';
-    html += '<pre style="background:#111;padding:10px;border-radius:4px;font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;color:#f8f8f2;max-height:400px;overflow-y:auto;margin:0;">' + escHtml(data.rawContext) + '</pre>';
+    if (parsed.dimensions.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="color:#bd93f9;font-size:11px;font-weight:600;margin-bottom:6px;">Dimension Affinities</div>';
+      for (var d = 0; d < parsed.dimensions.length; d++) {
+        var dim = parsed.dimensions[d];
+        var dimColor = dim.indexOf('preferred') >= 0 ? '#3fb950' : dim.indexOf('disliked') >= 0 ? '#f85149' : '#8b949e';
+        html += '<div style="font-size:11px;color:' + dimColor + ';margin-bottom:2px;padding-left:8px;">' + escHtml(dim) + '</div>';
+      }
+      html += '</div>';
+    }
+    if (parsed.companion.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="color:#ff79c6;font-size:11px;font-weight:600;margin-bottom:6px;">Companion Patterns</div>';
+      for (var c = 0; c < parsed.companion.length; c++) html += renderPatternBar(parsed.companion[c].name, parsed.companion[c].score, parsed.companion[c].level);
+      html += '</div>';
+    }
+    if (parsed.work.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="color:#79c0ff;font-size:11px;font-weight:600;margin-bottom:6px;">Work Patterns</div>';
+      for (var w = 0; w < parsed.work.length; w++) html += renderPatternBar(parsed.work[w].name, parsed.work[w].score, parsed.work[w].level);
+      html += '</div>';
+    }
+    if (parsed.directive) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="color:#d2a8ff;font-size:11px;font-weight:600;margin-bottom:4px;">Subconscious Directive</div>';
+      html += '<div style="font-size:11px;color:#c9d1d9;font-style:italic;padding-left:8px;">"' + escHtml(parsed.directive) + '"</div>';
+      html += '</div>';
+    }
+    if (parsed.subconscious) {
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="color:#d2a8ff;font-size:11px;font-weight:600;margin-bottom:4px;">Subconscious Memory</div>';
+      html += '<div style="font-size:11px;color:#8b949e;padding-left:8px;line-height:1.5;">' + escHtml(parsed.subconscious) + '</div>';
+      html += '</div>';
+    }
+    html += '<div style="border-top:1px solid #21262d;padding-top:8px;margin-top:8px;font-size:10px;color:#484f58;">Scale: 0=untrained, 0.5=baseline, 1.0=heavily trained</div>';
     html += '</div>';
     previewEl.innerHTML = html;
   }).catch(function(e) {
