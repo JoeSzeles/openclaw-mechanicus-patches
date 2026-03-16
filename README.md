@@ -1,6 +1,6 @@
 # OpenClaw Mechanicus Patch
 
-IG Trading system for OpenClaw. Adds 23 strategies, batch backtesting with optimization memory, AI calibration, equity curve visualization, live signal monitoring, Neural Trading (BrainJar spiking neural network), and the IG Trading Dashboard.
+
 
 ## Install
 
