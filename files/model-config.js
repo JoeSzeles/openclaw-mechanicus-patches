@@ -802,7 +802,7 @@ function switchNlSubTab(tab) {
   if (btn) { btn.style.color = '#bc8cff'; btn.style.borderBottom = '2px solid #bc8cff'; }
   var el = document.getElementById('nl-' + tab);
   if (el) el.style.display = 'block';
-  if (tab === 'brain-config') cbRefreshStatus();
+  if (tab === 'brain-config') { cbRefreshStatus(); loadLiveFingerprint(); }
   if (tab === 'dimensions') loadDimensionConfig();
   if (tab === 'engrams') loadEngramList();
   if (tab === 'training') loadTrainingTemplates();
@@ -818,6 +818,71 @@ function cbAddLog(msg) {
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
+
+var _fingerprintAutoInterval = null;
+
+window.loadLiveFingerprint = function() {
+  var badge = document.getElementById('cb-fingerprint-badge');
+  var compEl = document.getElementById('cb-fingerprint-companion');
+  var workEl = document.getElementById('cb-fingerprint-work');
+  if (badge) badge.textContent = 'probing...';
+  if (badge) badge.style.color = '#d29922';
+  apiFetch('/api/neural-feedback/brain-probe')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        if (badge) { badge.textContent = 'error'; badge.style.color = '#f85149'; }
+        if (compEl) compEl.innerHTML = '<p style="font-size:12px;color:#f85149;">' + escHtml(data.error) + '</p>';
+        if (workEl) workEl.innerHTML = '';
+        return;
+      }
+      if (badge) { badge.textContent = 'live'; badge.style.color = '#3fb950'; badge.style.background = '#3fb95020'; }
+      var sections = [
+        { key: 'companion', el: compEl, label: 'Companion', color: '#f97583', icon: '&#128150;' },
+        { key: 'work', el: workEl, label: 'Work', color: '#58a6ff', icon: '&#128188;' }
+      ];
+      for (var si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        var items = data[sec.key] || [];
+        if (!sec.el) continue;
+        if (!items.length) { sec.el.innerHTML = ''; continue; }
+        var html = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:' + sec.color + ';margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #21262d">' + sec.icon + ' ' + sec.label + '</div>';
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var norm = t.normalized || 0;
+          var barW = Math.round(norm * 100);
+          var barColor = t.strength === 'strong' ? '#3fb950' : t.strength === 'moderate' ? '#58a6ff' : t.strength === 'slight' ? '#8b949e' : t.strength === 'suppressed' ? '#f85149' : t.strength === 'weak' ? '#d29922' : '#484f58';
+          var strengthBadge = t.strength === 'neutral' ? '' : ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:' + barColor + '22;color:' + barColor + ';">' + t.strength + '</span>';
+          html += '<div style="margin-bottom:4px;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px;">';
+          html += '<span style="font-size:11px;color:#c9d1d9;">' + escHtml(t.label) + strengthBadge + '</span>';
+          html += '<span style="font-size:10px;color:#8b949e;font-family:monospace;">' + norm.toFixed(2) + '</span>';
+          html += '</div>';
+          html += '<div style="height:4px;background:#21262d;border-radius:2px;overflow:hidden;">';
+          html += '<div style="height:100%;width:' + barW + '%;background:' + barColor + ';border-radius:2px;transition:width 0.5s;"></div>';
+          html += '</div></div>';
+        }
+        sec.el.innerHTML = html;
+      }
+    }).catch(function(e) {
+      if (badge) { badge.textContent = 'offline'; badge.style.color = '#f85149'; }
+      if (compEl) compEl.innerHTML = '<p style="font-size:11px;color:#8b949e;">Brain offline or unreachable</p>';
+      if (workEl) workEl.innerHTML = '';
+    });
+};
+
+window.toggleFingerprintAuto = function() {
+  var btn = document.getElementById('cb-fingerprint-auto-btn');
+  if (_fingerprintAutoInterval) {
+    clearInterval(_fingerprintAutoInterval);
+    _fingerprintAutoInterval = null;
+    if (btn) btn.textContent = 'Auto-refresh: OFF';
+  } else {
+    loadLiveFingerprint();
+    _fingerprintAutoInterval = setInterval(loadLiveFingerprint, 30000);
+    if (btn) btn.textContent = 'Auto-refresh: ON (30s)';
+  }
+};
 
 function cbFetchBrainStatus(type) {
   var url = type === 'agent' ? '/api/agent-brain/status' : '/api/brain/status';
@@ -1089,5 +1154,163 @@ window.trainTemplate = function(key) {
     });
 };
 
+window.loadBrainProbe = function() {
+  var el = document.getElementById('brainProbeResults');
+  el.innerHTML = '<p style="color:#8b949e;">Probing brain patterns...</p>';
+  apiFetch('/api/neural-feedback/brain-probe')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        el.innerHTML = '<p class="empty">' + escHtml(data.error) + '</p>';
+        return;
+      }
+      var s = data.summary || {};
+      var html = '<div style="margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#58a6ff;">' + (s.totalTemplates || 0) + ' templates probed</span>' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#3fb950;">' + (s.trained || 0) + ' differentiated</span>' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#8b949e;">' + (s.neutral || 0) + ' neutral</span>' +
+        '</div>';
+      var sections = [
+        { key: 'companion', label: 'Companion Patterns', color: '#f97583', icon: '&#128150;' },
+        { key: 'work', label: 'Work Patterns', color: '#58a6ff', icon: '&#128188;' }
+      ];
+      for (var si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        var items = data[sec.key] || [];
+        if (!items.length) continue;
+        html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:' + sec.color + ';margin:' + (si > 0 ? '16px' : '0') + ' 0 8px 0;padding-bottom:4px;border-bottom:1px solid #21262d">' + sec.icon + ' ' + sec.label + '</div>';
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var norm = t.normalized || 0;
+          var barW = Math.round(norm * 100);
+          var barColor = t.strength === 'strong' ? '#3fb950' : t.strength === 'moderate' ? '#58a6ff' : t.strength === 'slight' ? '#8b949e' : t.strength === 'suppressed' ? '#f85149' : t.strength === 'weak' ? '#d29922' : '#484f58';
+          var strengthBadge = t.strength === 'neutral' ? '' : ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:' + barColor + '22;color:' + barColor + ';">' + t.strength + '</span>';
+          html += '<div style="margin-bottom:6px;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">';
+          html += '<span style="font-size:12px;color:#c9d1d9;">' + escHtml(t.label) + strengthBadge + '</span>';
+          html += '<span style="font-size:11px;color:#8b949e;">' + (t.avg_rate || 0).toFixed(1) + ' Hz</span>';
+          html += '</div>';
+          html += '<div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden;">';
+          html += '<div style="height:100%;width:' + barW + '%;background:' + barColor + ';border-radius:3px;transition:width 0.3s;"></div>';
+          html += '</div></div>';
+        }
+      }
+      if (data.contextBlock) {
+        html += '<div style="margin-top:16px;padding:10px;background:#0d1117;border:1px solid #21262d;border-radius:6px;font-size:11px;color:#8b949e;font-family:monospace;white-space:pre-wrap;">' + escHtml(data.contextBlock) + '</div>';
+      }
+      el.innerHTML = html;
+    }).catch(function(e) {
+      el.innerHTML = '<p class="empty">Probe failed: ' + escHtml(e.message) + '</p>';
+    });
+};
+
+window.loadTradingProbe = function() {
+  var el = document.getElementById('tradingProbeResults');
+  el.innerHTML = '<p style="color:#8b949e;">Probing trading brain scenarios...</p>';
+  apiFetch('/api/brain/probe-trading')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        el.innerHTML = '<p class="empty">' + escHtml(data.error) + '</p>';
+        return;
+      }
+      var s = data.summary || {};
+      var html = '<div style="margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#58a6ff;">' + (s.totalScenarios || 0) + ' scenarios</span>' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#3fb950;">' + (s.differentiated || 0) + ' differentiated</span>' +
+        '<span style="padding:3px 8px;border-radius:4px;font-size:11px;background:#21262d;color:#3fb950;">Strongest: ' + escHtml(s.strongestResponse || '?') + '</span>' +
+        '</div>';
+      var sections = [
+        { key: 'bullish', label: 'Bullish Scenarios', color: '#3fb950', icon: '&#128200;' },
+        { key: 'bearish', label: 'Bearish Scenarios', color: '#f85149', icon: '&#128201;' },
+        { key: 'neutral', label: 'Neutral Scenarios', color: '#8b949e', icon: '&#9135;' }
+      ];
+      for (var si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        var items = data[sec.key] || [];
+        if (!items.length) continue;
+        html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:' + sec.color + ';margin:' + (si > 0 ? '12px' : '0') + ' 0 6px 0;padding-bottom:4px;border-bottom:1px solid #21262d">' + sec.icon + ' ' + sec.label + '</div>';
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var norm = t.normalized || 0;
+          var barW = Math.round(norm * 100);
+          var barColor = sec.color;
+          var domColor = t.dominant === 'BUY' ? '#3fb950' : t.dominant === 'SELL' ? '#f85149' : '#8b949e';
+          html += '<div style="margin-bottom:5px;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">';
+          html += '<span style="font-size:12px;color:#c9d1d9;">' + escHtml(t.label) + ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:' + domColor + '22;color:' + domColor + ';">' + t.dominant + '</span></span>';
+          html += '<span style="font-size:11px;color:#8b949e;">' + (t.avg_rate || 0).toFixed(1) + ' Hz | B:' + (t.buy || 0).toFixed(0) + ' S:' + (t.sell || 0).toFixed(0) + ' H:' + (t.hold || 0).toFixed(0) + '</span>';
+          html += '</div>';
+          html += '<div style="height:5px;background:#21262d;border-radius:3px;overflow:hidden;">';
+          html += '<div style="height:100%;width:' + barW + '%;background:' + barColor + ';border-radius:3px;"></div>';
+          html += '</div></div>';
+        }
+      }
+      el.innerHTML = html;
+    }).catch(function(e) {
+      el.innerHTML = '<p class="empty">Probe failed: ' + escHtml(e.message) + '</p>';
+    });
+};
+
+function refreshBrainLog() {
+  var logEl = document.getElementById('brainActivityLog');
+  var statusEl = document.getElementById('brainActivityStatus');
+  fetch('/api/neural-feedback/injection-log').then(function(r) { return r.json(); }).then(function(data) {
+    var gateColor = data.gateOpen ? '#2d6a4f' : '#6b3030';
+    var gateLabel = data.gateOpen ? 'OPEN' : 'CLOSED';
+    var carryover = data.trainedWeightsCarryover ? ' <span style="font-size:10px;color:#3fb950;">(trained weights carryover)</span>' : '';
+    statusEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
+      '<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:' + gateColor + ';color:#fff;">GATE: ' + gateLabel + '</span>' + carryover +
+      '<span style="color:#999;font-size:12px;">Stimulations: ' + data.stimulationCount + '/' + data.gateThreshold + '</span>' +
+      '<span style="color:#999;font-size:12px;">Injections logged: ' + data.count + '</span>' +
+      '</div>';
+    if (!data.log || data.log.length === 0) {
+      logEl.innerHTML = '<p class="empty">No injections logged yet. Chat with the agent after training to see injection data.</p>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < data.log.length; i++) {
+      var entry = data.log[i];
+      var time = new Date(entry.ts).toLocaleTimeString();
+      var date = new Date(entry.ts).toLocaleDateString();
+      html += '<div style="border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:10px;background:#1a1a2e;">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;">';
+      html += '<span style="color:#8be9fd;font-size:12px;font-weight:600;">' + date + ' ' + time + '</span>';
+      html += '<span style="color:#999;font-size:11px;">' + entry.contextLength + ' chars</span>';
+      html += '</div>';
+      if (entry.userMessage) {
+        html += '<div style="color:#bd93f9;font-size:11px;margin-bottom:6px;">User: "' + escHtml(entry.userMessage) + '"</div>';
+      }
+      html += '<pre style="background:#111;padding:10px;border-radius:4px;font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;color:#f8f8f2;max-height:300px;overflow-y:auto;margin:0;">' + escHtml(entry.rawContext) + '</pre>';
+      html += '</div>';
+    }
+    logEl.innerHTML = html;
+  }).catch(function(e) {
+    logEl.innerHTML = '<p class="empty">Error loading injection log: ' + escHtml(e.message) + '</p>';
+  });
+}
+
+function previewInjection() {
+  var previewEl = document.getElementById('brainInjectionPreview');
+  previewEl.style.display = 'block';
+  previewEl.innerHTML = '<p class="empty">Loading preview...</p>';
+  fetch('/api/neural-feedback/injection-preview').then(function(r) { return r.json(); }).then(function(data) {
+    var statusColor = data.wouldInject ? '#2d6a4f' : '#6b3030';
+    var statusLabel = data.wouldInject ? 'WOULD INJECT' : 'WOULD NOT INJECT';
+    var html = '<div style="border:1px solid #444;border-radius:6px;padding:14px;background:#1a1a2e;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+    html += '<span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:' + statusColor + ';color:#fff;">' + statusLabel + '</span>';
+    html += '<span style="color:#999;font-size:11px;">Stimulations: ' + data.stimulationCount + '/' + data.stimulationGate + ' | Context: ' + data.contextLength + ' chars</span>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:#8be9fd;margin-bottom:6px;font-weight:600;">Raw context that would be appended to your next message:</div>';
+    html += '<pre style="background:#111;padding:10px;border-radius:4px;font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;color:#f8f8f2;max-height:400px;overflow-y:auto;margin:0;">' + escHtml(data.rawContext) + '</pre>';
+    html += '</div>';
+    previewEl.innerHTML = html;
+  }).catch(function(e) {
+    previewEl.innerHTML = '<p class="empty">Error: ' + escHtml(e.message) + '</p>';
+  });
+}
+
 loadConfig();
 loadIgConfig();
+setTimeout(refreshBrainLog, 1500);

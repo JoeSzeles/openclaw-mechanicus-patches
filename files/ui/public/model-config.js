@@ -802,7 +802,7 @@ function switchNlSubTab(tab) {
   if (btn) { btn.style.color = '#bc8cff'; btn.style.borderBottom = '2px solid #bc8cff'; }
   var el = document.getElementById('nl-' + tab);
   if (el) el.style.display = 'block';
-  if (tab === 'brain-config') cbRefreshStatus();
+  if (tab === 'brain-config') { cbRefreshStatus(); loadLiveFingerprint(); }
   if (tab === 'dimensions') loadDimensionConfig();
   if (tab === 'engrams') loadEngramList();
   if (tab === 'training') loadTrainingTemplates();
@@ -818,6 +818,71 @@ function cbAddLog(msg) {
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
+
+var _fingerprintAutoInterval = null;
+
+window.loadLiveFingerprint = function() {
+  var badge = document.getElementById('cb-fingerprint-badge');
+  var compEl = document.getElementById('cb-fingerprint-companion');
+  var workEl = document.getElementById('cb-fingerprint-work');
+  if (badge) badge.textContent = 'probing...';
+  if (badge) badge.style.color = '#d29922';
+  apiFetch('/api/neural-feedback/brain-probe')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        if (badge) { badge.textContent = 'error'; badge.style.color = '#f85149'; }
+        if (compEl) compEl.innerHTML = '<p style="font-size:12px;color:#f85149;">' + escHtml(data.error) + '</p>';
+        if (workEl) workEl.innerHTML = '';
+        return;
+      }
+      if (badge) { badge.textContent = 'live'; badge.style.color = '#3fb950'; badge.style.background = '#3fb95020'; }
+      var sections = [
+        { key: 'companion', el: compEl, label: 'Companion', color: '#f97583', icon: '&#128150;' },
+        { key: 'work', el: workEl, label: 'Work', color: '#58a6ff', icon: '&#128188;' }
+      ];
+      for (var si = 0; si < sections.length; si++) {
+        var sec = sections[si];
+        var items = data[sec.key] || [];
+        if (!sec.el) continue;
+        if (!items.length) { sec.el.innerHTML = ''; continue; }
+        var html = '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:' + sec.color + ';margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #21262d">' + sec.icon + ' ' + sec.label + '</div>';
+        for (var i = 0; i < items.length; i++) {
+          var t = items[i];
+          var norm = t.normalized || 0;
+          var barW = Math.round(norm * 100);
+          var barColor = t.strength === 'strong' ? '#3fb950' : t.strength === 'moderate' ? '#58a6ff' : t.strength === 'slight' ? '#8b949e' : t.strength === 'suppressed' ? '#f85149' : t.strength === 'weak' ? '#d29922' : '#484f58';
+          var strengthBadge = t.strength === 'neutral' ? '' : ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:' + barColor + '22;color:' + barColor + ';">' + t.strength + '</span>';
+          html += '<div style="margin-bottom:4px;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px;">';
+          html += '<span style="font-size:11px;color:#c9d1d9;">' + escHtml(t.label) + strengthBadge + '</span>';
+          html += '<span style="font-size:10px;color:#8b949e;font-family:monospace;">' + norm.toFixed(2) + '</span>';
+          html += '</div>';
+          html += '<div style="height:4px;background:#21262d;border-radius:2px;overflow:hidden;">';
+          html += '<div style="height:100%;width:' + barW + '%;background:' + barColor + ';border-radius:2px;transition:width 0.5s;"></div>';
+          html += '</div></div>';
+        }
+        sec.el.innerHTML = html;
+      }
+    }).catch(function(e) {
+      if (badge) { badge.textContent = 'offline'; badge.style.color = '#f85149'; }
+      if (compEl) compEl.innerHTML = '<p style="font-size:11px;color:#8b949e;">Brain offline or unreachable</p>';
+      if (workEl) workEl.innerHTML = '';
+    });
+};
+
+window.toggleFingerprintAuto = function() {
+  var btn = document.getElementById('cb-fingerprint-auto-btn');
+  if (_fingerprintAutoInterval) {
+    clearInterval(_fingerprintAutoInterval);
+    _fingerprintAutoInterval = null;
+    if (btn) btn.textContent = 'Auto-refresh: OFF';
+  } else {
+    loadLiveFingerprint();
+    _fingerprintAutoInterval = setInterval(loadLiveFingerprint, 30000);
+    if (btn) btn.textContent = 'Auto-refresh: ON (30s)';
+  }
+};
 
 function cbFetchBrainStatus(type) {
   var url = type === 'agent' ? '/api/agent-brain/status' : '/api/brain/status';
@@ -1193,8 +1258,9 @@ function refreshBrainLog() {
   fetch('/api/neural-feedback/injection-log').then(function(r) { return r.json(); }).then(function(data) {
     var gateColor = data.gateOpen ? '#2d6a4f' : '#6b3030';
     var gateLabel = data.gateOpen ? 'OPEN' : 'CLOSED';
+    var carryover = data.trainedWeightsCarryover ? ' <span style="font-size:10px;color:#3fb950;">(trained weights carryover)</span>' : '';
     statusEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:' + gateColor + ';color:#fff;">GATE: ' + gateLabel + '</span>' +
+      '<span style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:' + gateColor + ';color:#fff;">GATE: ' + gateLabel + '</span>' + carryover +
       '<span style="color:#999;font-size:12px;">Stimulations: ' + data.stimulationCount + '/' + data.gateThreshold + '</span>' +
       '<span style="color:#999;font-size:12px;">Injections logged: ' + data.count + '</span>' +
       '</div>';

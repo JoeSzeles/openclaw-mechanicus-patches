@@ -339,10 +339,17 @@ tr:hover{background:#1c2128}
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="section-title" style="margin-bottom:8px"><span class="section-icon">&#128203;</span> Brain Activity Log</div>
-      <div id="cb-log" style="height:200px;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px;overflow-y:auto;font-size:11px;font-family:monospace;color:#8b949e">
-        [Brain logs will appear here...]
+      <div class="section-title" style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+        <span class="section-icon">&#129504;</span> Live Brain Fingerprint
+        <span id="cb-fingerprint-badge" style="font-size:10px;color:#8b949e;background:#21262d;padding:2px 8px;border-radius:10px">idle</span>
       </div>
+      <div style="font-size:11px;color:#8b949e;margin-bottom:10px">Current neural fingerprint from template probing &mdash; shows what personality patterns the brain has learned.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-secondary btn-small" onclick="loadLiveFingerprint()">Probe Now</button>
+        <button class="btn btn-secondary btn-small" onclick="toggleFingerprintAuto()" id="cb-fingerprint-auto-btn" style="font-size:10px">Auto-refresh: OFF</button>
+      </div>
+      <div id="cb-fingerprint-companion" style="margin-bottom:10px"></div>
+      <div id="cb-fingerprint-work"></div>
     </div>
   </div>
 

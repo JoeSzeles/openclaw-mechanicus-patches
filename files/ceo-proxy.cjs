@@ -72,6 +72,7 @@ let _agentBrainStepCount = 0;
 let _agentBrainStepLastCheck = 0;
 const _recentBrainActivity = [];
 let _agentBrainStimulationCount = 0;
+let _brainHasTrainedWeights = false;
 let _subconsciousVersion = 0;
 let _subconsciousEssenceCache = "";
 let _subconsciousEssenceLastFetch = 0;
@@ -259,6 +260,18 @@ function getEnabledDimensions() {
     _dimensionConfig = config;
   }
   return Object.entries(_dimensionConfig).filter(([_, v]) => v).map(([k]) => k);
+}
+
+function trimFeatureVector(fv, maxFeatures) {
+  if (!fv || typeof fv !== "object") return fv;
+  const entries = Object.entries(fv).filter(([_, v]) => typeof v === "number" && v !== 0);
+  if (entries.length <= maxFeatures) return fv;
+  entries.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const trimmed = {};
+  for (let i = 0; i < maxFeatures && i < entries.length; i++) {
+    trimmed[entries[i][0]] = entries[i][1];
+  }
+  return trimmed;
 }
 
 function buildDynamicFeatureVector(responseText, agentId) {
@@ -682,7 +695,7 @@ function buildBrainPatternBlock(pattern) {
 }
 
 async function buildFullPreferenceContext() {
-  if (_agentBrainStimulationCount < 3) return "";
+  if (_agentBrainStimulationCount < 3 && !_brainHasTrainedWeights) return "";
   let ctx = "";
   const prefCtx = buildPreferenceContext();
   if (prefCtx) ctx += prefCtx;
@@ -866,7 +879,8 @@ async function processNeuralFeedback(userText, agentId) {
     return null;
   }
 
-  const featureVector = prev.features || buildDynamicFeatureVector(prev.text, prev.agentId);
+  const fullFeatureVector = prev.features || buildDynamicFeatureVector(prev.text, prev.agentId);
+  const featureVector = trimFeatureVector(fullFeatureVector, 12);
   const feedback = sentiment === "positive" ? "sugar" : "pain";
   const magnitude = Math.abs(score);
   const brainResponse = await stimulateBrainPreference(featureVector, feedback, magnitude);
@@ -1100,7 +1114,8 @@ async function replayPreferenceFeedback(count, dryRun) {
     const feedback = record.sentiment === "positive" ? "sugar" : "pain";
     const rawScore = record.sentimentScore !== undefined ? record.sentimentScore : record.score;
     const replayStrength = typeof rawScore === "number" ? Math.abs(rawScore) : undefined;
-    const result = await stimulateBrainPreference(record.featureVector, feedback, replayStrength);
+    const trimmedFv = trimFeatureVector(record.featureVector, 12);
+    const result = await stimulateBrainPreference(trimmedFv, feedback, replayStrength);
     if (result && !result.error) replayed++;
     else errors++;
   }
@@ -6240,19 +6255,21 @@ async function handleApi(req, res) {
       count: _injectionLog.length,
       stimulationCount: _agentBrainStimulationCount,
       gateThreshold: 3,
-      gateOpen: _agentBrainStimulationCount >= 3,
+      gateOpen: _agentBrainStimulationCount >= 3 || _brainHasTrainedWeights,
+      trainedWeightsCarryover: _brainHasTrainedWeights,
     }), true;
   }
 
   if (p === "/api/neural-feedback/injection-preview") {
     const fullCtx = await buildFullPreferenceContext();
-    const gated = _agentBrainStimulationCount >= 3;
+    const gated = _agentBrainStimulationCount >= 3 || _brainHasTrainedWeights;
     const brainPattern = _brainProbeCache || null;
     return json(res, 200, {
       wouldInject: gated && !!fullCtx,
       stimulationCount: _agentBrainStimulationCount,
-      stimulationGate: 3,
+      stimulationGate: _brainHasTrainedWeights ? 0 : 3,
       gated,
+      trainedWeightsCarryover: _brainHasTrainedWeights,
       contextLength: (fullCtx || "").length,
       rawContext: fullCtx || "(empty — no context built)",
       sections: {
@@ -7299,7 +7316,7 @@ server.on("upgrade", (req, socket, head) => {
               } else {
                 console.log("[neural-feedback:intercept] no _lastAgentResponse yet — skipping");
               }
-              if (_agentBrainStimulationCount >= 3) {
+              if (_agentBrainStimulationCount >= 3 || _brainHasTrainedWeights) {
                 needsAsyncInject = true;
                 const placeholder = Symbol();
                 sendQueue.push(placeholder);
@@ -7309,7 +7326,7 @@ server.on("upgrade", (req, socket, head) => {
                   if (fullCtx) {
                     frame.params.message = originalUserMsg + "\n\n---\n" + fullCtx;
                     logInjection(fullCtx, originalUserMsg);
-                    console.log("[neural-feedback:inject] Injected " + fullCtx.length + " chars into chat.send");
+                    console.log("[neural-feedback:inject] Injected " + fullCtx.length + " chars into chat.send" + (_brainHasTrainedWeights ? " (trained weights carryover)" : ""));
                     enqueueSend(JSON.stringify(frame), { binary: false });
                   } else {
                     logInjection("", originalUserMsg);
@@ -7322,7 +7339,7 @@ server.on("upgrade", (req, socket, head) => {
                   enqueueSend(finalData, finalOpts);
                 });
               } else {
-                console.log("[neural-feedback:inject] Skipped — agent brain learning (stimulations=" + _agentBrainStimulationCount + "/3)");
+                console.log("[neural-feedback:inject] Skipped — new brain, no trained weights yet (stimulations=" + _agentBrainStimulationCount + "/3)");
               }
             }
           }
@@ -7373,12 +7390,16 @@ server.listen(PROXY_PORT, "0.0.0.0", () => {
   } catch (e) {
     console.log("[startup] Agent brain start error:", e.message);
   }
-  setTimeout(() => { checkAgentBrainSteps().then(s => console.log("[startup] Agent brain steps: " + s + ", stimulations this session: " + _agentBrainStimulationCount + (_agentBrainStimulationCount < 3 ? " (fresh — preference injection disabled until 3+ real stimulations)" : " (active)"))); }, 8000);
+  setTimeout(() => { checkAgentBrainSteps().then(s => console.log("[startup] Agent brain steps: " + s + ", stimulations this session: " + _agentBrainStimulationCount + (_brainHasTrainedWeights ? " (trained weights — personality injection active from start)" : _agentBrainStimulationCount < 3 ? " (new brain — injection disabled until 3+ stimulations)" : " (active)"))); }, 8000);
   setInterval(() => { checkAgentBrainSteps().catch(() => {}); }, 30000);
   setTimeout(async () => {
     try { const sdb = require("./skills/bots/ig-scalper-db.cjs"); await sdb.ensurePriceCandlesTable(); console.log("[startup] price_candles table ready"); } catch (e) { console.log("[startup] price_candles init failed:", e.message); }
     try {
       await loadNeuralFeedbackFromDb();
+      if (_nfMemory.stats.total >= 3) {
+        _brainHasTrainedWeights = true;
+        console.log("[startup] Brain has trained weights from " + _nfMemory.stats.total + " previous interactions — personality injection enabled immediately");
+      }
       console.log("[startup] Neural feedback: " + _nfMemory.stats.total + " records loaded (pos=" + _nfMemory.stats.positive + " neg=" + _nfMemory.stats.negative + ")");
       await loadDimensionConfig();
       const enabledDims = getEnabledDimensions();
